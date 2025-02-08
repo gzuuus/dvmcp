@@ -9,22 +9,58 @@ export class DVMBridge {
   private mcpClient: MCPClientHandler;
   private nostrAnnouncer: NostrAnnouncer;
   private relayHandler: RelayHandler;
+  private isRunning: boolean = false;
 
   constructor() {
+    console.log('Initializing DVM Bridge...');
     this.mcpClient = new MCPClientHandler();
     this.nostrAnnouncer = new NostrAnnouncer();
     this.relayHandler = new RelayHandler(CONFIG.nostr.relayUrls);
   }
 
   async start() {
-    await this.mcpClient.connect();
+    if (this.isRunning) {
+      console.log('Bridge is already running');
+      return;
+    }
 
-    const tools = await this.mcpClient.listTools();
-    console.log('Available MCP tools:', tools);
+    console.log('Starting DVM Bridge...');
+    try {
+      console.log('Connecting to MCP server...');
+      await this.mcpClient.connect();
 
-    await this.nostrAnnouncer.announceService();
+      const tools = await this.mcpClient.listTools();
+      console.log('Available MCP tools:', tools);
 
-    this.relayHandler.subscribeToRequests(this.handleRequest.bind(this));
+      console.log('Announcing service to Nostr network...');
+      await this.nostrAnnouncer.announceService();
+
+      console.log('Setting up request handlers...');
+      this.relayHandler.subscribeToRequests(this.handleRequest.bind(this));
+
+      this.isRunning = true;
+      console.log('DVM Bridge is now running and ready to handle requests');
+    } catch (error) {
+      console.error('Failed to start DVM Bridge:', error);
+      throw error;
+    }
+  }
+
+  async stop() {
+    if (!this.isRunning) {
+      return;
+    }
+
+    console.log('Stopping DVM Bridge...');
+    try {
+      await this.mcpClient.disconnect();
+      this.relayHandler.cleanup();
+      this.isRunning = false;
+      console.log('DVM Bridge stopped successfully');
+    } catch (error) {
+      console.error('Error stopping DVM Bridge:', error);
+      throw error;
+    }
   }
 
   private async handleRequest(event: Event) {
@@ -100,9 +136,32 @@ export class DVMBridge {
       console.error('Error handling request:', error);
     }
   }
+}
 
-  async stop() {
-    await this.mcpClient.disconnect();
-    this.relayHandler.cleanup();
+if (import.meta.main) {
+  console.log('Starting DVM-MCP Bridge service...');
+  const bridge = new DVMBridge();
+
+  const shutdown = async () => {
+    console.log('Shutting down...');
+    try {
+      await bridge.stop();
+      process.exit(0);
+    } catch (error) {
+      console.error('Error during shutdown:', error);
+      process.exit(1);
+    }
+  };
+
+  // Handle termination signals
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+
+  // Start the bridge
+  try {
+    await bridge.start();
+  } catch (error) {
+    console.error('Failed to start service:', error);
+    process.exit(1);
   }
 }

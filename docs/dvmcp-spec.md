@@ -38,15 +38,22 @@ The protocol consists of four main phases:
 
 ## Event Kinds
 
-This specification defines how to use existing DVM event kinds (5600-7000) for MCP integration:
+Following NIP-90 conventions, this specification defines these event kinds:
 
-| Kind | Description                     |
-| ---- | ------------------------------- |
-| 5600 | Tool discovery request          |
-| 6600 | Tool catalog response           |
-| 5601 | Tool execution request          |
-| 6601 | Tool execution response         |
-| 7000 | Job feedback and payment status |
+| Kind | Description              |
+| ---- | ------------------------ |
+| 5600 | DVM-MCP Bridge Requests  |
+| 6600 | DVM-MCP Bridge Responses |
+| 7000 | Job Feedback             |
+
+Operations are differentiated using the `c` tag, which specifies the command being executed:
+
+| Command Value         | Type     | Kind | Description                               |
+| --------------------- | -------- | ---- | ----------------------------------------- |
+| list-tools            | Request  | 5600 | Request available tools catalog           |
+| list-tools-response   | Response | 6600 | Returns available tools and their schemas |
+| execute-tool          | Request  | 5600 | Request execution of a specific tool      |
+| execute-tool-response | Response | 6600 | Returns the results of tool execution     |
 
 ## Service Discovery
 
@@ -62,30 +69,81 @@ Service providers SHOULD announce their DVM capabilities using NIP-89 handler in
   },
   "tags": [
     ["d", "<dvm-announcement/random-id>"],
-    ["k", "5600"], // Tool discovery
-    ["k", "5601"], // Tool execution
+    ["k", "5600"],
     ["capabilities", "mcp-1.0"],
     ["t", "mcp"]
   ]
 }
 ```
 
+### Tool Discovery in Service Announcements
+
+DVMs SHOULD include their available tools directly in their kind:31990 announcement events. This enables immediate tool discovery and execution without requiring an additional request/response cycle. Here's an example of a complete announcement:
+
+```json
+{
+  "kind": 31990,
+  "pubkey": "<dvm-pubkey>",
+  "content": {
+    "name": "MCP Tools DVM",
+    "about": "AI and computational tools via MCP",
+    "tools": [
+      {
+        "name": "summarize",
+        "description": "Summarizes text input",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Text to summarize"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "tags": [
+    ["d", "<dvm-announcement/random-id>"],
+    ["k", "5600"],
+    ["capabilities", "mcp-1.0"],
+    ["t", "mcp"],
+    ["t", "summarize"]
+  ]
+}
+```
+
+This direct tool listing allows clients to:
+
+1. Execute tools immediately without a discovery step
+2. Filter for specific tool capabilities using relay queries
+3. Make better decisions about DVM selection based on available tools
+4. Reduce network overhead for simple integrations
+
+DVMs MAY fall back to the `list-tools` command (described in the Tool Discovery section) in cases where:
+
+- The tool list is too extensive to include in the announcement
+- Tools are dynamically generated or change frequently
+- Additional runtime metadata is needed for tool discovery
+- The full tool schema would make the announcement too large
+
 ### Required Tags
 
 - `d`: A unique identifier for this announcement that should be maintained consistently for announcement updates
-- `k`: The event kinds this DVM supports (must include 5600 and 5601 for MCP support)
+- `k`: The event kind this DVM supports (5600 for MCP bridge requests)
 - `capabilities`: Must include "mcp-1.0" to indicate MCP protocol support
-- `t`: Should include "mcp" to aid in discovery
+- `t`: Should include "mcp", and also tool names, to aid in discovery
 
-### Tool Discovery Request (kind: 5600)
+### Tool Discovery
 
-Clients discover available tools by sending a kind 5600 event. This initiates the tool discovery process.
+Clients can also discover available tools by sending a request:
 
 ```json
 {
   "kind": 5600,
   "content": "",
   "tags": [
+    ["c", "list-tools"],
     ["output", "application/json"],
     ["bid", "<msat-amount>"]
   ]
@@ -98,9 +156,7 @@ The `p` tag MAY be included to target a specific provider:
 ["p", "<provider-pubkey>"]
 ```
 
-### Tool Catalog Response (kind: 6600)
-
-The DVM MUST respond with a kind 6600 event that lists all available tools and their specifications:
+The DVM MUST respond with a kind 6600 event:
 
 ```json
 {
@@ -139,36 +195,22 @@ The DVM MUST respond with a kind 6600 event that lists all available tools and t
       }
     ]
   },
-  "tags": [["e", "<tool-discovery-req-event-id>"]]
+  "tags": [
+    ["c", "list-tools-response"],
+    ["e", "<tool-discovery-req-event-id>"]
+  ]
 }
 ```
 
-The tool catalog response preserves the full MCP tool definition format, allowing clients to understand:
-
-- Required and optional parameters
-- Parameter types and constraints
-- Expected response formats
-
-Common parameter and properties types include:
-
-- `string`: Text input with optional length constraints
-- `number`: Floating-point values with optional ranges
-- `integer`: Whole numbers with optional ranges
-- `boolean`: True/false flags
-- `array`: Lists of values with optional item constraints
-- `object`: Nested parameter structures
-
 ## Job Execution
 
-Tools are executed through a request/response pair of events.
+Tools are executed through request/response pairs using kinds 5600/6600.
 
-### Job Request (kind: 5601)
-
-Tools are executed using a kind 5601 event:
+### Job Request
 
 ```json
 {
-  "kind": 5601,
+  "kind": 5600,
   "content": {
     "name": "<tool-name>",
     "parameters": {
@@ -177,7 +219,10 @@ Tools are executed using a kind 5601 event:
       "max_tokens": 1024
     }
   },
-  "tags": [["p", "<provider-pubkey>"]]
+  "tags": [
+    ["c", "execute-tool"],
+    ["p", "<provider-pubkey>"]
+  ]
 }
 ```
 
@@ -191,11 +236,11 @@ The content object MAY include:
 - `timeout`: Maximum execution time in milliseconds
 - `metadata`: Additional execution context
 
-### Job Response (kind: 6601)
+### Job Response
 
 ```json
 {
-  "kind": 6601,
+  "kind": 6600,
   "content": {
     "content": [
       {
@@ -218,29 +263,16 @@ The content object MAY include:
     }
   },
   "tags": [
+    ["c", "execute-tool-response"],
     ["e", "<job-request-id>"],
     ["status", "success"]
   ]
 }
 ```
 
-The response content MUST include:
-
-- `content`: An array of content blocks from the MCP tool execution
-- `isError`: Boolean indicating if an error occurred
-
-The response content MAY include:
-
-- `metadata`: Additional context about the execution
-
-Each content block MUST specify:
-
-- `type`: The MIME type of the content
-- `text`: The actual content data
-
 ## Job Feedback
 
-DVMs use kind 7000 events to provide updates about job status and payment requirements. This enables proper handling of long-running jobs and payment flows.
+Following NIP-90, DVMs use kind 7000 events to provide updates about job status and payment requirements:
 
 ```json
 {
@@ -269,11 +301,11 @@ The `status` tag MUST use one of these values:
 
 A typical payment flow proceeds as follows:
 
-1. Client submits job request
-2. DVM responds requesting payment
+1. Client submits job request (kind:5600)
+2. DVM responds with payment requirement (kind:7000)
 3. Client pays the invoice
-4. DVM processes the job
-5. DVM returns results
+4. DVM indicates processing (kind:7000)
+5. DVM returns results (kind:6600)
 
 ## Error Handling
 
@@ -295,9 +327,9 @@ DVMs MUST handle both protocol and execution errors appropriately:
 
 For any error, DVMs MUST:
 
-1. Send a kind 7000 event with status "error"
-2. Include relevant error details in the content
-3. Set isError=true in any kind 6601 response
+1. Send a kind:7000 event with status "error"
+2. Set isError=true in the kind:6600 response
+3. Include relevant error details
 
 ## Implementation Requirements
 
@@ -322,19 +354,32 @@ sequenceDiagram
     participant Server as MCP Server
 
     Client->>Relay: Query kind:31990
-    Relay-->>Client: DVM handler info
+    Relay-->>Client: DVM handler info with tools
 
-    Client->>DVM: kind:5600 (List Tools)
-    DVM->>Server: Initialize + Get Tools
-    Server-->>DVM: Tool Definitions
-    DVM-->>Client: kind:6600 (Tool Catalog)
+    alt Tools not in announcement
+        Client->>DVM: kind:5600, c:list-tools
+        DVM->>Server: Initialize + Get Tools
+        Server-->>DVM: Tool Definitions
+        DVM-->>Client: kind:6600, c:list-tools-response
+    end
 
-    Client->>DVM: kind:5601 (Execute Tool)
-    DVM-->>Client: (Optional)kind:7000 (payment-required)
+    Note over Client,DVM: Tool execution (same for both paths)
+    Client->>DVM: kind:5600, c:execute-tool
+    DVM-->>Client: kind:7000 (payment-required)
     Client->>DVM: Payment
     DVM-->>Client: kind:7000 (processing)
     DVM->>Server: Execute Tool
     Server-->>DVM: Results
     DVM-->>Client: kind:7000 (success)
-    DVM-->>Client: kind:6601 (Results)
+    DVM-->>Client: kind:6600, c:execute-tool-response
 ```
+
+## Future Extensions
+
+Additional commands can be added to support new MCP capabilities by defining new values for the `c` tag. This allows the protocol to evolve without requiring new event kinds. Future commands might include:
+
+- Resource operations (list-resources, read-resource, etc.)
+- Prompt operations (list-prompts, execute-prompt, etc.)
+- Advanced tool operations (cancel-execution, batch-execute, etc.)
+
+All such extensions MUST maintain the request/response kind relationship defined in NIP-90 (response kind = request kind + 1000) and use kind:7000 for job feedback.

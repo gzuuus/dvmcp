@@ -17,7 +17,7 @@ export class NostrAnnouncer {
         about: CONFIG.mcp.about,
       }),
       tags: [
-        ['d', Math.random().toString(36).substring(7)],
+        ['d', 'dvm-announcement'],
         ['k', '5000'],
         ['k', '5001'],
         ['capabilities', 'mcp-1.0'],

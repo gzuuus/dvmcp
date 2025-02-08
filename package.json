@@ -3,7 +3,7 @@
   "module": "src/dvm-bridge.ts",
   "type": "module",
   "scripts": {
-    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json}\"",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "dev": "bun --watch src/dvm-bridge.ts",
     "start": "bun run src/dvm-bridge.ts",
     "typecheck": "tsc --noEmit",

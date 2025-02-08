@@ -177,3 +177,4 @@ dist
 #
 codebase*
 .aider*
+.prettierrc

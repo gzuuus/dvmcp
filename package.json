@@ -2,6 +2,7 @@
   "name": "dvmcp",
   "module": "src/dvm-bridge.ts",
   "type": "module",
+  "license": "MIT",
   "scripts": {
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "dev": "bun --watch src/dvm-bridge.ts",

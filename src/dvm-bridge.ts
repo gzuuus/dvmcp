@@ -65,11 +65,11 @@ export class DVMBridge {
 
   private async handleRequest(event: Event) {
     try {
-      if (event.kind === 5000) {
+      if (event.kind === 5600) {
         const tools = await this.mcpClient.listTools();
 
         const response = keyManager.signEvent({
-          ...keyManager.createEventTemplate(6000),
+          ...keyManager.createEventTemplate(6600),
           content: JSON.stringify({
             schema_version: '1.0',
             tools,
@@ -81,7 +81,7 @@ export class DVMBridge {
         });
 
         await this.relayHandler.publishEvent(response);
-      } else if (event.kind === 5001) {
+      } else if (event.kind === 5601) {
         const { name, parameters } = JSON.parse(event.content);
 
         const processingStatus = keyManager.signEvent({
@@ -108,7 +108,7 @@ export class DVMBridge {
           await this.relayHandler.publishEvent(successStatus);
 
           const response = keyManager.signEvent({
-            ...keyManager.createEventTemplate(6001),
+            ...keyManager.createEventTemplate(6601),
             content: JSON.stringify(result),
             tags: [
               ['e', event.id],
@@ -153,11 +153,9 @@ if (import.meta.main) {
     }
   };
 
-  // Handle termination signals
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  // Start the bridge
   try {
     await bridge.start();
   } catch (error) {

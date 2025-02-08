@@ -18,8 +18,8 @@ export class NostrAnnouncer {
       }),
       tags: [
         ['d', 'dvm-announcement'],
-        ['k', '5000'],
-        ['k', '5001'],
+        ['k', '5600'],
+        ['k', '5601'],
         ['capabilities', 'mcp-1.0'],
         ['t', 'mcp'],
       ],

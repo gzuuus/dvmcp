@@ -30,7 +30,7 @@ export class RelayHandler {
   subscribeToRequests(onRequest: (event: Event) => void): SubCloser {
     const filters: Filter[] = [
       {
-        kinds: [5000, 5001],
+        kinds: [5600, 5601],
         since: Math.floor(Date.now() / 1000),
       },
     ];

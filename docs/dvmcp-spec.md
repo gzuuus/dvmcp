@@ -38,14 +38,14 @@ The protocol consists of four main phases:
 
 ## Event Kinds
 
-This specification defines how to use existing DVM event kinds (5000-7000) for MCP integration:
+This specification defines how to use existing DVM event kinds (5600-7000) for MCP integration:
 
 | Kind | Description                     |
 | ---- | ------------------------------- |
-| 5000 | Tool discovery request          |
-| 6000 | Tool catalog response           |
-| 5001 | Tool execution request          |
-| 6001 | Tool execution response         |
+| 5600 | Tool discovery request          |
+| 6600 | Tool catalog response           |
+| 5601 | Tool execution request          |
+| 6601 | Tool execution response         |
 | 7000 | Job feedback and payment status |
 
 ## Service Discovery
@@ -62,8 +62,8 @@ Service providers SHOULD announce their DVM capabilities using NIP-89 handler in
   },
   "tags": [
     ["d", "<dvm-announcement/random-id>"],
-    ["k", "5000"], // Tool discovery
-    ["k", "5001"], // Tool execution
+    ["k", "5600"], // Tool discovery
+    ["k", "5601"], // Tool execution
     ["capabilities", "mcp-1.0"],
     ["t", "mcp"]
   ]
@@ -73,17 +73,17 @@ Service providers SHOULD announce their DVM capabilities using NIP-89 handler in
 ### Required Tags
 
 - `d`: A unique identifier for this announcement that should be maintained consistently for announcement updates
-- `k`: The event kinds this DVM supports (must include 5000 and 5001 for MCP support)
+- `k`: The event kinds this DVM supports (must include 5600 and 5601 for MCP support)
 - `capabilities`: Must include "mcp-1.0" to indicate MCP protocol support
 - `t`: Should include "mcp" to aid in discovery
 
-### Tool Discovery Request (kind: 5000)
+### Tool Discovery Request (kind: 5600)
 
-Clients discover available tools by sending a kind 5000 event. This initiates the tool discovery process.
+Clients discover available tools by sending a kind 5600 event. This initiates the tool discovery process.
 
 ```json
 {
-  "kind": 5000,
+  "kind": 5600,
   "content": "",
   "tags": [
     ["output", "application/json"],
@@ -98,13 +98,13 @@ The `p` tag MAY be included to target a specific provider:
 ["p", "<provider-pubkey>"]
 ```
 
-### Tool Catalog Response (kind: 6000)
+### Tool Catalog Response (kind: 6600)
 
-The DVM MUST respond with a kind 6000 event that lists all available tools and their specifications:
+The DVM MUST respond with a kind 6600 event that lists all available tools and their specifications:
 
 ```json
 {
-  "kind": 6000,
+  "kind": 6600,
   "content": {
     "tools": [
       {
@@ -162,13 +162,13 @@ Common parameter and properties types include:
 
 Tools are executed through a request/response pair of events.
 
-### Job Request (kind: 5001)
+### Job Request (kind: 5601)
 
-Tools are executed using a kind 5001 event:
+Tools are executed using a kind 5601 event:
 
 ```json
 {
-  "kind": 5001,
+  "kind": 5601,
   "content": {
     "name": "<tool-name>",
     "parameters": {
@@ -191,11 +191,11 @@ The content object MAY include:
 - `timeout`: Maximum execution time in milliseconds
 - `metadata`: Additional execution context
 
-### Job Response (kind: 6001)
+### Job Response (kind: 6601)
 
 ```json
 {
-  "kind": 6001,
+  "kind": 6601,
   "content": {
     "content": [
       {
@@ -297,7 +297,7 @@ For any error, DVMs MUST:
 
 1. Send a kind 7000 event with status "error"
 2. Include relevant error details in the content
-3. Set isError=true in any kind 6001 response
+3. Set isError=true in any kind 6601 response
 
 ## Implementation Requirements
 
@@ -324,17 +324,17 @@ sequenceDiagram
     Client->>Relay: Query kind:31990
     Relay-->>Client: DVM handler info
 
-    Client->>DVM: kind:5000 (List Tools)
+    Client->>DVM: kind:5600 (List Tools)
     DVM->>Server: Initialize + Get Tools
     Server-->>DVM: Tool Definitions
-    DVM-->>Client: kind:6000 (Tool Catalog)
+    DVM-->>Client: kind:6600 (Tool Catalog)
 
-    Client->>DVM: kind:5001 (Execute Tool)
+    Client->>DVM: kind:5601 (Execute Tool)
     DVM-->>Client: (Optional)kind:7000 (payment-required)
     Client->>DVM: Payment
     DVM-->>Client: kind:7000 (processing)
     DVM->>Server: Execute Tool
     Server-->>DVM: Results
     DVM-->>Client: kind:7000 (success)
-    DVM-->>Client: kind:6001 (Results)
+    DVM-->>Client: kind:6601 (Results)
 ```

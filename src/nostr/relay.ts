@@ -20,7 +20,7 @@ export class RelayHandler {
   async publishEvent(event: Event): Promise<void> {
     try {
       await Promise.any(this.pool.publish(this.relayUrls, event));
-      console.log('Event published:', event.id);
+      console.log(`Event published(${event.kind}):, ${event.id.slice(0, 12)}`);
     } catch (error) {
       console.error('Failed to publish event:', error);
       throw error;
@@ -31,6 +31,7 @@ export class RelayHandler {
     const filters: Filter[] = [
       {
         kinds: [5000, 5001],
+        since: Math.floor(Date.now() / 1000),
       },
     ];
 

@@ -1,0 +1,25 @@
+{
+  "name": "dvmcp",
+  "module": "src/dvm-bridge.ts",
+  "type": "module",
+  "scripts": {
+    "format": "prettier --write \"src/**/*.{ts,tsx,js,jsx,json}\"",
+    "dev": "bun --watch src/dvm-bridge.ts",
+    "start": "bun run src/dvm-bridge.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "bun run typecheck && bun run format"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.4.1",
+    "@noble/hashes": "^1.7.1",
+    "dotenv": "^16.4.7",
+    "nostr-tools": "^2.10.4",
+    "prettier": "^3.4.2"
+  }
+}

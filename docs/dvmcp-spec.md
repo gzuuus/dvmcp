@@ -42,18 +42,18 @@ Following NIP-90 conventions, this specification defines these event kinds:
 
 | Kind | Description              |
 | ---- | ------------------------ |
-| 5600 | DVM-MCP Bridge Requests  |
-| 6600 | DVM-MCP Bridge Responses |
+| 5910 | DVM-MCP Bridge Requests  |
+| 6910 | DVM-MCP Bridge Responses |
 | 7000 | Job Feedback             |
 
 Operations are differentiated using the `c` tag, which specifies the command being executed:
 
 | Command Value         | Type     | Kind | Description                               |
 | --------------------- | -------- | ---- | ----------------------------------------- |
-| list-tools            | Request  | 5600 | Request available tools catalog           |
-| list-tools-response   | Response | 6600 | Returns available tools and their schemas |
-| execute-tool          | Request  | 5600 | Request execution of a specific tool      |
-| execute-tool-response | Response | 6600 | Returns the results of tool execution     |
+| list-tools            | Request  | 5910 | Request available tools catalog           |
+| list-tools-response   | Response | 6910 | Returns available tools and their schemas |
+| execute-tool          | Request  | 5910 | Request execution of a specific tool      |
+| execute-tool-response | Response | 6910 | Returns the results of tool execution     |
 
 ## Service Discovery
 
@@ -69,7 +69,7 @@ Service providers SHOULD announce their DVM capabilities using NIP-89 handler in
   },
   "tags": [
     ["d", "<dvm-announcement/random-id>"],
-    ["k", "5600"],
+    ["k", "5910"],
     ["capabilities", "mcp-1.0"],
     ["t", "mcp"]
   ]
@@ -105,7 +105,7 @@ DVMs SHOULD include their available tools directly in their kind:31990 announcem
   },
   "tags": [
     ["d", "<dvm-announcement/random-id>"],
-    ["k", "5600"],
+    ["k", "5910"],
     ["capabilities", "mcp-1.0"],
     ["t", "mcp"],
     ["t", "summarize"]
@@ -130,7 +130,7 @@ DVMs MAY fall back to the `list-tools` command (described in the Tool Discovery 
 ### Required Tags
 
 - `d`: A unique identifier for this announcement that should be maintained consistently for announcement updates
-- `k`: The event kind this DVM supports (5600 for MCP bridge requests)
+- `k`: The event kind this DVM supports (5910 for MCP bridge requests)
 - `capabilities`: Must include "mcp-1.0" to indicate MCP protocol support
 - `t`: Should include "mcp", and also tool names, to aid in discovery
 
@@ -140,7 +140,7 @@ Clients can also discover available tools by sending a request:
 
 ```json
 {
-  "kind": 5600,
+  "kind": 5910,
   "content": "",
   "tags": [
     ["c", "list-tools"],
@@ -156,11 +156,11 @@ The `p` tag MAY be included to target a specific provider:
 ["p", "<provider-pubkey>"]
 ```
 
-The DVM MUST respond with a kind 6600 event:
+The DVM MUST respond with a kind 6910 event:
 
 ```json
 {
-  "kind": 6600,
+  "kind": 6910,
   "content": {
     "tools": [
       {
@@ -204,13 +204,13 @@ The DVM MUST respond with a kind 6600 event:
 
 ## Job Execution
 
-Tools are executed through request/response pairs using kinds 5600/6600.
+Tools are executed through request/response pairs using kinds 5910/6910.
 
 ### Job Request
 
 ```json
 {
-  "kind": 5600,
+  "kind": 5910,
   "content": {
     "name": "<tool-name>",
     "parameters": {
@@ -240,7 +240,7 @@ The content object MAY include:
 
 ```json
 {
-  "kind": 6600,
+  "kind": 6910,
   "content": {
     "content": [
       {
@@ -301,11 +301,11 @@ The `status` tag MUST use one of these values:
 
 A typical payment flow proceeds as follows:
 
-1. Client submits job request (kind:5600)
+1. Client submits job request (kind:5910)
 2. DVM responds with payment requirement (kind:7000)
 3. Client pays the invoice
 4. DVM indicates processing (kind:7000)
-5. DVM returns results (kind:6600)
+5. DVM returns results (kind:6910)
 
 ## Error Handling
 
@@ -328,7 +328,7 @@ DVMs MUST handle both protocol and execution errors appropriately:
 For any error, DVMs MUST:
 
 1. Send a kind:7000 event with status "error"
-2. Set isError=true in the kind:6600 response
+2. Set isError=true in the kind:6910 response
 3. Include relevant error details
 
 ## Implementation Requirements
@@ -357,21 +357,21 @@ sequenceDiagram
     Relay-->>Client: DVM handler info with tools
 
     alt Tools not in announcement
-        Client->>DVM: kind:5600, c:list-tools
+        Client->>DVM: kind:5910, c:list-tools
         DVM->>Server: Initialize + Get Tools
         Server-->>DVM: Tool Definitions
-        DVM-->>Client: kind:6600, c:list-tools-response
+        DVM-->>Client: kind:6910, c:list-tools-response
     end
 
     Note over Client,DVM: Tool execution (same for both paths)
-    Client->>DVM: kind:5600, c:execute-tool
+    Client->>DVM: kind:5910, c:execute-tool
     DVM-->>Client: kind:7000 (payment-required)
     Client->>DVM: Payment
     DVM-->>Client: kind:7000 (processing)
     DVM->>Server: Execute Tool
     Server-->>DVM: Results
     DVM-->>Client: kind:7000 (success)
-    DVM-->>Client: kind:6600, c:execute-tool-response
+    DVM-->>Client: kind:6910, c:execute-tool-response
 ```
 
 ## Future Extensions

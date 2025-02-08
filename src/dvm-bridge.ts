@@ -14,7 +14,7 @@ export class DVMBridge {
   constructor() {
     console.log('Initializing DVM Bridge...');
     this.mcpClient = new MCPClientHandler();
-    this.nostrAnnouncer = new NostrAnnouncer();
+    this.nostrAnnouncer = new NostrAnnouncer(this.mcpClient);
     this.relayHandler = new RelayHandler(CONFIG.nostr.relayUrls);
   }
 
@@ -65,71 +65,75 @@ export class DVMBridge {
 
   private async handleRequest(event: Event) {
     try {
-      if (event.kind === 5600) {
-        const tools = await this.mcpClient.listTools();
+      if (event.kind === 5910) {
+        const command = event.tags.find((tag) => tag[0] === 'c')?.[1];
 
-        const response = keyManager.signEvent({
-          ...keyManager.createEventTemplate(6600),
-          content: JSON.stringify({
-            schema_version: '1.0',
-            tools,
-          }),
-          tags: [
-            ['e', event.id],
-            ['p', event.pubkey],
-          ],
-        });
-
-        await this.relayHandler.publishEvent(response);
-      } else if (event.kind === 5601) {
-        const { name, parameters } = JSON.parse(event.content);
-
-        const processingStatus = keyManager.signEvent({
-          ...keyManager.createEventTemplate(7000),
-          tags: [
-            ['status', 'processing'],
-            ['e', event.id],
-            ['p', event.pubkey],
-          ],
-        });
-        await this.relayHandler.publishEvent(processingStatus);
-
-        try {
-          const result = await this.mcpClient.callTool(name, parameters);
-
-          const successStatus = keyManager.signEvent({
-            ...keyManager.createEventTemplate(7000),
-            tags: [
-              ['status', 'success'],
-              ['e', event.id],
-              ['p', event.pubkey],
-            ],
-          });
-          await this.relayHandler.publishEvent(successStatus);
-
+        if (command === 'list-tools') {
+          const tools = await this.mcpClient.listTools();
           const response = keyManager.signEvent({
-            ...keyManager.createEventTemplate(6601),
-            content: JSON.stringify(result),
+            ...keyManager.createEventTemplate(6910),
+            content: JSON.stringify({
+              tools,
+            }),
             tags: [
+              ['request', JSON.stringify(event)],
               ['e', event.id],
               ['p', event.pubkey],
             ],
           });
+
           await this.relayHandler.publishEvent(response);
-        } catch (error) {
-          const errorStatus = keyManager.signEvent({
+        } else {
+          const jobRequest = JSON.parse(event.content);
+          const processingStatus = keyManager.signEvent({
             ...keyManager.createEventTemplate(7000),
             tags: [
-              [
-                'status',
-                'error',
-                error instanceof Error ? error.message : 'Unknown error',
-              ],
+              ['status', 'processing'],
               ['e', event.id],
               ['p', event.pubkey],
             ],
           });
-          await this.relayHandler.publishEvent(errorStatus);
+          await this.relayHandler.publishEvent(processingStatus);
+
+          try {
+            const result = await this.mcpClient.callTool(
+              jobRequest.name,
+              jobRequest.parameters
+            );
+            const successStatus = keyManager.signEvent({
+              ...keyManager.createEventTemplate(7000),
+              tags: [
+                ['status', 'success'],
+                ['e', event.id],
+                ['p', event.pubkey],
+              ],
+            });
+            await this.relayHandler.publishEvent(successStatus);
+            const response = keyManager.signEvent({
+              ...keyManager.createEventTemplate(6910),
+              content: JSON.stringify(result),
+              tags: [
+                ['request', JSON.stringify(event)],
+                ['e', event.id],
+                ['p', event.pubkey],
+              ],
+            });
+            await this.relayHandler.publishEvent(response);
+          } catch (error) {
+            const errorStatus = keyManager.signEvent({
+              ...keyManager.createEventTemplate(7000),
+              tags: [
+                [
+                  'status',
+                  'error',
+                  error instanceof Error ? error.message : 'Unknown error',
+                ],
+                ['e', event.id],
+                ['p', event.pubkey],
+              ],
+            });
+            await this.relayHandler.publishEvent(errorStatus);
+          }
         }
       }
     } catch (error) {

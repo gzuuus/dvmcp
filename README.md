@@ -14,8 +14,7 @@ The Model Context Protocol provides a standardized way for applications to expos
 ## Features
 
 - **Service Discovery**: Automatically announces MCP services using NIP-89
-- **Tool Discovery**: Exposes MCP tools through DVM kind:5600/6600 events
-- **Tool Execution**: Handles tool execution requests via kind:5601/6601 events
+- **Tool Discovery and Execution**: Exposes and executes MCP tools through DVM kind:5910/6910 events
 - **Status Updates**: Provides job status and payment handling via kind:7000 events
 - **Error Handling**: Comprehensive error handling and status reporting
 - **Payment Flow**: Built-in support for Lightning payment processing
@@ -79,24 +78,37 @@ The bridge operates in several stages:
    - Announces service availability on Nostr network
    - Begins listening for DVM requests
 
-2. **Tool Discovery**:
+2. **Tool Operations**:
 
-   - Receives kind:5600 requests from clients
-   - Queries available tools from MCP server
-   - Responds with kind:6600 tool catalog
-
-3. **Tool Execution**:
-
-   - Receives kind:5601 execution requests
-   - Validates parameters against tool schema
-   - Executes tool via MCP server
-   - Returns results via kind:6601 events
+   - Receives kind:5910 requests from clients for tool listing or execution
+   - Processes requests based on the 'c' tag command
+   - Responds with kind:6910 events containing tool catalog or execution results
    - Provides status updates via kind:7000 events
 
-4. **Payment Processing**:
+3. **Payment Processing**:
    - Handles payment requirements through kind:7000 events
    - Supports Lightning Network payments
    - Provides execution status updates
+
+## Example Commands
+
+List available tools:
+
+```bash
+nak event -k 5910 -c '' --tag 'c=list-tools' --tag 'output=application/json' wss://relay.com
+```
+
+Execute a tool:
+
+```bash
+nak event -k 5910 -c '{"name":"extract","parameters":{"url":"https://nostr.how"}}' --tag 'c=execute-tool' wss://relay.com
+```
+
+Monitor results:
+
+```bash
+nak req --stream -k 6910 -k 7000 -s "$(date +%s)" wss://relay.com | jq --stream "fromstream(0|truncate_stream(inputs))"
+```
 
 ## Contributing
 

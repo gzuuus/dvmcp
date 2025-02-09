@@ -16,11 +16,10 @@ export class NostrAnnouncer {
   async announceService() {
     const toolsResult: ListToolsResult = await this.mcpClient.listTools();
 
-    const toolsWithMetadata = toolsResult.tools
+    const toolsListing = toolsResult.tools
       .map((tool) => ({
         name: tool.name,
         description: tool.description,
-        inputSchema: tool.inputSchema,
       }))
       .slice(0, 100); // Hard limit to 100 tools
 
@@ -29,18 +28,22 @@ export class NostrAnnouncer {
       content: JSON.stringify({
         name: CONFIG.mcp.name,
         about: CONFIG.mcp.about,
-        tools: toolsWithMetadata,
+        tools: toolsListing,
       }),
       tags: [
         ['d', 'dvm-announcement'],
         ['k', '5910'],
         ['capabilities', 'mcp-1.0'],
         ['t', 'mcp'],
-        ...toolsWithMetadata.map((tool) => ['t', tool.name]),
+        ...toolsListing.map((tool) => ['t', tool.name]),
       ],
     });
 
     await this.relayHandler.publishEvent(event);
-    console.log(`Announced service with ${toolsWithMetadata.length} tools`);
+    console.log(`Announced service with ${toolsListing.length} tools`);
+  }
+
+  async updateAnnouncement() {
+    await this.announceService();
   }
 }

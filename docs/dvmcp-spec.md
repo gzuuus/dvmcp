@@ -29,22 +29,22 @@ There are three main actors in this workflow:
 - DVMs: Bridge components that translate between Nostr and MCP protocols
 - Customers: Nostr clients that discover and utilize the exposed capabilities
 
-The protocol consists of four main phases:
+The protocol consists of tree main phases:
 
-1. Service Discovery: Finding available MCP-enabled DVMs
-2. Tool Discovery: Retrieving available tools from a specific DVM
-3. Job Execution: Requesting tool execution and receiving results
-4. Job Feedback: Handling payment and status updates
+1. Tool Discovery: Finding available MCP-enabled, and retrieving available tools from them
+2. Job Execution: Requesting tool execution and receiving results
+3. Job Feedback: Handling payment and status updates
 
 ## Event Kinds
 
-Following NIP-90 conventions, this specification defines these event kinds:
+This specification defines these event kinds:
 
-| Kind | Description              |
-| ---- | ------------------------ |
-| 5910 | DVM-MCP Bridge Requests  |
-| 6910 | DVM-MCP Bridge Responses |
-| 7000 | Job Feedback             |
+| Kind  | Description                           |
+| ----- | ------------------------------------- |
+| 31990 | DVM Service Announcement (via NIP-89) |
+| 5910  | DVM-MCP Bridge Requests               |
+| 6910  | DVM-MCP Bridge Responses              |
+| 7000  | Job Feedback                          |
 
 Operations are differentiated using the `c` tag, which specifies the command being executed:
 
@@ -55,30 +55,20 @@ Operations are differentiated using the `c` tag, which specifies the command bei
 | execute-tool          | Request  | 5910 | Request execution of a specific tool      |
 | execute-tool-response | Response | 6910 | Returns the results of tool execution     |
 
-## Service Discovery
+# Tool Discovery
 
-Service providers SHOULD announce their DVM capabilities using NIP-89 handler information events. This enables clients to discover MCP-enabled DVMs through Nostr's existing discovery mechanisms.
+DVMCP provides two methods for tool discovery:
 
-```json
-{
-  "kind": 31990,
-  "pubkey": "<dvm-pubkey>",
-  "content": {
-    "name": "MCP Tools DVM",
-    "about": "AI and computational tools via MCP"
-  },
-  "tags": [
-    ["d", "<dvm-announcement/random-id>"],
-    ["k", "5910"],
-    ["capabilities", "mcp-1.0"],
-    ["t", "mcp"]
-  ]
-}
-```
+- Discovery through NIP-89 announcements
+- Direct discovery through NIP-90 requests
 
-### Tool Discovery in Service Announcements
+Clients MAY use either method or both depending on their needs. Each method has its own advantages and use cases.
 
-DVMs SHOULD include their available tools directly in their kind:31990 announcement events. This enables immediate tool discovery and execution without requiring an additional request/response cycle. Here's an example of a complete announcement:
+## Discovery via NIP-89 Announcements
+
+DVMs SHOULD publish their tool listings using NIP-89 announcements. This enables immediate tool discovery without requiring a request/response cycle and allows clients to discover tools through relay queries.
+
+Example announcement:
 
 ```json
 {
@@ -90,16 +80,11 @@ DVMs SHOULD include their available tools directly in their kind:31990 announcem
     "tools": [
       {
         "name": "summarize",
-        "description": "Summarizes text input",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "text": {
-              "type": "string",
-              "description": "Text to summarize"
-            }
-          }
-        }
+        "description": "Summarizes text input"
+      },
+      {
+        "name": "translate",
+        "description": "Translates text between languages"
       }
     ]
   },
@@ -108,35 +93,26 @@ DVMs SHOULD include their available tools directly in their kind:31990 announcem
     ["k", "5910"],
     ["capabilities", "mcp-1.0"],
     ["t", "mcp"],
-    ["t", "summarize"]
+    ["t", "summarize"],
+    ["t", "translate"]
   ]
 }
 ```
 
-This direct tool listing allows clients to:
+### Tool Listing Content
 
-1. Execute tools immediately without a discovery step
-2. Filter for specific tool capabilities using relay queries
-3. Make better decisions about DVM selection based on available tools
-4. Reduce network overhead for simple integrations
+Each tool in the `tools` array MUST include:
 
-DVMs MAY fall back to the `list-tools` command (described in the Tool Discovery section) in cases where:
+- `name`: The unique identifier for the tool
+- `description`: A brief description of the tool's functionality
 
-- The tool list is too extensive to include in the announcement
-- Tools are dynamically generated or change frequently
-- Additional runtime metadata is needed for tool discovery
-- The full tool schema would make the announcement too large
+To maintain the announcement under control, the NIP-89 announcement SHOULD NOT include full input schemas. Since some apis might have an undefined amount of inputs and the event might end pretty verbose or lengthly.
 
-### Required Tags
+## Discovery via Direct Request
 
-- `d`: A unique identifier for this announcement that should be maintained consistently for announcement updates
-- `k`: The event kind this DVM supports (5910 for MCP bridge requests)
-- `capabilities`: Must include "mcp-1.0" to indicate MCP protocol support
-- `t`: Should include "mcp", and also tool names, to aid in discovery
+Following NIP-90's model, clients MAY discover tools by publishing a request event and receiving responses from available DVMs. This method allows for discovery of DVMs that may not publish NIP-89 announcements.
 
-### Tool Discovery
-
-Clients can also discover available tools by sending a request:
+### List Tools Request
 
 ```json
 {
@@ -144,19 +120,20 @@ Clients can also discover available tools by sending a request:
   "content": "",
   "tags": [
     ["c", "list-tools"],
-    ["output", "application/json"],
-    ["bid", "<msat-amount>"]
+    ["output", "application/json"]
   ]
 }
 ```
 
-The `p` tag MAY be included to target a specific provider:
+The request MAY include a `p` tag to target a specific provider:
 
 ```json
 ["p", "<provider-pubkey>"]
 ```
 
-The DVM MUST respond with a kind 6910 event:
+### List Tools Response
+
+DVMs MUST respond with a kind 6910 event containing complete tool specifications:
 
 ```json
 {
@@ -165,6 +142,7 @@ The DVM MUST respond with a kind 6910 event:
     "tools": [
       {
         "name": "<tool-name>",
+        "description": "<tool-description>",
         "inputSchema": {
           "type": "object",
           "properties": {
@@ -173,13 +151,6 @@ The DVM MUST respond with a kind 6910 event:
               "description": "Input text to process",
               "minLength": 1,
               "maxLength": 10000
-            },
-            "temperature": {
-              "type": "number",
-              "description": "Sampling temperature",
-              "minimum": 0,
-              "maximum": 2,
-              "default": 0.7
             },
             "max_tokens": {
               "type": "integer",
@@ -202,6 +173,25 @@ The DVM MUST respond with a kind 6910 event:
 }
 ```
 
+### Implementation Requirements
+
+DVMs MUST:
+
+1. Respond to list-tools requests with complete tool specifications
+2. Maintain consistency between NIP-89 listings (if published) and available tools
+3. Return appropriate error status if any tool becomes unavailable
+
+Clients MUST:
+
+1. Obtain complete tool specifications before attempting tool execution
+2. Handle cases where tools may be unavailable or specifications may have changed
+
+DVMs that publish NIP-89 announcements SHOULD:
+
+1. Keep announcements lightweight by omitting full schemas
+2. Maintain announcement accuracy by updating when tool availability changes
+3. Include all announced tools in list-tools responses
+
 ## Job Execution
 
 Tools are executed through request/response pairs using kinds 5910/6910.
@@ -215,7 +205,6 @@ Tools are executed through request/response pairs using kinds 5910/6910.
     "name": "<tool-name>",
     "parameters": {
       "text": "The input text to be processed",
-      "temperature": 0.8,
       "max_tokens": 1024
     }
   },
@@ -331,19 +320,6 @@ For any error, DVMs MUST:
 2. Set isError=true in the kind:6910 response
 3. Include relevant error details
 
-## Implementation Requirements
-
-DVMs implementing this protocol MUST:
-
-1. Properly handle MCP server initialization and capability negotiation
-2. Transform tool definitions and parameters between MCP and DVM formats
-3. Validate all parameters against the published schema
-4. Implement appropriate job feedback and error handling
-5. Follow NIP-89 for service registration
-6. Handle payment flows securely
-7. Maintain proper state during long-running operations
-8. Implement appropriate timeouts and resource limits
-
 ## Complete Protocol Flow
 
 ```mermaid
@@ -353,17 +329,21 @@ sequenceDiagram
     participant DVM as MCP-DVM Bridge
     participant Server as MCP Server
 
-    Client->>Relay: Query kind:31990
-    Relay-->>Client: DVM handler info with tools
+    rect rgb(240, 240, 240)
+        Note over Client,Server: Discovery Path A: NIP-89
+        Client->>Relay: Query kind:31990 (NIP-89)
+        Relay-->>Client: DVM handler info with tool listing
+    end
 
-    alt Tools not in announcement
+    rect rgb(240, 240, 240)
+        Note over Client,Server: Discovery Path B: Direct Request
         Client->>DVM: kind:5910, c:list-tools
         DVM->>Server: Initialize + Get Tools
         Server-->>DVM: Tool Definitions
         DVM-->>Client: kind:6910, c:list-tools-response
     end
 
-    Note over Client,DVM: Tool execution (same for both paths)
+    Note over Client,Server: Tool Execution (Same for both paths)
     Client->>DVM: kind:5910, c:execute-tool
     DVM-->>Client: kind:7000 (payment-required)
     Client->>DVM: Payment

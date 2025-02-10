@@ -33,7 +33,7 @@ export class MCPClientHandler {
   }
 
   async listTools() {
-    return await this.client.listTools();
+    return (await this.client.listTools()).tools;
   }
 
   async callTool(name: string, args: Record<string, any>) {

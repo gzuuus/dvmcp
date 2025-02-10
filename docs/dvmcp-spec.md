@@ -66,7 +66,7 @@ Clients MAY use either method or both depending on their needs. Each method has 
 
 ## Discovery via NIP-89 Announcements
 
-DVMs SHOULD publish their tool listings using NIP-89 announcements. This enables immediate tool discovery without requiring a request/response cycle and allows clients to discover tools through relay queries.
+You can query relays by creating a filter for events with kind `31990`, and `t` tag `mcp`. DVMs SHOULD include their available tools directly in their kind:31990 announcement events. This enables immediate tool discovery and execution without requiring an additional request/response cycle. Here's an example of a complete announcement:
 
 Example announcement:
 
@@ -80,11 +80,16 @@ Example announcement:
     "tools": [
       {
         "name": "summarize",
-        "description": "Summarizes text input"
-      },
-      {
-        "name": "translate",
-        "description": "Translates text between languages"
+        "description": "Summarizes text input",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "description": "Text to summarize"
+            }
+          }
+        }
       }
     ]
   },
@@ -105,12 +110,19 @@ Each tool in the `tools` array MUST include:
 
 - `name`: The unique identifier for the tool
 - `description`: A brief description of the tool's functionality
+- `tools`: The tools present in the MCP server
 
-To maintain the announcement under control, the NIP-89 announcement SHOULD NOT include full input schemas. Since some apis might have an undefined amount of inputs and the event might end pretty verbose or lengthly.
+### Required Tags
+
+- `d`: A unique identifier for this announcement that should be maintained consistently for announcement updates
+- `k`: The event kind this DVM supports (5910 for MCP bridge requests)
+- `capabilities`: Must include "mcp-1.0" to indicate MCP protocol support
+- `t`: Should include "mcp", and also tool names, to aid in discovery
 
 ## Discovery via Direct Request
 
 Following NIP-90's model, clients MAY discover tools by publishing a request event and receiving responses from available DVMs. This method allows for discovery of DVMs that may not publish NIP-89 announcements.
+Another way to do discovery using the previous list tools request is to query relays with a filter for events with type `5910` and `c` tag `list-tools-response`.
 
 ### List Tools Request
 
@@ -210,7 +222,8 @@ Tools are executed through request/response pairs using kinds 5910/6910.
   },
   "tags": [
     ["c", "execute-tool"],
-    ["p", "<provider-pubkey>"]
+    ["p", "<provider-pubkey>"],
+    ["output", "application/json"]
   ]
 }
 ```

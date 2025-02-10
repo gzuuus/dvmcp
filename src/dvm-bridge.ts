@@ -2,7 +2,7 @@ import { MCPClientHandler } from './mcp-client';
 import { NostrAnnouncer } from './nostr/announcer';
 import { RelayHandler } from './nostr/relay';
 import { keyManager } from './nostr/keys';
-import { CONFIG } from './config';
+import relayHandler from './nostr/relay';
 import type { Event } from 'nostr-tools/pure';
 
 export class DVMBridge {
@@ -14,8 +14,8 @@ export class DVMBridge {
   constructor() {
     console.log('Initializing DVM Bridge...');
     this.mcpClient = new MCPClientHandler();
+    this.relayHandler = relayHandler;
     this.nostrAnnouncer = new NostrAnnouncer(this.mcpClient);
-    this.relayHandler = new RelayHandler(CONFIG.nostr.relayUrls);
   }
 
   async start() {

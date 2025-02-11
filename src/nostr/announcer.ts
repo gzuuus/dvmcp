@@ -13,9 +13,19 @@ export class NostrAnnouncer {
     this.mcpClient = mcpClient;
   }
 
+  async announceRelayList() {
+    const event = keyManager.signEvent({
+      ...keyManager.createEventTemplate(10002),
+      content: '',
+      tags: CONFIG.nostr.relayUrls.map((url) => ['r', url]),
+    });
+
+    await this.relayHandler.publishEvent(event);
+    console.log('Announced relay list metadata');
+  }
+
   async announceService() {
     const toolsResult = await this.mcpClient.listTools();
-
     const event = keyManager.signEvent({
       ...keyManager.createEventTemplate(31990),
       content: JSON.stringify({
@@ -31,12 +41,11 @@ export class NostrAnnouncer {
         ...toolsResult.map((tool) => ['t', tool.name]),
       ],
     });
-
     await this.relayHandler.publishEvent(event);
     console.log(`Announced service with ${toolsResult.length} tools`);
   }
 
   async updateAnnouncement() {
-    await this.announceService();
+    await Promise.all([this.announceService(), this.announceRelayList()]);
   }
 }

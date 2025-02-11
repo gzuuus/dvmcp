@@ -4,6 +4,7 @@ import { RelayHandler } from './nostr/relay';
 import { keyManager } from './nostr/keys';
 import relayHandler from './nostr/relay';
 import type { Event } from 'nostr-tools/pure';
+import { CONFIG } from './config';
 
 export class DVMBridge {
   private mcpClient: MCPClientHandler;
@@ -18,13 +19,18 @@ export class DVMBridge {
     this.nostrAnnouncer = new NostrAnnouncer(this.mcpClient);
   }
 
+  private isWhitelisted(pubkey: string): boolean {
+    if (!CONFIG.whitelist.allowedPubkeys) {
+      return true;
+    }
+    return CONFIG.whitelist.allowedPubkeys.has(pubkey);
+  }
+
   async start() {
     if (this.isRunning) {
       console.log('Bridge is already running');
       return;
     }
-
-    console.log('Starting DVM Bridge...');
     try {
       console.log('Connecting to MCP server...');
       await this.mcpClient.connect();
@@ -33,7 +39,7 @@ export class DVMBridge {
       console.log('Available MCP tools:', tools);
 
       console.log('Announcing service to Nostr network...');
-      await this.nostrAnnouncer.announceService();
+      await this.nostrAnnouncer.updateAnnouncement();
 
       console.log('Setting up request handlers...');
       this.relayHandler.subscribeToRequests(this.handleRequest.bind(this));
@@ -65,76 +71,89 @@ export class DVMBridge {
 
   private async handleRequest(event: Event) {
     try {
-      if (event.kind === 5910) {
-        const command = event.tags.find((tag) => tag[0] === 'c')?.[1];
+      if (this.isWhitelisted(event.pubkey)) {
+        if (event.kind === 5910) {
+          const command = event.tags.find((tag) => tag[0] === 'c')?.[1];
 
-        if (command === 'list-tools') {
-          const tools = await this.mcpClient.listTools();
-          const response = keyManager.signEvent({
-            ...keyManager.createEventTemplate(6910),
-            content: JSON.stringify({
-              tools,
-            }),
-            tags: [
-              ['request', JSON.stringify(event)],
-              ['e', event.id],
-              ['p', event.pubkey],
-            ],
-          });
-
-          await this.relayHandler.publishEvent(response);
-        } else {
-          const jobRequest = JSON.parse(event.content);
-          const processingStatus = keyManager.signEvent({
-            ...keyManager.createEventTemplate(7000),
-            tags: [
-              ['status', 'processing'],
-              ['e', event.id],
-              ['p', event.pubkey],
-            ],
-          });
-          await this.relayHandler.publishEvent(processingStatus);
-
-          try {
-            const result = await this.mcpClient.callTool(
-              jobRequest.name,
-              jobRequest.parameters
-            );
-            const successStatus = keyManager.signEvent({
-              ...keyManager.createEventTemplate(7000),
-              tags: [
-                ['status', 'success'],
-                ['e', event.id],
-                ['p', event.pubkey],
-              ],
-            });
-            await this.relayHandler.publishEvent(successStatus);
+          if (command === 'list-tools') {
+            const tools = await this.mcpClient.listTools();
             const response = keyManager.signEvent({
               ...keyManager.createEventTemplate(6910),
-              content: JSON.stringify(result),
+              content: JSON.stringify({
+                tools,
+              }),
               tags: [
                 ['request', JSON.stringify(event)],
                 ['e', event.id],
                 ['p', event.pubkey],
               ],
             });
+
             await this.relayHandler.publishEvent(response);
-          } catch (error) {
-            const errorStatus = keyManager.signEvent({
+          } else {
+            const jobRequest = JSON.parse(event.content);
+            const processingStatus = keyManager.signEvent({
               ...keyManager.createEventTemplate(7000),
               tags: [
-                [
-                  'status',
-                  'error',
-                  error instanceof Error ? error.message : 'Unknown error',
-                ],
+                ['status', 'processing'],
                 ['e', event.id],
                 ['p', event.pubkey],
               ],
             });
-            await this.relayHandler.publishEvent(errorStatus);
+            await this.relayHandler.publishEvent(processingStatus);
+
+            try {
+              const result = await this.mcpClient.callTool(
+                jobRequest.name,
+                jobRequest.parameters
+              );
+              const successStatus = keyManager.signEvent({
+                ...keyManager.createEventTemplate(7000),
+                tags: [
+                  ['status', 'success'],
+                  ['e', event.id],
+                  ['p', event.pubkey],
+                ],
+              });
+              await this.relayHandler.publishEvent(successStatus);
+              const response = keyManager.signEvent({
+                ...keyManager.createEventTemplate(6910),
+                content: JSON.stringify(result),
+                tags: [
+                  ['request', JSON.stringify(event)],
+                  ['e', event.id],
+                  ['p', event.pubkey],
+                ],
+              });
+              await this.relayHandler.publishEvent(response);
+            } catch (error) {
+              const errorStatus = keyManager.signEvent({
+                ...keyManager.createEventTemplate(7000),
+                tags: [
+                  [
+                    'status',
+                    'error',
+                    error instanceof Error ? error.message : 'Unknown error',
+                  ],
+                  ['e', event.id],
+                  ['p', event.pubkey],
+                ],
+              });
+              await this.relayHandler.publishEvent(errorStatus);
+            }
           }
         }
+      } else {
+        const errorStatus = keyManager.signEvent({
+          ...keyManager.createEventTemplate(7000),
+          content: 'Unauthorized: Pubkey not in whitelist',
+          tags: [
+            ['status', 'error'],
+            ['e', event.id],
+            ['p', event.pubkey],
+          ],
+        });
+        await this.relayHandler.publishEvent(errorStatus);
       }
     } catch (error) {
       console.error('Error handling request:', error);
@@ -143,7 +162,6 @@ export class DVMBridge {
 }
 
 if (import.meta.main) {
-  console.log('Starting DVM-MCP Bridge service...');
   const bridge = new DVMBridge();
 
   const shutdown = async () => {

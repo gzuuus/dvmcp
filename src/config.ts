@@ -2,6 +2,30 @@ import { config } from 'dotenv';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
+interface NostrConfig {
+  privateKey: string;
+  relayUrls: string[];
+}
+
+interface MCPConfig {
+  name: string;
+  about: string;
+  clientName: string;
+  clientVersion: string;
+  serverCommand: string;
+  serverArgs: string[];
+}
+
+interface WhitelistConfig {
+  allowedPubkeys: Set<string> | undefined;
+}
+
+interface AppConfig {
+  nostr: NostrConfig;
+  mcp: MCPConfig;
+  whitelist: WhitelistConfig;
+}
+
 const envPath = join(process.cwd(), '.env');
 if (!existsSync(envPath)) {
   throw new Error(
@@ -31,7 +55,7 @@ function getEnvVar(name: string, defaultValue: string): string {
   return process.env[name] || defaultValue;
 }
 
-export const CONFIG = {
+export const CONFIG: AppConfig = {
   nostr: {
     privateKey: requireEnvVar('PRIVATE_KEY'),
     relayUrls: requireEnvVar('RELAY_URLS')
@@ -48,6 +72,11 @@ export const CONFIG = {
     clientVersion: requireEnvVar('MCP_CLIENT_VERSION'),
     serverCommand: requireEnvVar('MCP_SERVER_COMMAND'),
     serverArgs: requireEnvVar('MCP_SERVER_ARGS').split(','),
+  },
+  whitelist: {
+    allowedPubkeys: process.env.ALLOWED_PUBKEYS
+      ? new Set(process.env.ALLOWED_PUBKEYS.split(',').map((pk) => pk.trim()))
+      : undefined,
   },
 };
 

@@ -1,22 +1,22 @@
-import { MCPClientHandler } from './mcp-client';
 import { NostrAnnouncer } from './nostr/announcer';
 import { RelayHandler } from './nostr/relay';
 import { keyManager } from './nostr/keys';
 import relayHandler from './nostr/relay';
 import type { Event } from 'nostr-tools/pure';
 import { CONFIG } from './config';
+import { MCPPool } from './mcp-pool';
 
 export class DVMBridge {
-  private mcpClient: MCPClientHandler;
+  private mcpPool: MCPPool;
   private nostrAnnouncer: NostrAnnouncer;
   private relayHandler: RelayHandler;
   private isRunning: boolean = false;
 
   constructor() {
     console.log('Initializing DVM Bridge...');
-    this.mcpClient = new MCPClientHandler();
+    this.mcpPool = new MCPPool(CONFIG.mcp.servers);
     this.relayHandler = relayHandler;
-    this.nostrAnnouncer = new NostrAnnouncer(this.mcpClient);
+    this.nostrAnnouncer = new NostrAnnouncer(this.mcpPool);
   }
 
   private isWhitelisted(pubkey: string): boolean {
@@ -31,12 +31,13 @@ export class DVMBridge {
       console.log('Bridge is already running');
       return;
     }
-    try {
-      console.log('Connecting to MCP server...');
-      await this.mcpClient.connect();
 
-      const tools = await this.mcpClient.listTools();
-      console.log('Available MCP tools:', tools);
+    try {
+      console.log('Connecting to MCP servers...');
+      await this.mcpPool.connect();
+
+      const tools = await this.mcpPool.listTools();
+      console.log(`Available MCP tools across all servers: ${tools.length}`);
 
       console.log('Announcing service to Nostr network...');
       await this.nostrAnnouncer.updateAnnouncement();
@@ -59,7 +60,7 @@ export class DVMBridge {
 
     console.log('Stopping DVM Bridge...');
     try {
-      await this.mcpClient.disconnect();
+      await this.mcpPool.disconnect();
       this.relayHandler.cleanup();
       this.isRunning = false;
       console.log('DVM Bridge stopped successfully');
@@ -76,7 +77,7 @@ export class DVMBridge {
           const command = event.tags.find((tag) => tag[0] === 'c')?.[1];
 
           if (command === 'list-tools') {
-            const tools = await this.mcpClient.listTools();
+            const tools = await this.mcpPool.listTools();
             const response = keyManager.signEvent({
               ...keyManager.createEventTemplate(6910),
               content: JSON.stringify({
@@ -103,7 +104,7 @@ export class DVMBridge {
             await this.relayHandler.publishEvent(processingStatus);
 
             try {
-              const result = await this.mcpClient.callTool(
+              const result = await this.mcpPool.callTool(
                 jobRequest.name,
                 jobRequest.parameters
               );

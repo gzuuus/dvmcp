@@ -21,6 +21,7 @@
     "@noble/hashes": "^1.7.1",
     "dotenv": "^16.4.7",
     "nostr-tools": "^2.10.4",
-    "prettier": "^3.4.2"
+    "prettier": "^3.4.2",
+    "yaml": "^2.7.0"
   }
 }

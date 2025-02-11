@@ -1,9 +1,7 @@
 import { hexToBytes } from '@noble/hashes/utils';
 import { getPublicKey, finalizeEvent } from 'nostr-tools/pure';
-import type { Event } from 'nostr-tools/pure';
+import type { Event, UnsignedEvent } from 'nostr-tools/pure';
 import { CONFIG } from '../config';
-
-export type UnsignedEvent = Omit<Event, 'sig' | 'id'>;
 
 export const createKeyManager = (privateKeyHex: string) => {
   const privateKeyBytes = hexToBytes(privateKeyHex);

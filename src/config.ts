@@ -1,6 +1,7 @@
-import { config } from 'dotenv';
+import { parse } from 'yaml';
 import { join } from 'path';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
+import type { MCPServerConfig } from './types';
 
 interface NostrConfig {
   privateKey: string;
@@ -12,8 +13,7 @@ interface MCPConfig {
   about: string;
   clientName: string;
   clientVersion: string;
-  serverCommand: string;
-  serverArgs: string[];
+  servers: MCPServerConfig[];
 }
 
 interface WhitelistConfig {
@@ -26,75 +26,120 @@ interface AppConfig {
   whitelist: WhitelistConfig;
 }
 
-const envPath = join(process.cwd(), '.env');
-if (!existsSync(envPath)) {
+const CONFIG_PATH = join(process.cwd(), 'config.yml');
+const HEX_KEYS_REGEX = /^(?:[0-9a-fA-F]{64})$/;
+
+if (!existsSync(CONFIG_PATH)) {
   throw new Error(
-    'No .env file found. Please create one based on .env.example'
+    'No config.yml file found. Please create one based on config.example.yml'
   );
 }
 
-const result = config();
+function loadConfig(): AppConfig {
+  try {
+    const configFile = readFileSync(CONFIG_PATH, 'utf8');
+    const rawConfig = parse(configFile);
 
-if (result.error) {
-  throw new Error(`Error loading .env file: ${result.error.message}`);
+    const config: AppConfig = {
+      nostr: {
+        privateKey: validateRequiredField(
+          rawConfig.nostr?.privateKey,
+          'nostr.privateKey'
+        ),
+        relayUrls: validateRelayUrls(rawConfig.nostr?.relayUrls),
+      },
+      mcp: {
+        name: getConfigValue(rawConfig.mcp?.name, 'DVM MCP Bridge'),
+        about: getConfigValue(
+          rawConfig.mcp?.about,
+          'MCP-enabled DVM providing AI and computational tools'
+        ),
+        clientName: validateRequiredField(
+          rawConfig.mcp?.clientName,
+          'mcp.clientName'
+        ),
+        clientVersion: validateRequiredField(
+          rawConfig.mcp?.clientVersion,
+          'mcp.clientVersion'
+        ),
+        servers: validateMCPServers(rawConfig.mcp?.servers),
+      },
+      whitelist: {
+        allowedPubkeys: rawConfig.whitelist?.allowedPubkeys
+          ? new Set(
+              rawConfig.whitelist.allowedPubkeys.map((pk: string) => pk.trim())
+            )
+          : undefined,
+      },
+    };
+
+    if (!HEX_KEYS_REGEX.test(config.nostr.privateKey)) {
+      throw new Error('privateKey must be a 32-byte hex string');
+    }
+
+    return config;
+  } catch (error) {
+    throw new Error(`Failed to load config: ${error}`);
+  }
 }
 
-const HEX_KEYS_REGEX = /^(?:[0-9a-fA-F]{64})$/;
-
-function requireEnvVar(name: string): string {
-  const value = process.env[name];
+function validateRequiredField(value: any, fieldName: string): string {
   if (!value) {
-    throw new Error(
-      `Missing required environment variable: ${name}. Check your .env file`
-    );
+    throw new Error(`Missing required config field: ${fieldName}`);
   }
   return value;
 }
 
-function getEnvVar(name: string, defaultValue: string): string {
-  return process.env[name] || defaultValue;
+function getConfigValue(
+  value: string | undefined,
+  defaultValue: string
+): string {
+  return value || defaultValue;
 }
 
-export const CONFIG: AppConfig = {
-  nostr: {
-    privateKey: requireEnvVar('PRIVATE_KEY'),
-    relayUrls: requireEnvVar('RELAY_URLS')
-      .split(',')
-      .map((url) => url.trim()),
-  },
-  mcp: {
-    name: getEnvVar('MCP_SERVICE_NAME', 'DVM MCP Bridge'),
-    about: getEnvVar(
-      'MCP_SERVICE_ABOUT',
-      'MCP-enabled DVM providing AI and computational tools'
-    ),
-    clientName: requireEnvVar('MCP_CLIENT_NAME'),
-    clientVersion: requireEnvVar('MCP_CLIENT_VERSION'),
-    serverCommand: requireEnvVar('MCP_SERVER_COMMAND'),
-    serverArgs: requireEnvVar('MCP_SERVER_ARGS').split(','),
-  },
-  whitelist: {
-    allowedPubkeys: process.env.ALLOWED_PUBKEYS
-      ? new Set(process.env.ALLOWED_PUBKEYS.split(',').map((pk) => pk.trim()))
-      : undefined,
-  },
-};
-
-if (!HEX_KEYS_REGEX.test(CONFIG.nostr.privateKey)) {
-  throw new Error('PRIVATE_KEY must be a 32-byte hex string');
-}
-
-CONFIG.nostr.relayUrls.forEach((url) => {
-  try {
-    new URL(url);
-    if (!url.startsWith('ws://') && !url.startsWith('wss://')) {
-      throw new Error(`Relay URL must start with ws:// or wss://: ${url}`);
-    }
-  } catch (error) {
-    throw new Error(`Invalid relay URL: ${url}`);
+function validateRelayUrls(urls: any): string[] {
+  if (!Array.isArray(urls) || urls.length === 0) {
+    throw new Error(
+      'At least one relay URL must be provided in nostr.relayUrls'
+    );
   }
-});
 
-if (CONFIG.nostr.relayUrls.length === 0) {
-  throw new Error('At least one relay URL must be provided in RELAY_URLS');
+  return urls.map((url: string) => {
+    try {
+      const trimmedUrl = url.trim();
+      new URL(trimmedUrl);
+      if (!trimmedUrl.startsWith('ws://') && !trimmedUrl.startsWith('wss://')) {
+        throw new Error(
+          `Relay URL must start with ws:// or wss://: ${trimmedUrl}`
+        );
+      }
+      return trimmedUrl;
+    } catch (error) {
+      throw new Error(`Invalid relay URL: ${url}`);
+    }
+  });
 }
+
+function validateMCPServers(servers: any): MCPServerConfig[] {
+  if (!Array.isArray(servers) || servers.length === 0) {
+    throw new Error(
+      'At least one MCP server must be configured in mcp.servers'
+    );
+  }
+
+  return servers.map((server: any, index: number) => {
+    if (!server.name || !server.command || !Array.isArray(server.args)) {
+      throw new Error(
+        `Invalid MCP server configuration at index ${index}. Required fields: name, command, args[]`
+      );
+    }
+
+    return {
+      name: server.name,
+      command: server.command,
+      args: server.args,
+    };
+  });
+}
+
+export const CONFIG = loadConfig();

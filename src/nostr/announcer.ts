@@ -1,16 +1,16 @@
 import { CONFIG } from '../config';
 import { RelayHandler } from './relay';
 import { keyManager } from './keys';
-import { MCPClientHandler } from '../mcp-client';
 import relayHandler from './relay';
+import type { MCPPool } from '../mcp-pool';
 
 export class NostrAnnouncer {
   private relayHandler: RelayHandler;
-  private mcpClient: MCPClientHandler;
+  private mcpPool: MCPPool;
 
-  constructor(mcpClient: MCPClientHandler) {
+  constructor(mcpPool: MCPPool) {
     this.relayHandler = relayHandler;
-    this.mcpClient = mcpClient;
+    this.mcpPool = mcpPool;
   }
 
   async announceRelayList() {
@@ -25,24 +25,24 @@ export class NostrAnnouncer {
   }
 
   async announceService() {
-    const toolsResult = await this.mcpClient.listTools();
+    const tools = await this.mcpPool.listTools();
     const event = keyManager.signEvent({
       ...keyManager.createEventTemplate(31990),
       content: JSON.stringify({
         name: CONFIG.mcp.name,
         about: CONFIG.mcp.about,
-        tools: toolsResult,
+        tools: tools,
       }),
       tags: [
         ['d', 'dvm-announcement'],
         ['k', '5910'],
         ['capabilities', 'mcp-1.0'],
         ['t', 'mcp'],
-        ...toolsResult.map((tool) => ['t', tool.name]),
+        ...tools.map((tool) => ['t', tool.name]),
       ],
     });
     await this.relayHandler.publishEvent(event);
-    console.log(`Announced service with ${toolsResult.length} tools`);
+    console.log(`Announced service with ${tools.length} tools`);
   }
 
   async updateAnnouncement() {

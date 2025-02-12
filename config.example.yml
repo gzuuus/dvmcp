@@ -1,0 +1,35 @@
+# Nostr Configuration
+nostr:
+  # Your private key in hex format (32-byte hex string)
+  privateKey: "your_private_key_here"
+  # List of relay URLs (must start with ws:// or wss://)
+  relayUrls:
+    - "wss://relay1.com"
+    - "wss://relay2.net"
+
+# MCP Service Configuration
+mcp:
+  # Service information
+  name: "DVM MCP Bridge"
+  about: "MCP-enabled DVM providing AI and computational tools"
+  # Required client information
+  clientName: "DVM MCP Bridge Client"
+  clientVersion: "1.0.0"
+  
+  # MCP Servers Configuration accepts multiple servers
+  servers:
+    - name: "server1"
+      command: "node"
+      args: 
+        - "run"
+        - "src/external-mcp-server1.ts"
+    
+    - name: "server2"
+      command: "python"
+      args:
+        - "src/external-mcp-server2.py"
+
+# Optional: Whitelist Configuration
+# whitelist:
+  # List of allowed public keys (leave empty for no restrictions)
+  # allowedPubkeys: []

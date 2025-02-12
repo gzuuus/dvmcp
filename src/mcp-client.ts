@@ -1,17 +1,17 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { CONFIG } from './config';
-// TODO: Add connection to multiple mcp servers and router
+import type { MCPServerConfig } from './types';
+
 export class MCPClientHandler {
   private client: Client;
   private transport: StdioClientTransport;
 
-  constructor() {
+  constructor(config: MCPServerConfig) {
     this.transport = new StdioClientTransport({
-      command: CONFIG.mcp.serverCommand,
-      args: CONFIG.mcp.serverArgs,
+      command: config.command,
+      args: config.args,
     });
-
     this.client = new Client(
       {
         name: CONFIG.mcp.clientName,

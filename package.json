@@ -8,7 +8,8 @@
     "dev": "bun --watch src/dvm-bridge.ts",
     "start": "bun run src/dvm-bridge.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "bun run typecheck && bun run format"
+    "lint": "bun run typecheck && bun run format",
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "latest"

@@ -9,26 +9,22 @@ The Model Context Protocol provides a standardized way for applications to expos
 - MCP servers to announce their capabilities on the Nostr network
 - Nostr clients to discover available MCP tools
 - Seamless execution of MCP tools through Nostr's DVM protocol
-- Standardized payment handling
+- Support for multiple MCP servers in a single DVM instance
 
 ## Features
 
+- **MCP Server Pool**: Connect and manage multiple MCP servers through a single DVM
 - **Service Discovery**: Automatically announces MCP services using NIP-89
 - **Tool Discovery and Execution**: Exposes and executes MCP tools through DVM kind:5910/6910 events
 - **Status Updates**: Provides job status and payment handling via kind:7000 events
 - **Error Handling**: Comprehensive error handling and status reporting
-- **Payment Flow**: Built-in support for Lightning payment processing
-
-## Protocol Specification
-
-For detailed information about the DVMCP, see the [specification document](docs/dvmcp-spec.md).
 
 ## Getting Started
 
 ### Prerequisites
 
 - [Bun](https://bun.sh) runtime (v1.2.2 or later)
-- A running MCP server
+- One or more MCP servers
 - Access to Nostr relays
 
 ### Installation
@@ -49,10 +45,31 @@ bun install
 3. Create your configuration:
 
 ```bash
-cp .env.example .env
+cp config.example.yml config.yml
 ```
 
-4. Edit `.env` with your settings:
+4. Edit `config.yml` with your settings:
+
+```yaml
+nostr:
+  privateKey: 'your_private_key_here'
+  relayUrls:
+    - 'wss://relay1.com'
+    - 'wss://relay2.net'
+
+mcp:
+  name: 'DVM MCP Bridge'
+  about: 'MCP-enabled DVM providing AI and computational tools'
+  servers:
+    - name: 'server1'
+      command: 'node'
+      args: ['run', 'src/external-mcp-server1.ts']
+    - name: 'server2'
+      command: 'python'
+      args: ['src/external-mcp-server2.py']
+```
+
+You can find all the configurations in the `config.example.yml` file
 
 ### Running the Bridge
 

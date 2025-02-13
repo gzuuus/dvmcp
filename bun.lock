@@ -3,7 +3,7 @@
   "workspaces": {
     "": {
       "name": "dvmcp",
-      "dependencies": {
+      "devDependencies": {
         "prettier": "^3.5.1",
       },
     },

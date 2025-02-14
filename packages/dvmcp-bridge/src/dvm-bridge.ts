@@ -1,10 +1,9 @@
-import { NostrAnnouncer } from './nostr/announcer';
-import { RelayHandler } from './nostr/relay';
-import { keyManager } from './nostr/keys';
-import relayHandler from './nostr/relay';
+import { keyManager, NostrAnnouncer } from './announcer';
 import type { Event } from 'nostr-tools/pure';
 import { CONFIG } from './config';
 import { MCPPool } from './mcp-pool';
+import { RelayHandler } from 'commons/nostr/relay-handler';
+import { relayHandler } from './relay';
 
 export class DVMBridge {
   private mcpPool: MCPPool;

@@ -1,26 +1,38 @@
 import { parse } from 'yaml';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
-import type { AppConfig, MCPServerConfig } from './types';
+import { HEX_KEYS_REGEX } from 'commons/constants';
+
+export interface Config {
+  nostr: {
+    privateKey: string;
+    relayUrls: string[];
+  };
+  mcp: {
+    name: string;
+    version: string;
+    about: string;
+  };
+  whitelist?: {
+    allowedDVMs?: Set<string>;
+  };
+}
 
 const CONFIG_PATH = join(process.cwd(), 'config.yml');
-const HEX_KEYS_REGEX = /^(?:[0-9a-fA-F]{64})$/;
 
-const TEST_CONFIG: AppConfig = {
+const TEST_CONFIG: Config = {
   nostr: {
     privateKey:
       'd4d4d7aae7857054596c4c0976b22a73acac3a10d30bf56db35ee038bbf0dd44',
     relayUrls: ['ws://localhost:3334'],
   },
   mcp: {
-    name: 'Test DVM MCP Bridge',
-    about: 'Test MCP-enabled DVM',
-    clientName: 'Test Client',
-    clientVersion: '1.0.0',
-    servers: [],
+    name: 'Test DVMCP Discovery',
+    version: '1.0.0',
+    about: 'Test DVMCP Discovery Server',
   },
   whitelist: {
-    allowedPubkeys: new Set(),
+    allowedDVMs: new Set(),
   },
 };
 
@@ -60,27 +72,7 @@ function validateRelayUrls(urls: any): string[] {
   });
 }
 
-function validateMCPServers(servers: any): MCPServerConfig[] {
-  if (!Array.isArray(servers) || servers.length === 0) {
-    throw new Error(
-      'At least one MCP server must be configured in mcp.servers'
-    );
-  }
-  return servers.map((server: any, index: number) => {
-    if (!server.name || !server.command || !Array.isArray(server.args)) {
-      throw new Error(
-        `Invalid MCP server configuration at index ${index}. Required fields: name, command, args[]`
-      );
-    }
-    return {
-      name: server.name,
-      command: server.command,
-      args: server.args,
-    };
-  });
-}
-
-function loadConfig(): AppConfig {
+function loadConfig(): Config {
   if (process.env.NODE_ENV === 'test') {
     return TEST_CONFIG;
   }
@@ -95,7 +87,7 @@ function loadConfig(): AppConfig {
     const configFile = readFileSync(CONFIG_PATH, 'utf8');
     const rawConfig = parse(configFile);
 
-    const config: AppConfig = {
+    const config: Config = {
       nostr: {
         privateKey: validateRequiredField(
           rawConfig.nostr?.privateKey,
@@ -104,25 +96,17 @@ function loadConfig(): AppConfig {
         relayUrls: validateRelayUrls(rawConfig.nostr?.relayUrls),
       },
       mcp: {
-        name: getConfigValue(rawConfig.mcp?.name, 'DVM MCP Bridge'),
+        name: getConfigValue(rawConfig.mcp?.name, 'DVMCP Discovery'),
+        version: validateRequiredField(rawConfig.mcp?.version, 'mcp.version'),
         about: getConfigValue(
           rawConfig.mcp?.about,
-          'MCP-enabled DVM providing AI and computational tools'
+          'DVMCP Discovery Server for aggregating MCP tools from DVMs'
         ),
-        clientName: validateRequiredField(
-          rawConfig.mcp?.clientName,
-          'mcp.clientName'
-        ),
-        clientVersion: validateRequiredField(
-          rawConfig.mcp?.clientVersion,
-          'mcp.clientVersion'
-        ),
-        servers: validateMCPServers(rawConfig.mcp?.servers),
       },
       whitelist: {
-        allowedPubkeys: rawConfig.whitelist?.allowedPubkeys
+        allowedDVMs: rawConfig.whitelist?.allowedDVMs
           ? new Set(
-              rawConfig.whitelist.allowedPubkeys.map((pk: string) => pk.trim())
+              rawConfig.whitelist.allowedDVMs.map((pk: string) => pk.trim())
             )
           : undefined,
       },

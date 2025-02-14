@@ -4,7 +4,6 @@ import type { SubCloser } from 'nostr-tools/pool';
 import WebSocket from 'ws';
 import { useWebSocketImplementation } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
-import { CONFIG } from '../config';
 
 useWebSocketImplementation(WebSocket);
 
@@ -96,5 +95,3 @@ export class RelayHandler {
     return this.pool.listConnectionStatus();
   }
 }
-
-export default new RelayHandler(CONFIG.nostr.relayUrls);

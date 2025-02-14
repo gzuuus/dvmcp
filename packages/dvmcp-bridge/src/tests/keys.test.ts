@@ -1,5 +1,5 @@
 import { expect, test, describe } from 'bun:test';
-import { createKeyManager } from '../nostr/keys';
+import { createKeyManager } from 'commons/nostr/key-manager';
 
 describe('KeyManager', () => {
   const testPrivateKey =

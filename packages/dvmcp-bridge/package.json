@@ -22,6 +22,7 @@
     "@noble/hashes": "^1.7.1",
     "dotenv": "^16.4.7",
     "nostr-tools": "^2.10.4",
-    "yaml": "^2.7.0"
+    "yaml": "^2.7.0",
+    "commons": "workspace:*"
   }
 }

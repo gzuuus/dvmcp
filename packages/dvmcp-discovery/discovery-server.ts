@@ -20,6 +20,7 @@ export class DiscoveryServer {
   private keyManager: ReturnType<typeof createKeyManager>;
   private discoveredTools: Map<string, DVMTool> = new Map();
   private executionSubscriptions: Map<string, () => void> = new Map();
+  private isConnected: boolean = false;
 
   constructor(config: Config) {
     this.relayHandler = new RelayHandler(config.nostr.relayUrls);
@@ -29,21 +30,17 @@ export class DiscoveryServer {
       name: config.mcp.name,
       version: config.mcp.version,
     });
-
-    this.startDiscovery();
   }
 
   private async startDiscovery() {
-    // Query existing announcements
     const filter: Filter = {
       kinds: [31990],
       '#t': ['mcp'],
     };
 
     const events = await this.relayHandler.queryEvents(filter);
-    events.forEach((event) => this.handleDVMAnnouncement(event));
+    await Promise.all(events.map((event) => this.handleDVMAnnouncement(event)));
 
-    // Subscribe to new announcements
     this.relayHandler.subscribeToRequests((event) => {
       if (event.kind === 31990) {
         this.handleDVMAnnouncement(event);
@@ -51,9 +48,8 @@ export class DiscoveryServer {
     });
   }
 
-  private handleDVMAnnouncement(event: Event) {
+  private async handleDVMAnnouncement(event: Event) {
     try {
-      // Check whitelist if enabled
       if (
         CONFIG.whitelist?.allowedDVMs &&
         !CONFIG.whitelist.allowedDVMs.has(event.pubkey)
@@ -63,26 +59,67 @@ export class DiscoveryServer {
       const content = JSON.parse(event.content);
       if (!content.tools || !Array.isArray(content.tools)) return;
 
-      content.tools.forEach((tool: any) => {
-        const toolId = `${event.pubkey}:${tool.name}`;
+      for (const tool of content.tools) {
+        const toolId = `${event.pubkey.slice(0, 12)}:${tool.name}`;
+
+        const inputSchema = z.object(
+          Object.fromEntries(
+            Object.entries(tool.inputSchema.properties).map(
+              ([key, value]: [string, any]) => [key, this.mapSchemaType(value)]
+            )
+          )
+        );
 
         this.discoveredTools.set(toolId, {
           name: tool.name,
           description: tool.description,
-          inputSchema: z.object(tool.inputSchema.properties),
+          inputSchema: inputSchema,
           dvmPubkey: event.pubkey,
         });
 
-        this.registerTool(toolId, tool);
-      });
+        if (!this.isConnected) {
+          this.registerTool(toolId, {
+            name: tool.name,
+            description: tool.description,
+            inputSchema: inputSchema,
+            dvmPubkey: event.pubkey,
+          });
+        }
+      }
     } catch (error) {
       console.error('Error processing DVM announcement:', error);
+    }
+  }
+
+  private mapSchemaType(schema: any): z.ZodTypeAny {
+    switch (schema.type) {
+      case 'string':
+        return z.string();
+      case 'number':
+        return z.number();
+      case 'integer':
+        return z.number().int();
+      case 'boolean':
+        return z.boolean();
+      case 'array':
+        return z.array(this.mapSchemaType(schema.items));
+      case 'object':
+        return z.object(
+          Object.fromEntries(
+            Object.entries(schema.properties).map(
+              ([key, value]: [string, any]) => [key, this.mapSchemaType(value)]
+            )
+          )
+        );
+      default:
+        return z.any();
     }
   }
 
   private registerTool(toolId: string, toolDef: DVMTool) {
     this.mcpServer.tool(
       toolId,
+      toolDef.description,
       toolDef.inputSchema.shape,
       async (
         args: z.infer<typeof toolDef.inputSchema>
@@ -124,16 +161,20 @@ export class DiscoveryServer {
         reject(new Error('Tool not found'));
         return;
       }
-
-      // Create execution request event
       const requestEvent = this.keyManager.createEventTemplate(5910);
-      requestEvent.content = JSON.stringify(params);
-      requestEvent.tags.push(['c', 'execute-tool'], ['name', tool.name]);
-
+      requestEvent.content = JSON.stringify({
+        name: tool.name,
+        parameters: params,
+      });
+      requestEvent.tags.push(['c', 'execute-tool']);
       const signedEvent = this.keyManager.signEvent(requestEvent);
       const executionId = signedEvent.id;
 
-      // Set up response listener
+      const defaultFilter: Filter = {
+        kinds: [6910, 7000],
+        since: Math.floor(Date.now() / 1000),
+      };
+
       const sub = this.relayHandler.subscribeToRequests((event) => {
         if (
           event.kind === 6910 &&
@@ -147,6 +188,7 @@ export class DiscoveryServer {
             reject(error);
             cleanup();
           }
+          return;
         }
 
         if (
@@ -159,35 +201,41 @@ export class DiscoveryServer {
             cleanup();
           }
         }
-      });
+      }, defaultFilter);
 
-      // Cleanup function
       const cleanup = () => {
         sub.close();
         this.executionSubscriptions.delete(executionId);
       };
 
-      // Store cleanup function
       this.executionSubscriptions.set(executionId, cleanup);
 
-      // Publish request
-      this.relayHandler.publishEvent(signedEvent).catch(reject);
+      this.relayHandler.publishEvent(signedEvent).catch((err) => {
+        reject(err);
+        cleanup();
+      });
 
-      // Set execution timeout
       setTimeout(() => {
         reject(new Error('Tool execution timeout'));
         cleanup();
-      }, 30000); // 30 second timeout
+      }, 30000);
     });
   }
 
   public async start() {
+    await this.startDiscovery();
+
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
+    this.isConnected = true;
+
     console.log('DVMCP Discovery Server started');
+    console.log(`Discovered ${this.discoveredTools.size} tools`);
+    this.discoveredTools.forEach((tool) => console.log(tool));
   }
 
   public cleanup() {
+    this.isConnected = false;
     this.relayHandler.cleanup();
     this.executionSubscriptions.forEach((cleanup) => cleanup());
     this.executionSubscriptions.clear();

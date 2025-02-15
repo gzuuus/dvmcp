@@ -23,7 +23,7 @@ const CONFIG_PATH = join(process.cwd(), 'config.yml');
 const TEST_CONFIG: Config = {
   nostr: {
     privateKey:
-      'd4d4d7aae7857054596c4c0976b22a73acac3a10d30bf56db35ee038bbf0dd44',
+      '034cf6179a62e5aaf12bd67dc7d19be2f0fae9065fccaddd4607c2ca041fdaf9',
     relayUrls: ['ws://localhost:3334'],
   },
   mcp: {

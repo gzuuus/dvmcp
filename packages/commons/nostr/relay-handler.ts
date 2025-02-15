@@ -51,14 +51,17 @@ export class RelayHandler {
     }
   }
 
-  subscribeToRequests(onRequest: (event: Event) => void): SubCloser {
-    const filters: Filter[] = [
-      {
-        kinds: [5910],
-        since: Math.floor(Date.now() / 1000),
-      },
-    ];
-
+  subscribeToRequests(
+    onRequest: (event: Event) => void,
+    filter?: Filter
+  ): SubCloser {
+    const defaultFilter: Filter = {
+      kinds: [5910, 6910, 7000],
+      since: Math.floor(Date.now() / 1000),
+    };
+  
+    const filters: Filter[] = [filter || defaultFilter];
+  
     const sub = this.pool.subscribeMany(this.relayUrls, filters, {
       onevent(event) {
         console.log(
@@ -73,7 +76,7 @@ export class RelayHandler {
         console.log('Subscription closed:', reasons);
       },
     });
-
+  
     this.subscriptions.push(sub);
     return sub;
   }

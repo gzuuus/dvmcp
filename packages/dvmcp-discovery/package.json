@@ -2,6 +2,14 @@
   "name": "dvmcp-discovery",
   "module": "index.ts",
   "type": "module",
+  "scripts": {
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "dev": "bun --watch src/index.ts",
+    "start": "bun run index.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "bun run typecheck && bun run format",
+    "test": "bun test"
+  },
   "devDependencies": {
     "@types/bun": "latest"
   },

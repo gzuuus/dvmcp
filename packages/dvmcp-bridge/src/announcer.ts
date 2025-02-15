@@ -1,7 +1,7 @@
 import type { RelayHandler } from 'commons/nostr/relay-handler';
 import { CONFIG } from './config';
-import type { MCPPool } from './mcp-pool';
 import { createKeyManager } from 'commons/nostr/key-manager';
+import type { MCPPool } from './mcp-pool';
 import { relayHandler } from './relay';
 
 export const keyManager = createKeyManager(CONFIG.nostr.privateKey);

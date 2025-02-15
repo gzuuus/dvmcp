@@ -1,5 +1,5 @@
-import { DiscoveryServer } from './discovery-server';
-import { CONFIG } from './config';
+import { CONFIG } from './src/config';
+import { DiscoveryServer } from './src/discovery-server';
 
 async function main() {
   try {

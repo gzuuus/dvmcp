@@ -1,10 +1,10 @@
-import { NostrAnnouncer } from './nostr/announcer';
-import { RelayHandler } from './nostr/relay';
-import { keyManager } from './nostr/keys';
-import relayHandler from './nostr/relay';
+import { keyManager, NostrAnnouncer } from './announcer';
 import type { Event } from 'nostr-tools/pure';
 import { CONFIG } from './config';
 import { MCPPool } from './mcp-pool';
+import { RelayHandler } from 'commons/nostr/relay-handler';
+import { relayHandler } from './relay';
+import { DVM_NOTICE_KIND, TOOL_REQUEST_KIND, TOOL_RESPONSE_KIND } from 'commons/constants';
 
 export class DVMBridge {
   private mcpPool: MCPPool;
@@ -73,13 +73,13 @@ export class DVMBridge {
   private async handleRequest(event: Event) {
     try {
       if (this.isWhitelisted(event.pubkey)) {
-        if (event.kind === 5910) {
+        if (event.kind === TOOL_REQUEST_KIND) {
           const command = event.tags.find((tag) => tag[0] === 'c')?.[1];
 
           if (command === 'list-tools') {
             const tools = await this.mcpPool.listTools();
             const response = keyManager.signEvent({
-              ...keyManager.createEventTemplate(6910),
+              ...keyManager.createEventTemplate(TOOL_RESPONSE_KIND),
               content: JSON.stringify({
                 tools,
               }),
@@ -94,7 +94,7 @@ export class DVMBridge {
           } else {
             const jobRequest = JSON.parse(event.content);
             const processingStatus = keyManager.signEvent({
-              ...keyManager.createEventTemplate(7000),
+              ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
               tags: [
                 ['status', 'processing'],
                 ['e', event.id],
@@ -109,7 +109,7 @@ export class DVMBridge {
                 jobRequest.parameters
               );
               const successStatus = keyManager.signEvent({
-                ...keyManager.createEventTemplate(7000),
+                ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
                 tags: [
                   ['status', 'success'],
                   ['e', event.id],
@@ -118,7 +118,7 @@ export class DVMBridge {
               });
               await this.relayHandler.publishEvent(successStatus);
               const response = keyManager.signEvent({
-                ...keyManager.createEventTemplate(6910),
+                ...keyManager.createEventTemplate(TOOL_RESPONSE_KIND),
                 content: JSON.stringify(result),
                 tags: [
                   ['request', JSON.stringify(event)],
@@ -129,7 +129,7 @@ export class DVMBridge {
               await this.relayHandler.publishEvent(response);
             } catch (error) {
               const errorStatus = keyManager.signEvent({
-                ...keyManager.createEventTemplate(7000),
+                ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
                 tags: [
                   [
                     'status',
@@ -146,7 +146,7 @@ export class DVMBridge {
         }
       } else {
         const errorStatus = keyManager.signEvent({
-          ...keyManager.createEventTemplate(7000),
+          ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
           content: 'Unauthorized: Pubkey not in whitelist',
           tags: [
             ['status', 'error'],
@@ -159,30 +159,5 @@ export class DVMBridge {
     } catch (error) {
       console.error('Error handling request:', error);
     }
-  }
-}
-
-if (import.meta.main) {
-  const bridge = new DVMBridge();
-
-  const shutdown = async () => {
-    console.log('Shutting down...');
-    try {
-      await bridge.stop();
-      process.exit(0);
-    } catch (error) {
-      console.error('Error during shutdown:', error);
-      process.exit(1);
-    }
-  };
-
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
-
-  try {
-    await bridge.start();
-  } catch (error) {
-    console.error('Failed to start service:', error);
-    process.exit(1);
   }
 }

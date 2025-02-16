@@ -1,8 +1,11 @@
-import { CONFIG } from '../config';
-import { RelayHandler } from './relay';
-import { keyManager } from './keys';
-import relayHandler from './relay';
-import type { MCPPool } from '../mcp-pool';
+import type { RelayHandler } from 'commons/nostr/relay-handler';
+import { CONFIG } from './config';
+import { createKeyManager } from 'commons/nostr/key-manager';
+import type { MCPPool } from './mcp-pool';
+import { relayHandler } from './relay';
+import { DVM_ANNOUNCEMENT_KIND, TOOL_REQUEST_KIND } from 'commons/constants';
+
+export const keyManager = createKeyManager(CONFIG.nostr.privateKey);
 
 export class NostrAnnouncer {
   private relayHandler: RelayHandler;
@@ -27,7 +30,7 @@ export class NostrAnnouncer {
   async announceService() {
     const tools = await this.mcpPool.listTools();
     const event = keyManager.signEvent({
-      ...keyManager.createEventTemplate(31990),
+      ...keyManager.createEventTemplate(DVM_ANNOUNCEMENT_KIND),
       content: JSON.stringify({
         name: CONFIG.mcp.name,
         about: CONFIG.mcp.about,
@@ -35,7 +38,7 @@ export class NostrAnnouncer {
       }),
       tags: [
         ['d', 'dvm-announcement'],
-        ['k', '5910'],
+        ['k', `${TOOL_REQUEST_KIND}`],
         ['capabilities', 'mcp-1.0'],
         ['t', 'mcp'],
         ...tools.map((tool) => ['t', tool.name]),

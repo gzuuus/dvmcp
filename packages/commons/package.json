@@ -1,0 +1,14 @@
+{
+  "name": "commons",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@noble/hashes": "^1.7.1",
+    "nostr-tools": "^2.10.4"
+  }
+}

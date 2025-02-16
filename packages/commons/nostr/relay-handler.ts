@@ -4,7 +4,7 @@ import type { SubCloser } from 'nostr-tools/pool';
 import WebSocket from 'ws';
 import { useWebSocketImplementation } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
-import { CONFIG } from '../config';
+import { DVM_NOTICE_KIND, TOOL_REQUEST_KIND, TOOL_RESPONSE_KIND } from '../constants';
 
 useWebSocketImplementation(WebSocket);
 
@@ -52,13 +52,16 @@ export class RelayHandler {
     }
   }
 
-  subscribeToRequests(onRequest: (event: Event) => void): SubCloser {
-    const filters: Filter[] = [
-      {
-        kinds: [5910],
-        since: Math.floor(Date.now() / 1000),
-      },
-    ];
+  subscribeToRequests(
+    onRequest: (event: Event) => void,
+    filter?: Filter
+  ): SubCloser {
+    const defaultFilter: Filter = {
+      kinds: [TOOL_REQUEST_KIND, TOOL_RESPONSE_KIND, DVM_NOTICE_KIND],
+      since: Math.floor(Date.now() / 1000),
+    };
+
+    const filters: Filter[] = [filter || defaultFilter];
 
     const sub = this.pool.subscribeMany(this.relayUrls, filters, {
       onevent(event) {
@@ -96,5 +99,3 @@ export class RelayHandler {
     return this.pool.listConnectionStatus();
   }
 }
-
-export default new RelayHandler(CONFIG.nostr.relayUrls);

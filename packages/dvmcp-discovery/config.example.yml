@@ -1,0 +1,21 @@
+nostr:
+  # Your DVM's private key (32-byte hex string)
+  privateKey: "your_private_key_here"
+  # List of relays to connect to
+  relayUrls:
+    - "wss://relay.damus.io"
+    - "wss://relay.nostr.band"
+
+mcp:
+  # Server name
+  name: "DVMCP Discovery"
+  # Server version
+  version: "1.0.0"
+  # Server description
+  about: "DVMCP Discovery Server for aggregating MCP tools from DVMs"
+
+whitelist:
+  # Optional: List of allowed DVM pubkeys
+  allowedDVMs:
+    - "pubkey1"
+    - "pubkey2"

@@ -4,7 +4,11 @@ import type { SubCloser } from 'nostr-tools/pool';
 import WebSocket from 'ws';
 import { useWebSocketImplementation } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
-import { DVM_NOTICE_KIND, TOOL_REQUEST_KIND, TOOL_RESPONSE_KIND } from '../constants';
+import {
+  DVM_NOTICE_KIND,
+  TOOL_REQUEST_KIND,
+  TOOL_RESPONSE_KIND,
+} from '../constants';
 
 useWebSocketImplementation(WebSocket);
 

@@ -4,7 +4,11 @@ import { CONFIG } from './config';
 import { MCPPool } from './mcp-pool';
 import { RelayHandler } from 'commons/nostr/relay-handler';
 import { relayHandler } from './relay';
-import { DVM_NOTICE_KIND, TOOL_REQUEST_KIND, TOOL_RESPONSE_KIND } from 'commons/constants';
+import {
+  DVM_NOTICE_KIND,
+  TOOL_REQUEST_KIND,
+  TOOL_RESPONSE_KIND,
+} from 'commons/constants';
 
 export class DVMBridge {
   private mcpPool: MCPPool;

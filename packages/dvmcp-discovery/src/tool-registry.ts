@@ -15,6 +15,7 @@ export class ToolRegistry {
       this.registerWithMcp(toolId, tool);
     } catch (error) {
       console.error(`Invalid MCP tool format for ${toolId}:`, error);
+      throw error;
     }
   }
 

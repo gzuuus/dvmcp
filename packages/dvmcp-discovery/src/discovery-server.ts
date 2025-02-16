@@ -6,7 +6,6 @@ import { createKeyManager } from 'commons/nostr/key-manager';
 import { CONFIG, type Config } from './config';
 import { DVM_ANNOUNCEMENT_KIND } from 'commons/constants';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import type { SubCloser } from 'nostr-tools/abstract-pool';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
 

@@ -1,7 +1,7 @@
 import { parse } from 'yaml';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { HEX_KEYS_REGEX } from 'commons/constants';
+import { HEX_KEYS_REGEX } from '@dvmcp/commons/constants';
 import type { AppConfig, MCPServerConfig } from './types';
 
 const CONFIG_PATH = join(process.cwd(), 'config.yml');

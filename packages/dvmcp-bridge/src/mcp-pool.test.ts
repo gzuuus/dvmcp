@@ -2,7 +2,7 @@ import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
 import { join } from 'path';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { MCPPool } from './mcp-pool';
-import { createMockServer } from 'commons/mock-server';
+import { createMockServer } from '@dvmcp/commons/mock-server';
 
 describe('MCPPool', () => {
   let mcpPool: MCPPool;

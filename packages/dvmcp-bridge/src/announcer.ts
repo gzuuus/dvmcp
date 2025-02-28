@@ -1,9 +1,12 @@
-import type { RelayHandler } from 'commons/nostr/relay-handler';
+import type { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { CONFIG } from './config';
-import { createKeyManager } from 'commons/nostr/key-manager';
+import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
 import type { MCPPool } from './mcp-pool';
 import { relayHandler } from './relay';
-import { DVM_ANNOUNCEMENT_KIND, TOOL_REQUEST_KIND } from 'commons/constants';
+import {
+  DVM_ANNOUNCEMENT_KIND,
+  TOOL_REQUEST_KIND,
+} from '@dvmcp/commons/constants';
 
 export const keyManager = createKeyManager(CONFIG.nostr.privateKey);
 

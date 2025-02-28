@@ -1,0 +1,6 @@
+node_modules
+*.log
+*.lock
+.DS_Store
+*.test.ts
+*.test.js

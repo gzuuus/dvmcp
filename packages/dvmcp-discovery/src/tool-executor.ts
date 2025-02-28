@@ -1,12 +1,12 @@
 import { type Event } from 'nostr-tools';
-import { RelayHandler } from 'commons/nostr/relay-handler';
-import { createKeyManager } from 'commons/nostr/key-manager';
+import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
+import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
 import { type Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
   TOOL_REQUEST_KIND,
   TOOL_RESPONSE_KIND,
   DVM_NOTICE_KIND,
-} from 'commons/constants';
+} from '@dvmcp/commons/constants';
 
 interface ExecutionContext {
   timeoutId: ReturnType<typeof setTimeout>;

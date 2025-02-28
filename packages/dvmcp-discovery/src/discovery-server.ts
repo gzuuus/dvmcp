@@ -1,10 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { type Event, type Filter } from 'nostr-tools';
-import { RelayHandler } from 'commons/nostr/relay-handler';
-import { createKeyManager } from 'commons/nostr/key-manager';
+import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
+import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
 import { CONFIG, type Config } from './config';
-import { DVM_ANNOUNCEMENT_KIND } from 'commons/constants';
+import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';

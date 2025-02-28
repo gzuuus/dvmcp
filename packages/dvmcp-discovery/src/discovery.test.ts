@@ -4,7 +4,7 @@ import { CONFIG } from './config';
 import {
   server as mockRelay,
   stop as stopRelay,
-} from 'commons/nostr/mock-relay';
+} from '@dvmcp/commons/nostr/mock-relay';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 describe('DiscoveryServer E2E', () => {

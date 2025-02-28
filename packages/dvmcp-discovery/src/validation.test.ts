@@ -2,11 +2,14 @@ import { expect, test, describe } from 'bun:test';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { RelayHandler } from 'commons/nostr/relay-handler';
-import { createKeyManager } from 'commons/nostr/key-manager';
+import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
+import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
 import { type Tool, ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z, ZodError } from 'zod';
-import { DVM_ANNOUNCEMENT_KIND, TOOL_REQUEST_KIND } from 'commons/constants';
+import {
+  DVM_ANNOUNCEMENT_KIND,
+  TOOL_REQUEST_KIND,
+} from '@dvmcp/commons/constants';
 
 describe('Tool Schema Validation', () => {
   describe('ToolRegistry Validation', () => {

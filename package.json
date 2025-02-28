@@ -2,7 +2,11 @@
   "name": "dvmcp",
   "scripts": {
     "start:mcp-dvm": "cd packages/mcp-dvm-bridge && bun start",
-    "format": "prettier --write \"packages/**/*.{ts,tsx,js,jsx,json,md}\""
+    "format": "prettier --write \"packages/**/*.{ts,tsx,js,jsx,json,md}\"",
+    "publish:commons": "cd packages/commons && npm publish --access public",
+    "publish:bridge": "cd packages/dvmcp-bridge && npm publish --access public",
+    "publish:discovery": "cd packages/dvmcp-discovery && npm publish --access public",
+    "publish:all": "npm run publish:commons && npm run publish:bridge && npm run publish:discovery"
   },
   "workspaces": [
     "packages/*"

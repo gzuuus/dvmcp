@@ -1,15 +1,28 @@
 {
-  "name": "dvmcp-bridge",
+  "name": "@dvmcp/bridge",
+  "version": "0.1.0",
+  "description": "Bridge connecting MCP servers to Nostr's DVM ecosystem",
   "module": "index.ts",
   "type": "module",
   "license": "MIT",
+  "bin": {
+    "dvmcp-bridge": "./cli.ts"
+  },
+  "files": [
+    "**/*.ts",
+    "**/*.js",
+    "!**/*.test.ts",
+    "!**/*.test.js",
+    "config.example.yml"
+  ],
   "scripts": {
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "dev": "bun --watch index.ts",
     "start": "bun run index.ts",
     "typecheck": "tsc --noEmit",
     "lint": "bun run typecheck && bun run format",
-    "test": "bun test"
+    "test": "bun test",
+    "prepublishOnly": "bun run lint && bun run test"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -22,6 +35,9 @@
     "dotenv": "^16.4.7",
     "nostr-tools": "^2.10.4",
     "yaml": "^2.7.0",
-    "commons": "workspace:*"
+    "@dvmcp/commons": "^0.1.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

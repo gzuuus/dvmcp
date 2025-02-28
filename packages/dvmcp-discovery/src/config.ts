@@ -1,7 +1,7 @@
 import { parse } from 'yaml';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { HEX_KEYS_REGEX } from 'commons/constants';
+import { HEX_KEYS_REGEX } from '@dvmcp/commons/constants';
 
 export interface Config {
   nostr: {

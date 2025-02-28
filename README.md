@@ -6,36 +6,76 @@ A monorepo containing packages that bridge Model Context Protocol (MCP) servers 
 
 This monorepo contains the following packages:
 
-### [@dvmcp-bridge](./packages/dvmcp-bridge)
-The bridge implementation let's you connect MCP servers to Nostr's DVM ecosystem. Handles tool announcement, execution, and status updates.
+### [@dvmcp/bridge](./packages/dvmcp-bridge)
+The bridge implementation that connects MCP servers to Nostr's DVM ecosystem. Handles tool announcement, execution, and status updates.
 
-### [@dvmcp-discovery](./packages/dvmcp-discovery)
-A MCP server, discovery service that aggregates MCP tools from DVMs, and make their tools available
+### [@dvmcp/discovery](./packages/dvmcp-discovery)
+A MCP server/discovery service that aggregates MCP tools from DVMs and makes their tools available.
 
-### [@commons](./packages/commons)
+### [@dvmcp/commons](./packages/dvmcp-commons)
 Shared utilities and components used across DVMCP packages.
 
-## Getting Started
+## Installation & Usage
 
-1. Install dependencies:
+### Quick Start with NPX (No Installation)
+
+You can run the packages directly using `npx` without installing them:
+
 ```bash
-bun install
+# Run the bridge
+npx @dvmcp/bridge
+
+# Run the discovery service
+npx @dvmcp/discovery
 ```
 
-2. Set up configurations:
-```bash
-# For the bridge
-cp packages/dvmcp-bridge/config.example.yml packages/dvmcp-bridge/config.yml
+The interactive CLI will guide you through configuration setup on first run.
 
-# For the discovery service
-cp packages/dvmcp-discovery/config.example.yml packages/dvmcp-discovery/config.yml
+### Global Installation
+
+```bash
+# Install the packages globally
+npm install -g @dvmcp/bridge @dvmcp/discovery
+
+# Run the commands
+dvmcp-bridge
+dvmcp-discovery
 ```
 
-3. Edit the configuration files according to your needs.
+## Setting Up a Bridge
+
+To expose your MCP server as a DVM on Nostr:
+
+1. Navigate to the directory where you want to configure the bridge
+2. Run: `npx @dvmcp/bridge`
+3. Follow the interactive setup to configure:
+   - Your MCP server path
+   - Nostr private key (or generate a new one)
+   - Relays to connect to
+4. The bridge will start and begin proxying requests between Nostr and your MCP server
+
+## Setting Up a Discovery Service
+
+To aggregate MCP tools from DVMs:
+
+1. Navigate to your desired directory
+2. Run: `npx @dvmcp/discovery`
+3. Follow the setup to configure:
+   - Nostr private key
+   - Relays to monitor
 
 ## Development
 
+For contributors to this repository:
+
 ```bash
+# Clone the repo
+git clone https://github.com/gzuuus/dvmcp.git
+cd dvmcp
+
+# Install dependencies
+bun install
+
 # Start the bridge in development mode
 bun run dev --cwd packages/dvmcp-bridge
 
@@ -43,22 +83,12 @@ bun run dev --cwd packages/dvmcp-bridge
 bun run dev --cwd packages/dvmcp-discovery
 ```
 
-## Production
-
-```bash
-# Start the bridge
-bun run start --cwd packages/dvmcp-bridge
-
-# Start the discovery service
-bun run start --cwd packages/dvmcp-discovery
-```
-
 ## Documentation
 
 - [DVMCP Specification](./docs/dvmcp-spec.md)
 - [Bridge Package](./packages/dvmcp-bridge/README.md)
 - [Discovery Package](./packages/dvmcp-discovery/README.md)
-- [Commons Package](./packages/commons/README.md)
+- [Commons Package](./packages/dvmcp-commons/README.md)
 
 ## Contributing
 

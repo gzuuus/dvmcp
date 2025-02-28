@@ -3,8 +3,8 @@ nostr:
   privateKey: "your_private_key_here"
   # List of relays to connect to
   relayUrls:
-    - "wss://relay.damus.io"
-    - "wss://relay.nostr.band"
+    - "wss://relay1.com"
+    - "wss://relay2.net"
 
 mcp:
   # Server name

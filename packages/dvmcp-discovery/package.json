@@ -18,6 +18,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "dev": "bun --watch index.ts",
     "start": "bun run index.ts",
+    "setup": "bun run cli.ts",
     "typecheck": "tsc --noEmit",
     "lint": "bun run typecheck && bun run format",
     "test": "bun test",

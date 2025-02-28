@@ -15,7 +15,7 @@ export interface WhitelistConfig {
   allowedPubkeys: Set<string> | undefined;
 }
 
-export interface AppConfig {
+export interface Config {
   nostr: NostrConfig;
   mcp: MCPConfig;
   whitelist: WhitelistConfig;

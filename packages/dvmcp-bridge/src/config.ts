@@ -2,11 +2,11 @@ import { parse } from 'yaml';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { HEX_KEYS_REGEX } from '@dvmcp/commons/constants';
-import type { AppConfig, MCPServerConfig } from './types';
+import type { Config, MCPServerConfig } from './types';
 
 const CONFIG_PATH = join(process.cwd(), 'config.yml');
 
-const TEST_CONFIG: AppConfig = {
+const TEST_CONFIG: Config = {
   nostr: {
     privateKey:
       'd4d4d7aae7857054596c4c0976b22a73acac3a10d30bf56db35ee038bbf0dd44',
@@ -80,7 +80,7 @@ function validateMCPServers(servers: any): MCPServerConfig[] {
   });
 }
 
-function loadConfig(): AppConfig {
+function loadConfig(): Config {
   if (process.env.NODE_ENV === 'test') {
     return TEST_CONFIG;
   }
@@ -95,7 +95,7 @@ function loadConfig(): AppConfig {
     const configFile = readFileSync(CONFIG_PATH, 'utf8');
     const rawConfig = parse(configFile);
 
-    const config: AppConfig = {
+    const config: Config = {
       nostr: {
         privateKey: validateRequiredField(
           rawConfig.nostr?.privateKey,

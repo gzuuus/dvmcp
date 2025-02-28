@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { writeFileSync, existsSync } from 'node:fs';

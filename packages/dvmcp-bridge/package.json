@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/bridge",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Bridge connecting MCP servers to Nostr's DVM ecosystem",
   "module": "index.ts",
   "type": "module",
@@ -36,7 +36,7 @@
     "dotenv": "^16.4.7",
     "nostr-tools": "^2.10.4",
     "yaml": "^2.7.0",
-    "@dvmcp/commons": "^0.1.0"
+    "@dvmcp/commons": "^0.1.1"
   },
   "publishConfig": {
     "access": "public"

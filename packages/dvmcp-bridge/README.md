@@ -12,41 +12,30 @@ A bridge implementation that connects Model Context Protocol (MCP) servers to No
 
 ## Configuration
 
-Create your configuration file by copying the example:
+You can run the configuration wizard directly using `npx`, more details below, or run `bun setup` in the package directory, or create your configuration file by copying `config.example.yml` and replacing the values of the fields
 
 ```bash
 cp config.example.yml config.yml
-```
-
-Example configuration:
-
-```yaml
-nostr:
-  privateKey: 'your_private_key_here'
-  relayUrls:
-    - 'wss://relay1.com'
-    - 'wss://relay2.net'
-
-mcp:
-  name: 'DVM MCP Bridge'
-  about: 'MCP-enabled DVM providing AI and computational tools'
-  clientName: 'DVM MCP Bridge Client'
-  clientVersion: '1.0.0'
-  servers:
-    - name: 'server1'
-      command: 'node'
-      args: ['run', 'src/external-mcp-server1.ts']
+nano config.yml
 ```
 
 ## Usage
 
-Development mode:
+**Prerequisite:** Ensure you have [Bun](https://bun.sh/) installed.
+
+You can run this package directly using `npx`:
+
+```bash
+npx @dvmcp/bridge
+```
+
+Alternatively, for development:
 
 ```bash
 bun run dev
 ```
 
-Production mode:
+For production:
 
 ```bash
 bun run start

@@ -11,41 +11,30 @@ A MCP server implementation that aggregates tools from DVMs across the Nostr net
 
 ## Configuration
 
-Create your configuration file by copying the example:
+You can run the configuration wizard directly using `npx`, more details below, or run `bun setup` in the package directory, or create your configuration file by copying `config.example.yml` and replacing the values of the fields
 
 ```bash
 cp config.example.yml config.yml
-```
-
-Example configuration:
-
-```yaml
-nostr:
-  privateKey: 'your_private_key_here'
-  relayUrls:
-    - 'wss://relay.damus.io'
-    - 'wss://relay.nostr.band'
-
-mcp:
-  name: 'DVMCP Discovery'
-  version: '1.0.0'
-  about: 'DVMCP Discovery Server for aggregating MCP tools from DVMs'
-# Optional: whitelist specific DVMs
-# whitelist:
-#   allowedDVMs:
-#     - 'pubkey1'
-#     - 'pubkey2'
+nano config.yml
 ```
 
 ## Usage
 
-Development mode:
+**Prerequisite:** Ensure you have [Bun](https://bun.sh/) installed.
+
+You can run this package directly using `npx`:
+
+```bash
+npx @dvmcp/discovery
+```
+
+Alternatively, for development:
 
 ```bash
 bun run dev
 ```
 
-Production mode:
+For production:
 
 ```bash
 bun run start

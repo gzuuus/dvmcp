@@ -2,7 +2,6 @@ import { DVMBridge } from './src/dvm-bridge';
 
 async function main() {
   const bridge = new DVMBridge();
-
   const shutdown = async () => {
     console.log('Shutting down...');
     try {
@@ -13,10 +12,8 @@ async function main() {
       process.exit(1);
     }
   };
-
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
-
   try {
     await bridge.start();
   } catch (error) {
@@ -25,4 +22,4 @@ async function main() {
   }
 }
 
-main();
+export default main;

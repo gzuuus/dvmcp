@@ -1,13 +1,17 @@
 #!/usr/bin/env bun
+import { existsSync } from 'node:fs';
+import { join } from 'path';
 import {
   ConfigGenerator,
-  generateHexKey,
   type FieldConfig,
-  CONFIG_EMOJIS,
+} from '@dvmcp/commons/config-generator';
+import {
+  generateHexKey,
   validateHexKey,
   validateRelayUrl,
+  CONFIG_EMOJIS,
 } from '@dvmcp/commons/config-generator';
-import { join } from 'path';
+import { argv } from 'process';
 import type { Config } from './src/types';
 
 const configPath = join(process.cwd(), 'config.yml');
@@ -90,13 +94,34 @@ const configFields: Record<string, FieldConfig> = {
     },
   },
 };
-const main = async () => {
+
+const configure = async () => {
   console.log(
     `${CONFIG_EMOJIS.SETUP} DVMCP Bridge Configuration Setup ${CONFIG_EMOJIS.SETUP}`
   );
-
   const generator = new ConfigGenerator<Config>(configPath, configFields);
   await generator.generate();
 };
 
-main().catch(console.error);
+const runApp = async () => {
+  const main = await import('./index.js');
+  console.log(`${CONFIG_EMOJIS.INFO} Running main application...`);
+  await main.default();
+};
+
+const cliMain = async () => {
+  if (argv.includes('--configure')) {
+    await configure();
+  }
+
+  if (!existsSync(configPath)) {
+    console.log(
+      `${CONFIG_EMOJIS.INFO} No configuration file found. Starting setup...`
+    );
+    await configure();
+  }
+
+  await runApp();
+};
+
+cliMain().catch(console.error);

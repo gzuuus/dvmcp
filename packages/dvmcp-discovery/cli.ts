@@ -9,6 +9,8 @@ import {
 } from '@dvmcp/commons/config-generator';
 import { join } from 'path';
 import type { Config } from './src/config.js';
+import { argv } from 'process';
+import { existsSync } from 'fs';
 
 const configPath = join(process.cwd(), 'config.yml');
 
@@ -70,7 +72,7 @@ const configFields: Record<string, FieldConfig> = {
   },
 };
 
-const main = async () => {
+const configure = async () => {
   console.log(
     `${CONFIG_EMOJIS.SETUP} DVMCP Discovery Configuration Setup ${CONFIG_EMOJIS.SETUP}`
   );
@@ -78,4 +80,25 @@ const main = async () => {
   await generator.generate();
 };
 
-main().catch(console.error);
+const runApp = async () => {
+  const main = await import('./index.js');
+  console.log(`${CONFIG_EMOJIS.INFO} Running main application...`);
+  await main.default();
+};
+
+const cliMain = async () => {
+  if (argv.includes('--configure')) {
+    await configure();
+  }
+
+  if (!existsSync(configPath)) {
+    console.log(
+      `${CONFIG_EMOJIS.INFO} No configuration file found. Starting setup...`
+    );
+    await configure();
+  }
+
+  await runApp();
+};
+
+cliMain().catch(console.error);

@@ -11,7 +11,7 @@ A MCP server implementation that aggregates tools from DVMs across the Nostr net
 
 ## Configuration
 
-You can run the configuration wizard directly using `npx`, more details below, or run `bun setup` in the package directory, or create your configuration file by copying `config.example.yml` and replacing the values of the fields
+When the package is run for the first time, it will detect if the `config.yml` file exists, and if not, it will launch a configuration wizard to help you create the configuration file. You can also create your configuration file by copying `config.example.yml` and changing the values of the fields
 
 ```bash
 cp config.example.yml config.yml

@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/bridge",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Bridge connecting MCP servers to Nostr's DVM ecosystem",
   "module": "index.ts",
   "type": "module",
@@ -18,8 +18,7 @@
   "scripts": {
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "dev": "bun --watch index.ts",
-    "start": "bun run index.ts",
-    "setup": "bun run cli.ts",
+    "start": "bun run cli.ts",
     "typecheck": "tsc --noEmit",
     "lint": "bun run typecheck && bun run format",
     "test": "bun test",

@@ -72,7 +72,7 @@ export class DiscoveryServer {
   private isAllowedDVM(pubkey: string): boolean {
     if (
       !CONFIG.whitelist?.allowedDVMs ||
-      CONFIG.whitelist.allowedDVMs.size === 0
+      CONFIG.whitelist.allowedDVMs.size == 0
     ) {
       return true;
     }

@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/discovery",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Discovery service for MCP tools in the Nostr DVM ecosystem",
   "module": "index.ts",
   "type": "module",

@@ -22,4 +22,9 @@ describe('KeyManager', () => {
     expect(signedEvent.sig).toBeDefined();
     expect(signedEvent.pubkey).toBe(keyManager.pubkey);
   });
+
+  test('should get public key', () => {
+    const publicKey = keyManager.getPublicKey();
+    expect(publicKey).toBeDefined();
+  });
 });

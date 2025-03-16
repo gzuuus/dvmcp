@@ -50,10 +50,10 @@ export class DVMBridge {
       await this.nostrAnnouncer.updateAnnouncement();
 
       console.log('Setting up request handlers...');
-
+      const publicKey = keyManager.getPublicKey();
       this.relayHandler.subscribeToRequests(this.handleRequest.bind(this), {
         kinds: [TOOL_REQUEST_KIND],
-        '#p': [keyManager.getPublicKey()],
+        '#p': [publicKey],
         since: Math.floor(Date.now() / 1000),
       });
 

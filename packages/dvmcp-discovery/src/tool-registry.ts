@@ -81,27 +81,34 @@ export class ToolRegistry {
   }
 
   private mapJsonSchemaToZod(schema: Tool['inputSchema']): z.ZodRawShape {
+    if (!schema.properties || Object.keys(schema.properties).length === 0) {
+      return { _: z.object({}).optional() };
+    }
+
     const properties: z.ZodRawShape = {};
-    if (schema.properties) {
-      for (const [key, prop] of Object.entries(schema.properties)) {
-        if (typeof prop === 'object' && prop && 'type' in prop) {
-          switch (prop.type) {
-            case 'string':
-              properties[key] = z.string();
-              break;
-            case 'number':
-              properties[key] = z.number();
-              break;
-            case 'integer':
-              properties[key] = z.number().int();
-              break;
-            case 'boolean':
-              properties[key] = z.boolean();
-              break;
-            default:
-              properties[key] = z.any();
-          }
+    for (const [key, prop] of Object.entries(schema.properties)) {
+      if (typeof prop === 'object' && prop && 'type' in prop) {
+        let zodType: z.ZodType;
+        switch (prop.type) {
+          case 'string':
+            zodType = z.string();
+            break;
+          case 'number':
+            zodType = z.number();
+            break;
+          case 'integer':
+            zodType = z.number().int();
+            break;
+          case 'boolean':
+            zodType = z.boolean();
+            break;
+          default:
+            zodType = z.any();
         }
+        properties[key] =
+          Array.isArray(schema.required) && schema.required.includes(key)
+            ? zodType
+            : zodType.optional();
       }
     }
     return properties;

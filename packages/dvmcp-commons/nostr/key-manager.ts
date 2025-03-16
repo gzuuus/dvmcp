@@ -22,6 +22,9 @@ export const createKeyManager = (privateKeyHex: string) => {
         content: '',
       };
     }
+    getPublicKey(): string {
+      return this.pubkey;
+    }
   }
 
   return new Manager();

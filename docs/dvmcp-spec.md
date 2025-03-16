@@ -42,8 +42,8 @@ This specification defines these event kinds:
 | Kind  | Description                           |
 | ----- | ------------------------------------- |
 | 31990 | DVM Service Announcement (via NIP-89) |
-| 5910  | DVM-MCP Bridge Requests               |
-| 6910  | DVM-MCP Bridge Responses              |
+| 5910  | DVMCP Bridge Requests                 |
+| 6910  | DVMCP Bridge Responses                |
 | 7000  | Job Feedback                          |
 
 Operations are differentiated using the `c` tag, which specifies the command being executed:
@@ -339,7 +339,7 @@ For any error, DVMs MUST:
 sequenceDiagram
     participant Client as Nostr Client
     participant Relay as Nostr Relay
-    participant DVM as MCP-DVM Bridge
+    participant DVM as DVMCP-Bridge
     participant Server as MCP Server
 
     rect rgb(240, 240, 240)

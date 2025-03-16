@@ -104,10 +104,18 @@ export class ToolExecutor {
 
   private createToolRequest(tool: Tool, params: unknown): Event {
     const request = this.keyManager.createEventTemplate(TOOL_REQUEST_KIND);
+
+    const parameters =
+      !tool.inputSchema.properties ||
+      Object.keys(tool.inputSchema.properties).length === 0
+        ? {}
+        : params;
+
     request.content = JSON.stringify({
       name: tool.name,
-      parameters: params,
+      parameters,
     });
+
     request.tags.push(['c', 'execute-tool']);
     return this.keyManager.signEvent(request);
   }

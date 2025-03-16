@@ -61,7 +61,7 @@ export class DiscoveryServer {
       if (!announcement?.tools) return;
 
       for (const tool of announcement.tools) {
-        const toolId = `${event.pubkey.slice(0, 12)}:${tool.name}`;
+        const toolId = `${tool.name}:${event.pubkey.slice(0, 4)}`;
         this.toolRegistry.registerTool(toolId, tool);
       }
     } catch (error) {

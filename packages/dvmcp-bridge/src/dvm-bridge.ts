@@ -53,6 +53,7 @@ export class DVMBridge {
 
       this.relayHandler.subscribeToRequests(this.handleRequest.bind(this), {
         kinds: [TOOL_REQUEST_KIND],
+        '#p': [keyManager.getPublicKey()],
         since: Math.floor(Date.now() / 1000),
       });
 

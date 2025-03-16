@@ -56,7 +56,7 @@ describe('DiscoveryServer E2E', () => {
     const toolIds = Array.from(toolRegistry['discoveredTools'].keys());
     console.log('Available tool IDs:', toolIds);
 
-    const toolId = toolIds.find((id) => id.endsWith(`:${mockTool.name}`));
+    const toolId = toolIds.find((id) => id.startsWith(`${mockTool.name}`));
     expect(toolId).toBeDefined();
     console.log('Selected tool ID:', toolId);
 

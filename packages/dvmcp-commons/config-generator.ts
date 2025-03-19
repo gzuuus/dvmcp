@@ -1,6 +1,6 @@
 import { createInterface } from 'node:readline';
-import { stringify } from 'yaml';
-import { writeFileSync, existsSync } from 'node:fs';
+import { parse, stringify } from 'yaml';
+import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { HEX_KEYS_REGEX } from './constants';
 
@@ -47,10 +47,21 @@ export interface FieldConfig {
 }
 
 export class ConfigGenerator<T extends Record<string, any>> {
+  private currentConfig: T | null = null;
   constructor(
     private configPath: string,
     private fields: Record<string, FieldConfig>
-  ) {}
+  ) {
+    if (existsSync(configPath)) {
+      try {
+        this.currentConfig = parse(readFileSync(configPath, 'utf8'));
+      } catch (error) {
+        console.warn(
+          `${CONFIG_EMOJIS.INFO} Could not parse existing configuration`
+        );
+      }
+    }
+  }
 
   private async prompt(question: string, defaultValue = ''): Promise<string> {
     const rl = createInterface({
@@ -112,6 +123,27 @@ export class ConfigGenerator<T extends Record<string, any>> {
   ): Promise<any> {
     const emoji = config.emoji || CONFIG_EMOJIS.PROMPT;
 
+    if (currentValue !== undefined) {
+      if (config.type !== 'nested' && config.type !== 'object-array') {
+        console.log(
+          `${CONFIG_EMOJIS.INFO} Current value: ${
+            typeof currentValue === 'object'
+              ? JSON.stringify(currentValue)
+              : currentValue
+          }`
+        );
+      }
+
+      const keepCurrent = await this.promptYesNo(
+        `${emoji} Keep current ${fieldName}?`,
+        true
+      );
+
+      if (keepCurrent) {
+        return currentValue;
+      }
+    }
+
     if (config.type === 'nested') {
       console.log(`\n${emoji} ${config.description || fieldName}`);
     }
@@ -151,7 +183,20 @@ export class ConfigGenerator<T extends Record<string, any>> {
           array.forEach((item: string, index: number) => {
             console.log(`${CONFIG_EMOJIS.INFO} ${index + 1}. ${item}`);
           });
-          console.log('');
+          
+          if (await this.promptYesNo(`${emoji} Remove any items?`, false)) {
+            while (true) {
+              const index =
+                parseInt(
+                  await this.prompt('Enter index to remove (0 to finish):')
+                ) - 1;
+              if (isNaN(index) || index < 0) break;
+              if (index < array.length) {
+                array.splice(index, 1);
+                console.log('Item removed');
+              }
+            }
+          }
         }
 
         if (await this.promptYesNo(`${emoji} Add ${fieldName}?`, true)) {
@@ -187,7 +232,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
       },
 
       'object-array': async () => {
-        const array: ArrayItem[] = currentValue || [];
+        let array: ArrayItem[] = currentValue || [];
         if (array.length > 0) {
           console.log('\nCurrent servers:');
           array.forEach((item: ArrayItem, index: number) => {
@@ -196,19 +241,49 @@ export class ConfigGenerator<T extends Record<string, any>> {
             );
           });
           console.log('');
+          const keepCurrent = await this.promptYesNo(
+            `${emoji} Keep current ${fieldName}?`,
+            true
+          );
+          if (!keepCurrent) {
+            array = [];
+            console.log(`${CONFIG_EMOJIS.INFO} Cleared existing servers.`);
+          } else {
+            if (
+              await this.promptYesNo(
+                `${emoji} Remove any existing servers?`,
+                false
+              )
+            ) {
+              while (true) {
+                const index =
+                  parseInt(
+                    await this.prompt(
+                      'Enter server number to remove (0 to finish):'
+                    )
+                  ) - 1;
+                if (isNaN(index) || index < 0) break;
+                if (index < array.length) {
+                  console.log(
+                    `${CONFIG_EMOJIS.INFO} Removed server: ${array[index].name}`
+                  );
+                  array.splice(index, 1);
+                }
+              }
+            }
+          }
         }
 
-        if (
-          (await this.promptYesNo(`${emoji} Add new ${fieldName}?`, true)) &&
-          config.fields
-        ) {
+        if (await this.promptYesNo(`${emoji} Add new ${fieldName}?`, true)) {
           while (true) {
-            const item = await this.handleObjectArrayItem(config.fields);
+            const item = await this.handleObjectArrayItem(config.fields!);
             if (!item) break;
             array.push(item as ArrayItem);
+            console.log(`${CONFIG_EMOJIS.INFO} Added new server: ${item.name}`);
             console.log('');
           }
         }
+
         return array;
       },
 
@@ -269,19 +344,15 @@ export class ConfigGenerator<T extends Record<string, any>> {
   }
 
   async generate(): Promise<T> {
-    console.log(`\n${CONFIG_EMOJIS.SETUP} Configuration Setup\n`);
-
-    if (existsSync(this.configPath)) {
-      const reconfigure = await this.promptYesNo(
-        `${CONFIG_EMOJIS.PROMPT} Configuration exists. Reconfigure?`,
-        true
-      );
-      if (!reconfigure) process.exit(0);
-    }
-
     const config: Record<string, any> = {};
     for (const [fieldName, fieldConfig] of Object.entries(this.fields)) {
-      config[fieldName] = await this.handleField(fieldName, fieldConfig);
+      const currentValue = this.currentConfig?.[fieldName];
+      config[fieldName] = await this.handleField(
+        fieldName,
+        fieldConfig,
+        true,
+        currentValue
+      );
     }
 
     writeFileSync(this.configPath, stringify(config));

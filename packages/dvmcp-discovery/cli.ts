@@ -12,7 +12,7 @@ import type { Config } from './src/config.js';
 import { argv } from 'process';
 import { existsSync } from 'fs';
 
-const configPath = join(process.cwd(), 'config.yml');
+const configPath = join(process.cwd(), 'config.dvmcp.yml');
 
 const configFields: Record<string, FieldConfig> = {
   nostr: {

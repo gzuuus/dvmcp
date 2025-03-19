@@ -24,7 +24,10 @@ export class DVMBridge {
   }
 
   private isWhitelisted(pubkey: string): boolean {
-    if (!CONFIG.whitelist.allowedPubkeys) {
+    if (
+      !CONFIG.whitelist.allowedPubkeys ||
+      CONFIG.whitelist.allowedPubkeys.size == 0
+    ) {
       return true;
     }
     return CONFIG.whitelist.allowedPubkeys.has(pubkey);
@@ -47,7 +50,12 @@ export class DVMBridge {
       await this.nostrAnnouncer.updateAnnouncement();
 
       console.log('Setting up request handlers...');
-      this.relayHandler.subscribeToRequests(this.handleRequest.bind(this));
+      const publicKey = keyManager.getPublicKey();
+      this.relayHandler.subscribeToRequests(this.handleRequest.bind(this), {
+        kinds: [TOOL_REQUEST_KIND],
+        '#p': [publicKey],
+        since: Math.floor(Date.now() / 1000),
+      });
 
       this.isRunning = true;
       console.log('DVM Bridge is now running and ready to handle requests');
@@ -88,14 +96,14 @@ export class DVMBridge {
                 tools,
               }),
               tags: [
-                ['request', JSON.stringify(event)],
+                ['c', 'list-tools-response'],
                 ['e', event.id],
                 ['p', event.pubkey],
               ],
             });
 
             await this.relayHandler.publishEvent(response);
-          } else {
+          } else if (command === 'execute-tool') {
             const jobRequest = JSON.parse(event.content);
             const processingStatus = keyManager.signEvent({
               ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
@@ -125,7 +133,7 @@ export class DVMBridge {
                 ...keyManager.createEventTemplate(TOOL_RESPONSE_KIND),
                 content: JSON.stringify(result),
                 tags: [
-                  ['request', JSON.stringify(event)],
+                  ['c', 'execute-tool-response'],
                   ['e', event.id],
                   ['p', event.pubkey],
                 ],
@@ -159,6 +167,7 @@ export class DVMBridge {
           ],
         });
         await this.relayHandler.publishEvent(errorStatus);
+        return;
       }
     } catch (error) {
       console.error('Error handling request:', error);

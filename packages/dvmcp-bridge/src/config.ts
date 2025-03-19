@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'fs';
 import { HEX_KEYS_REGEX } from '@dvmcp/commons/constants';
 import type { Config, MCPServerConfig } from './types';
 
-const CONFIG_PATH = join(process.cwd(), 'config.yml');
+const CONFIG_PATH = join(process.cwd(), 'config.dvmcp.yml');
 
 const TEST_CONFIG: Config = {
   nostr: {
@@ -87,7 +87,7 @@ function loadConfig(): Config {
 
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(
-      'No config.yml file found. Please create one based on config.example.yml'
+      'No config.dvmcp.yml file found. Please create one based on config.example.yml'
     );
   }
 
@@ -117,6 +117,9 @@ function loadConfig(): Config {
           rawConfig.mcp?.clientVersion,
           'mcp.clientVersion'
         ),
+        picture: rawConfig.mcp?.picture,
+        website: rawConfig.mcp?.website,
+        banner: rawConfig.mcp?.banner,
         servers: validateMCPServers(rawConfig.mcp?.servers),
       },
       whitelist: {

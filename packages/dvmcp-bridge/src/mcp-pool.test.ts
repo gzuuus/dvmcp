@@ -9,7 +9,10 @@ describe('MCPPool', () => {
   let transports: any[] = [];
   const serverNames = ['server1', 'server2', 'server3', 'server4'];
   beforeAll(async () => {
-    const mockServerPath = join(import.meta.dir, 'mock-server.ts');
+    const mockServerPath = join(
+      import.meta.dir,
+      '../../dvmcp-commons/mock-server.ts'
+    );
 
     const serverConfigs = serverNames.map((name) => ({
       name,

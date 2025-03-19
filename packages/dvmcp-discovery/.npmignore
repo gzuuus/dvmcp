@@ -4,4 +4,4 @@ node_modules
 .DS_Store
 *.test.ts
 *.test.js
-config.yml
+config.dvmcp.yml

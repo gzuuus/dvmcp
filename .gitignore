@@ -178,4 +178,4 @@ dist
 codebase*
 .aider*
 .prettierrc
-config.yml
+config.dvmcp.yml

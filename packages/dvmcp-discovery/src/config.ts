@@ -18,7 +18,7 @@ export interface Config {
   };
 }
 
-const CONFIG_PATH = join(process.cwd(), 'config.yml');
+const CONFIG_PATH = join(process.cwd(), 'config.dvmcp.yml');
 
 const TEST_CONFIG: Config = {
   nostr: {
@@ -79,7 +79,7 @@ function loadConfig(): Config {
 
   if (!existsSync(CONFIG_PATH)) {
     throw new Error(
-      'No config.yml file found. Please create one based on config.example.yml'
+      'No config.dvmcp.yml file found. Please create one based on config.example.yml'
     );
   }
 

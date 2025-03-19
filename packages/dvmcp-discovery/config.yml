@@ -1,0 +1,10 @@
+nostr:
+  privateKey: c5af6a2588250d3dfe82a9cc1c054697d7483b53850d7e6552620ff8e565630c
+  relayUrls:
+    - wss://relay.dvmcp.fun
+mcp:
+  name: DVMCP Discovery
+  version: 1.0.0
+  about: DVMCP Discovery Server for aggregating MCP tools from DVMs
+whitelist:
+  allowedDVMs: []

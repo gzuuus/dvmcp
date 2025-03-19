@@ -12,11 +12,11 @@ A bridge implementation that connects Model Context Protocol (MCP) servers to No
 
 ## Configuration
 
-When the package is run for the first time, it will detect if the `config.yml` file exists, and if not, it will launch a configuration wizard to help you create the configuration file. You can also create your configuration file by copying `config.example.yml` and changing the values of the fields
+When the package is run for the first time, it will detect if the `'config.dvmcp.yml'` file exists, and if not, it will launch a configuration wizard to help you create the configuration file. You can also create your configuration file by copying `config.example.yml` and changing the values of the fields
 
 ```bash
-cp config.example.yml config.yml
-nano config.yml
+cp config.example.yml config.dvmcp.yml
+nano config.dvmcp.yml
 ```
 
 ## Usage

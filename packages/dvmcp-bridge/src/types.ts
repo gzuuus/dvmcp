@@ -8,6 +8,9 @@ export interface MCPConfig {
   about: string;
   clientName: string;
   clientVersion: string;
+  picture?: string;
+  website?: string;
+  banner?: string;
   servers: MCPServerConfig[];
 }
 

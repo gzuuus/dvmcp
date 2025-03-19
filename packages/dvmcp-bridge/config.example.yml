@@ -15,7 +15,9 @@ mcp:
   # Required client information
   clientName: "DVM MCP Bridge Client"
   clientVersion: "1.0.0"
-  
+  # optional metadata
+  picture: "https://image.nostr.build/5bf2e2eb3b858bf72c23e53ed1f41ed0f65b2c8a805eaa48dd506b7cfec4ab88.png"
+  website: "https://github.com/gzuuus/dvmcp"
   # MCP Servers Configuration accepts multiple servers
   servers:
     - name: "server1"

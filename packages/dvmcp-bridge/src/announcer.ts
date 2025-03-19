@@ -37,6 +37,9 @@ export class NostrAnnouncer {
       content: JSON.stringify({
         name: CONFIG.mcp.name,
         about: CONFIG.mcp.about,
+        picture: CONFIG.mcp.picture,
+        website: CONFIG.mcp.website,
+        banner: CONFIG.mcp.banner,
         tools: tools,
       }),
       tags: [

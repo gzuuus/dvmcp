@@ -14,7 +14,7 @@ import {
 import { argv } from 'process';
 import type { Config } from './src/types';
 
-const configPath = join(process.cwd(), 'config.yml');
+const configPath = join(process.cwd(), 'config.dvmcp.yml');
 
 const configFields: Record<string, FieldConfig> = {
   nostr: {

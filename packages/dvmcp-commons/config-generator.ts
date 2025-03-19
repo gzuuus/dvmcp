@@ -183,7 +183,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
           array.forEach((item: string, index: number) => {
             console.log(`${CONFIG_EMOJIS.INFO} ${index + 1}. ${item}`);
           });
-
+          
           if (await this.promptYesNo(`${emoji} Remove any items?`, false)) {
             while (true) {
               const index =
@@ -233,7 +233,6 @@ export class ConfigGenerator<T extends Record<string, any>> {
 
       'object-array': async () => {
         let array: ArrayItem[] = currentValue || [];
-
         if (array.length > 0) {
           console.log('\nCurrent servers:');
           array.forEach((item: ArrayItem, index: number) => {
@@ -242,7 +241,6 @@ export class ConfigGenerator<T extends Record<string, any>> {
             );
           });
           console.log('');
-
           const keepCurrent = await this.promptYesNo(
             `${emoji} Keep current ${fieldName}?`,
             true
@@ -359,6 +357,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
 
     writeFileSync(this.configPath, stringify(config));
     console.log(`\n${CONFIG_EMOJIS.SUCCESS} Configuration saved successfully!`);
+
     return config as T;
   }
 }

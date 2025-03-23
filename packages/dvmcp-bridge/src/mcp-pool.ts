@@ -34,7 +34,8 @@ export class MCPPool {
   async callTool(name: string, args: Record<string, any>) {
     const client = this.toolRegistry.get(name);
     if (!client) {
-      throw new Error(`No MCP server found for tool: ${name}`);
+      console.error(`No MCP server found for tool: ${name}`);
+      return;
     }
     return await client.callTool(name, args);
   }

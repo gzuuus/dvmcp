@@ -121,25 +121,27 @@ export class DVMBridge {
                 jobRequest.name,
                 jobRequest.parameters
               );
-              const successStatus = keyManager.signEvent({
-                ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
-                tags: [
-                  ['status', 'success'],
-                  ['e', event.id],
-                  ['p', event.pubkey],
-                ],
-              });
-              await this.relayHandler.publishEvent(successStatus);
-              const response = keyManager.signEvent({
-                ...keyManager.createEventTemplate(TOOL_RESPONSE_KIND),
-                content: JSON.stringify(result),
-                tags: [
-                  ['c', 'execute-tool-response'],
-                  ['e', event.id],
-                  ['p', event.pubkey],
-                ],
-              });
-              await this.relayHandler.publishEvent(response);
+              if (result?.content) {
+                const successStatus = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
+                  tags: [
+                    ['status', 'success'],
+                    ['e', event.id],
+                    ['p', event.pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(successStatus);
+                const response = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(TOOL_RESPONSE_KIND),
+                  content: JSON.stringify(result),
+                  tags: [
+                    ['c', 'execute-tool-response'],
+                    ['e', event.id],
+                    ['p', event.pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(response);
+              }
             } catch (error) {
               const errorStatus = keyManager.signEvent({
                 ...keyManager.createEventTemplate(DVM_NOTICE_KIND),

@@ -18,6 +18,7 @@ export class DVMBridge {
 
   constructor() {
     console.log('Initializing DVM Bridge...');
+    console.log('public key:', keyManager.getPublicKey());
     this.mcpPool = new MCPPool(CONFIG.mcp.servers);
     this.relayHandler = relayHandler;
     this.nostrAnnouncer = new NostrAnnouncer(this.mcpPool);

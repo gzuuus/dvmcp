@@ -1,0 +1,5 @@
+- [ ] Add encryption
+- [ ] Add payments
+- [ ] Add mcp inspector 
+- [ ] Discovery cli to bootstrap configuration
+- [ ] Add one command, configless, quick run mode

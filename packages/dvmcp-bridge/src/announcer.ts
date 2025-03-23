@@ -43,7 +43,7 @@ export class NostrAnnouncer {
         tools: tools,
       }),
       tags: [
-        ['d', `dvm-announcement-${CONFIG.mcp.name}`],
+        ['d', `dvm-announcement-${CONFIG.mcp.clientName}`],
         ['k', `${TOOL_REQUEST_KIND}`],
         ['capabilities', 'mcp-1.0'],
         ['t', 'mcp'],

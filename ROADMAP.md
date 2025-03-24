@@ -1,3 +1,4 @@
+- [x] Add flag `--config-path` to cli
 - [ ] Add encryption
 - [ ] Add payments
 - [ ] Add mcp inspector 

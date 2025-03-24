@@ -14,7 +14,14 @@ import {
 import { argv } from 'process';
 import type { Config } from './src/types';
 
-const configPath = join(process.cwd(), 'config.dvmcp.yml');
+const defaultConfigPath = join(process.cwd(), 'config.dvmcp.yml');
+let configPath = defaultConfigPath;
+
+const configPathArgIndex = argv.indexOf('--config-path');
+if (configPathArgIndex !== -1 && argv[configPathArgIndex + 1]) {
+  configPath = argv[configPathArgIndex + 1];
+  console.log(configPath);
+}
 
 const configFields: Record<string, FieldConfig> = {
   nostr: {
@@ -113,7 +120,7 @@ const cliMain = async () => {
   if (argv.includes('--configure')) {
     await configure();
   }
-
+  console.log('1', configPath);
   if (!existsSync(configPath)) {
     console.log(
       `${CONFIG_EMOJIS.INFO} No configuration file found. Starting setup...`

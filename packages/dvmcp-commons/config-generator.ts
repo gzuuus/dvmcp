@@ -183,7 +183,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
           array.forEach((item: string, index: number) => {
             console.log(`${CONFIG_EMOJIS.INFO} ${index + 1}. ${item}`);
           });
-          
+
           if (await this.promptYesNo(`${emoji} Remove any items?`, false)) {
             while (true) {
               const index =

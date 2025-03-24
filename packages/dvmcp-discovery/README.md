@@ -21,7 +21,7 @@ nano config.dvmcp.yml
 You can also specify a custom configuration file path using the `--config-path` flag.
 
 ```bash
-npx @dvmcp/discovery --config-path /path/to/custom/config.dvmcp.yml
+npx dvmcp-discovery --config-path /path/to/custom/config.dvmcp.yml
 ```
 
 ## Usage

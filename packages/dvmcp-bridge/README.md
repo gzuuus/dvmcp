@@ -22,7 +22,7 @@ nano config.dvmcp.yml
 You can also specify a custom configuration file path using the `--config-path` flag:
 
 ```bash
-npx @dvmcp/bridge --config-path /path/to/custom/config.yml
+npx dvmcp-bridge --config-path /path/to/custom/config.yml
 ```
 
 ## Usage

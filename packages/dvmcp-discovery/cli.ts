@@ -7,17 +7,20 @@ import {
   validateHexKey,
   validateRelayUrl,
 } from '@dvmcp/commons/config-generator';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import type { Config } from './src/config.js';
 import { argv } from 'process';
 import { existsSync } from 'fs';
+import { setConfigPath } from './src/config.js';
 
 const defaultConfigPath = join(process.cwd(), 'config.dvmcp.yml');
 let configPath = defaultConfigPath;
 
 const configPathArgIndex = argv.indexOf('--config-path');
 if (configPathArgIndex !== -1 && argv[configPathArgIndex + 1]) {
-  configPath = argv[configPathArgIndex + 1];
+  configPath = resolve(argv[configPathArgIndex + 1]);
+  console.log(`Using config path: ${configPath}`);
+  setConfigPath(configPath);
 }
 
 const configFields: Record<string, FieldConfig> = {

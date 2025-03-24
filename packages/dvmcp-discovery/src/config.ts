@@ -18,7 +18,11 @@ export interface Config {
   };
 }
 
-const CONFIG_PATH = join(process.cwd(), 'config.dvmcp.yml');
+let CONFIG_PATH = join(process.cwd(), 'config.dvmcp.yml');
+
+export function setConfigPath(path: string) {
+  CONFIG_PATH = path.startsWith('/') ? path : join(process.cwd(), path);
+}
 
 const TEST_CONFIG: Config = {
   nostr: {

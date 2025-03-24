@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { existsSync } from 'node:fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import {
   ConfigGenerator,
   type FieldConfig,
@@ -13,14 +13,16 @@ import {
 } from '@dvmcp/commons/config-generator';
 import { argv } from 'process';
 import type { Config } from './src/types';
+import { setConfigPath } from './src/config.js';
 
 const defaultConfigPath = join(process.cwd(), 'config.dvmcp.yml');
 let configPath = defaultConfigPath;
 
 const configPathArgIndex = argv.indexOf('--config-path');
 if (configPathArgIndex !== -1 && argv[configPathArgIndex + 1]) {
-  configPath = argv[configPathArgIndex + 1];
-  console.log(configPath);
+  configPath = resolve(argv[configPathArgIndex + 1]);
+  console.log(`Using config path: ${configPath}`);
+  setConfigPath(configPath);
 }
 
 const configFields: Record<string, FieldConfig> = {
@@ -120,7 +122,7 @@ const cliMain = async () => {
   if (argv.includes('--configure')) {
     await configure();
   }
-  console.log('1', configPath);
+
   if (!existsSync(configPath)) {
     console.log(
       `${CONFIG_EMOJIS.INFO} No configuration file found. Starting setup...`

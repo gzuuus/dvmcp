@@ -82,6 +82,23 @@ export class DVMBridge {
       throw error;
     }
   }
+  
+  /**
+   * Deletes the service announcement from relays
+   * @param reason Optional reason for deletion
+   * @returns The deletion event that was published
+   */
+  async deleteAnnouncement(reason?: string) {
+    console.log('Deleting service announcement from relays...');
+    try {
+      const deletionEvent = await this.nostrAnnouncer.deleteAnnouncement(reason);
+      console.log('Service announcement deleted successfully');
+      return deletionEvent;
+    } catch (error) {
+      console.error('Error deleting service announcement:', error);
+      throw error;
+    }
+  }
 
   private async handleRequest(event: Event) {
     try {

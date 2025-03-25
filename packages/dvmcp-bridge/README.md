@@ -8,6 +8,7 @@ A bridge implementation that connects Model Context Protocol (MCP) servers to No
 - Automatic service announcement using NIP-89
 - Tool discovery and execution through DVM kind:5910/6910 events
 - Job status updates and payment handling via kind:7000 events
+- Service announcement deletion using NIP-09
 - Comprehensive error handling
 
 ## Configuration
@@ -46,6 +47,22 @@ For production:
 ```bash
 bun run start
 ```
+
+### Deleting Service Announcements
+
+To remove your service announcements from relays when shutting down or taking your service offline, you can use the `--delete-announcement` flag:
+
+```bash
+bun run start --delete-announcement
+```
+
+You can also provide an optional reason for the deletion:
+
+```bash
+bun run start --delete-announcement --reason "Service maintenance in progress"
+```
+
+This will send a NIP-09 deletion event (kind 5) to all connected relays, instructing them to remove your previously published service announcements.
 
 ## Testing
 

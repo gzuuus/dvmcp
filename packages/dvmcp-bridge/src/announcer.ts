@@ -7,6 +7,7 @@ import {
   DVM_ANNOUNCEMENT_KIND,
   TOOL_REQUEST_KIND,
 } from '@dvmcp/commons/constants';
+import type { Event } from 'nostr-tools/pure';
 
 export const keyManager = createKeyManager(CONFIG.nostr.privateKey);
 
@@ -56,5 +57,38 @@ export class NostrAnnouncer {
 
   async updateAnnouncement() {
     await Promise.all([this.announceService(), this.announceRelayList()]);
+  }
+
+  /**
+   * Deletes the service announcement from relays using NIP-09
+   * @param reason Optional reason for deletion
+   * @returns The deletion event that was published
+   */
+  async deleteAnnouncement(reason: string = 'Service offline'): Promise<Event> {
+    // First, query the relays to find our announcement event
+    const announcementFilter = {
+      kinds: [DVM_ANNOUNCEMENT_KIND],
+      authors: [keyManager.getPublicKey()],
+    };
+    
+    const events = await this.relayHandler.queryEvents(announcementFilter);
+    
+    // Create the deletion event (NIP-09)
+    const deletionEvent = keyManager.signEvent({
+      ...keyManager.createEventTemplate(5), // kind 5 is for deletion requests
+      content: reason,
+      tags: [
+        // Add tags for each event to be deleted
+        ...events.map(event => ['e', event.id]),
+        // Add the kind of events being deleted
+        ['k', `${DVM_ANNOUNCEMENT_KIND}`],
+      ],
+    });
+    
+    // Publish the deletion event
+    await this.relayHandler.publishEvent(deletionEvent);
+    console.log(`Published deletion event for service announcement`);
+    
+    return deletionEvent;
   }
 }

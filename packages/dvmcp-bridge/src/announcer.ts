@@ -65,30 +65,25 @@ export class NostrAnnouncer {
    * @returns The deletion event that was published
    */
   async deleteAnnouncement(reason: string = 'Service offline'): Promise<Event> {
-    // First, query the relays to find our announcement event
     const announcementFilter = {
       kinds: [DVM_ANNOUNCEMENT_KIND],
       authors: [keyManager.getPublicKey()],
     };
-    
+
     const events = await this.relayHandler.queryEvents(announcementFilter);
-    
-    // Create the deletion event (NIP-09)
+
     const deletionEvent = keyManager.signEvent({
-      ...keyManager.createEventTemplate(5), // kind 5 is for deletion requests
+      ...keyManager.createEventTemplate(5),
       content: reason,
       tags: [
-        // Add tags for each event to be deleted
-        ...events.map(event => ['e', event.id]),
-        // Add the kind of events being deleted
+        ...events.map((event) => ['e', event.id]),
         ['k', `${DVM_ANNOUNCEMENT_KIND}`],
       ],
     });
-    
-    // Publish the deletion event
+
     await this.relayHandler.publishEvent(deletionEvent);
     console.log(`Published deletion event for service announcement`);
-    
+
     return deletionEvent;
   }
 }

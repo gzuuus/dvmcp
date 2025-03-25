@@ -120,20 +120,26 @@ const runApp = async () => {
 };
 
 const deleteAnnouncement = async () => {
-  // Get optional reason from command line arguments
   const reasonIndex = argv.indexOf('--reason');
-  const reason = reasonIndex !== -1 && argv[reasonIndex + 1] ? argv[reasonIndex + 1] : undefined;
-  
-  // Import DVMBridge and perform deletion
+  const reason =
+    reasonIndex !== -1 && argv[reasonIndex + 1]
+      ? argv[reasonIndex + 1]
+      : undefined;
+
   const bridge = new DVMBridge();
-  
+
   try {
     console.log(`${CONFIG_EMOJIS.INFO} Deleting service announcement...`);
     await bridge.deleteAnnouncement(reason);
-    console.log(`${CONFIG_EMOJIS.SUCCESS} Service announcement deleted successfully`);
+    console.log(
+      `${CONFIG_EMOJIS.SUCCESS} Service announcement deleted successfully`
+    );
     process.exit(0);
   } catch (error) {
-    console.error(`${CONFIG_EMOJIS.INFO} Failed to delete service announcement:`, error);
+    console.error(
+      `${CONFIG_EMOJIS.INFO} Failed to delete service announcement:`,
+      error
+    );
     process.exit(1);
   }
 };
@@ -143,10 +149,12 @@ const cliMain = async () => {
     await configure();
     return;
   }
-  
+
   if (argv.includes('--delete-announcement')) {
     if (!existsSync(configPath)) {
-      console.error(`${CONFIG_EMOJIS.INFO} No configuration file found at ${configPath}`);
+      console.error(
+        `${CONFIG_EMOJIS.INFO} No configuration file found at ${configPath}`
+      );
       process.exit(1);
     }
     await deleteAnnouncement();

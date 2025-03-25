@@ -2,6 +2,7 @@ import { type Event } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
 import { type Tool } from '@modelcontextprotocol/sdk/types.js';
+import { ToolRegistry } from './tool-registry.js';
 import {
   TOOL_REQUEST_KIND,
   TOOL_RESPONSE_KIND,
@@ -19,12 +20,17 @@ export class ToolExecutor {
 
   constructor(
     private relayHandler: RelayHandler,
-    private keyManager: ReturnType<typeof createKeyManager>
+    private keyManager: ReturnType<typeof createKeyManager>,
+    private toolRegistry: ToolRegistry
   ) {}
 
-  public async executeTool(tool: Tool, params: unknown): Promise<unknown> {
+  public async executeTool(
+    toolId: string,
+    tool: Tool,
+    params: unknown
+  ): Promise<unknown> {
     return new Promise((resolve, reject) => {
-      const request = this.createToolRequest(tool, params);
+      const request = this.createToolRequest(toolId, tool, params);
       const executionId = request.id;
       const context = this.createExecutionContext(executionId);
 
@@ -102,7 +108,11 @@ export class ToolExecutor {
     }
   }
 
-  private createToolRequest(tool: Tool, params: unknown): Event {
+  private createToolRequest(
+    toolId: string,
+    tool: Tool,
+    params: unknown
+  ): Event {
     const request = this.keyManager.createEventTemplate(TOOL_REQUEST_KIND);
 
     const parameters =
@@ -111,12 +121,17 @@ export class ToolExecutor {
         ? {}
         : params;
 
+    const toolInfo = this.toolRegistry.getToolInfo(toolId);
+    if (!toolInfo) throw new Error(`Tool ${toolId} not found`);
+
     request.content = JSON.stringify({
       name: tool.name,
       parameters,
+      providerPubkey: toolInfo.providerPubkey,
     });
 
     request.tags.push(['c', 'execute-tool']);
+    request.tags.push(['p', toolInfo.providerPubkey]);
     return this.keyManager.signEvent(request);
   }
 }

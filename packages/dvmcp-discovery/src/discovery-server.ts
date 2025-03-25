@@ -31,12 +31,16 @@ export class DiscoveryServer {
     });
 
     this.toolRegistry = new ToolRegistry(this.mcpServer);
-    this.toolExecutor = new ToolExecutor(this.relayHandler, this.keyManager);
+    this.toolExecutor = new ToolExecutor(
+      this.relayHandler,
+      this.keyManager,
+      this.toolRegistry
+    );
 
     this.toolRegistry.setExecutionCallback(async (toolId, args) => {
       const tool = this.toolRegistry.getTool(toolId);
       if (!tool) throw new Error('Tool not found');
-      return this.toolExecutor.executeTool(tool, args);
+      return this.toolExecutor.executeTool(toolId, tool, args);
     });
   }
 
@@ -62,7 +66,7 @@ export class DiscoveryServer {
 
       for (const tool of announcement.tools) {
         const toolId = `${tool.name}:${event.pubkey.slice(0, 4)}`;
-        this.toolRegistry.registerTool(toolId, tool);
+        this.toolRegistry.registerTool(toolId, tool, event.pubkey);
       }
     } catch (error) {
       console.error('Error processing DVM announcement:', error);

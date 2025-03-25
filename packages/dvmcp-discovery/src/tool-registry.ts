@@ -4,14 +4,19 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 export class ToolRegistry {
-  private discoveredTools: Map<string, Tool> = new Map();
+  private discoveredTools: Map<string, { tool: Tool; providerPubkey: string }> =
+    new Map();
 
   constructor(private mcpServer: McpServer) {}
 
-  public registerTool(toolId: string, tool: Tool): void {
+  public registerTool(
+    toolId: string,
+    tool: Tool,
+    providerPubkey: string
+  ): void {
     try {
       ToolSchema.parse(tool);
-      this.discoveredTools.set(toolId, tool);
+      this.discoveredTools.set(toolId, { tool, providerPubkey });
       this.registerWithMcp(toolId, tool);
     } catch (error) {
       console.error(`Invalid MCP tool format for ${toolId}:`, error);
@@ -19,12 +24,16 @@ export class ToolRegistry {
     }
   }
 
-  public getTool(toolId: string): Tool | undefined {
+  public getToolInfo(toolId: string) {
     return this.discoveredTools.get(toolId);
   }
 
+  public getTool(toolId: string): Tool | undefined {
+    return this.discoveredTools.get(toolId)?.tool;
+  }
+
   public listTools(): Tool[] {
-    return Array.from(this.discoveredTools.values());
+    return Array.from(this.discoveredTools.values()).map(({ tool }) => tool);
   }
 
   public clear(): void {

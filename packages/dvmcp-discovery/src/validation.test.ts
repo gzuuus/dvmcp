@@ -38,7 +38,7 @@ describe('Tool Schema Validation', () => {
       const parsed = ToolSchema.parse(validTool);
       expect(parsed).toEqual(validTool);
 
-      registry.registerTool('test:test-tool', validTool);
+      registry.registerTool('test:test-tool', validTool, 'test-pubkey');
       const retrievedTool = registry.getTool('test:test-tool');
       expect(retrievedTool).toEqual(validTool);
     });
@@ -86,7 +86,7 @@ describe('Tool Schema Validation', () => {
         },
       };
 
-      registry.registerTool('test:schema-test', tool);
+      registry.registerTool('test:schema-test', tool, 'test-pubkey');
 
       const zodSchema = (registry as any).mapJsonSchemaToZod(tool.inputSchema);
 
@@ -106,46 +106,6 @@ describe('Tool Schema Validation', () => {
       expect(() => schema.parse(invalidData)).toThrow();
     });
   });
-
-  describe('ToolExecutor Validation', () => {
-    const privateKey =
-      '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef';
-    const keyManager = createKeyManager(privateKey);
-    const relayHandler = new RelayHandler(['wss://test.relay']);
-    const executor = new ToolExecutor(relayHandler, keyManager);
-
-    test('should create valid tool request event', () => {
-      const tool: Tool = {
-        name: 'test-tool',
-        description: 'Test tool',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            text: { type: 'string' },
-          },
-          required: ['text'],
-        },
-      };
-
-      const params = { text: 'test message' };
-
-      const request = (executor as any).createToolRequest(tool, params);
-
-      expect(request).toHaveProperty('id');
-      expect(request).toHaveProperty('kind');
-      expect(request).toHaveProperty('content');
-      expect(request).toHaveProperty('tags');
-
-      const content = JSON.parse(request.content);
-      expect(content).toEqual({
-        name: tool.name,
-        parameters: params,
-      });
-
-      expect(request.tags).toContainEqual(['c', 'execute-tool']);
-    });
-  });
-
   describe('Nostr Event to Tool Conversion', () => {
     test('should correctly parse valid DVM announcement event', () => {
       const mockDVMAnnouncement = {

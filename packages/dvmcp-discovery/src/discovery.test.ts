@@ -62,9 +62,13 @@ describe('DiscoveryServer E2E', () => {
 
     console.log('Executing tool...');
 
-    const result = await discoveryServer['toolExecutor'].executeTool(mockTool, {
-      text: 'Hello from test',
-    });
+    const result = await discoveryServer['toolExecutor'].executeTool(
+      toolId!,
+      mockTool,
+      {
+        text: 'Hello from test',
+      }
+    );
 
     console.log('Execution result:', result);
     expect(result).toBeDefined();

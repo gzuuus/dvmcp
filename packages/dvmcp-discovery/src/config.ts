@@ -2,6 +2,8 @@ import { parse } from 'yaml';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { HEX_KEYS_REGEX } from '@dvmcp/commons/constants';
+import { generateSecretKey } from 'nostr-tools/pure';
+import { bytesToHex } from '@noble/hashes/utils';
 
 export interface Config {
   nostr: {
@@ -19,9 +21,14 @@ export interface Config {
 }
 
 let CONFIG_PATH = join(process.cwd(), 'config.dvmcp.yml');
+let IN_MEMORY_CONFIG: Config | null = null;
 
 export function setConfigPath(path: string) {
   CONFIG_PATH = path.startsWith('/') ? path : join(process.cwd(), path);
+}
+
+export function setInMemoryConfig(config: Config) {
+  IN_MEMORY_CONFIG = config;
 }
 
 const TEST_CONFIG: Config = {
@@ -77,6 +84,10 @@ function validateRelayUrls(urls: any): string[] {
 }
 
 function loadConfig(): Config {
+  if (IN_MEMORY_CONFIG) {
+    return IN_MEMORY_CONFIG;
+  }
+
   if (process.env.NODE_ENV === 'test') {
     return TEST_CONFIG;
   }
@@ -124,6 +135,23 @@ function loadConfig(): Config {
   } catch (error) {
     throw new Error(`Failed to load config: ${error}`);
   }
+}
+
+export function createDefaultConfig(relayUrls: string[]): Config {
+  return {
+    nostr: {
+      privateKey: bytesToHex(generateSecretKey()),
+      relayUrls: validateRelayUrls(relayUrls),
+    },
+    mcp: {
+      name: 'DVMCP Discovery',
+      version: '1.0.0',
+      about: 'DVMCP Discovery Server for aggregating MCP tools from DVMs',
+    },
+    whitelist: {
+      allowedDVMs: new Set(),
+    },
+  };
 }
 
 export const CONFIG = loadConfig();

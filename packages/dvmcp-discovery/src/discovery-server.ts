@@ -8,12 +8,7 @@ import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
-
-interface DVMAnnouncement {
-  name: string;
-  about: string;
-  tools: Tool[];
-}
+import type { DVMAnnouncement } from './direct-discovery';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;
@@ -54,6 +49,17 @@ export class DiscoveryServer {
     await Promise.all(events.map((event) => this.handleDVMAnnouncement(event)));
   }
 
+  private createToolId(toolName: string, pubkey: string): string {
+    return `${toolName}:${pubkey.slice(0, 4)}`;
+  }
+
+  private registerToolsFromAnnouncement(pubkey: string, tools: Tool[]): void {
+    for (const tool of tools) {
+      const toolId = this.createToolId(tool.name, pubkey);
+      this.toolRegistry.registerTool(toolId, tool, pubkey);
+    }
+  }
+
   private async handleDVMAnnouncement(event: Event) {
     try {
       if (!this.isAllowedDVM(event.pubkey)) {
@@ -64,10 +70,7 @@ export class DiscoveryServer {
       const announcement = this.parseAnnouncement(event.content);
       if (!announcement?.tools) return;
 
-      for (const tool of announcement.tools) {
-        const toolId = `${tool.name}:${event.pubkey.slice(0, 4)}`;
-        this.toolRegistry.registerTool(toolId, tool, event.pubkey);
-      }
+      this.registerToolsFromAnnouncement(event.pubkey, announcement.tools);
     } catch (error) {
       console.error('Error processing DVM announcement:', error);
     }
@@ -93,6 +96,30 @@ export class DiscoveryServer {
 
   public async listTools(): Promise<Tool[]> {
     return this.toolRegistry.listTools();
+  }
+
+  public async registerDirectServerTools(
+    pubkey: string,
+    announcement: DVMAnnouncement
+  ) {
+    console.log('Starting discovery server with direct server tools...');
+
+    if (!announcement?.tools) {
+      console.error('No tools found in server announcement');
+      return;
+    }
+
+    this.registerToolsFromAnnouncement(pubkey, announcement.tools);
+
+    console.log(
+      `Registered ${announcement.tools.length} tools from direct server`
+    );
+
+    // Connect the MCP server
+    const transport = new StdioServerTransport();
+    await this.mcpServer.connect(transport);
+
+    console.log('DVMCP Discovery Server started');
   }
 
   public async start() {

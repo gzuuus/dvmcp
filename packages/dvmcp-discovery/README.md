@@ -8,6 +8,7 @@ A MCP server implementation that aggregates tools from DVMs across the Nostr net
 - Provides a unified interface to access tools from multiple DVMs
 - Tool execution handling and status tracking
 - Configurable DVM whitelist
+- Direct connection to specific providers or servers
 
 ## Configuration
 
@@ -45,6 +46,28 @@ For production:
 ```bash
 bun run start
 ```
+
+### Direct Connection Options
+
+You can connect directly to a specific provider or server without a configuration file:
+
+#### Connect to a Provider
+
+Use the `--provider` flag followed by an nprofile entity to discover and register all tools from a specific provider:
+
+```bash
+bun run start --provider nprofile1...
+```
+
+#### Connect to a Server
+
+Use the `--server` flag followed by an naddr entity to register only the tools from a specific server:
+
+```bash
+bun run start --server naddr1...
+```
+
+This is useful when you want to work with a specific subset of tools rather than discovering all tools from a provider.
 
 ## Testing
 

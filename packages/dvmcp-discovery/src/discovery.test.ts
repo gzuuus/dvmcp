@@ -1,6 +1,6 @@
 import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
 import { DiscoveryServer } from './discovery-server';
-import { CONFIG } from './config';
+import { getConfig } from './config';
 import {
   server as mockRelay,
   stop as stopRelay,
@@ -15,10 +15,11 @@ describe('DiscoveryServer E2E', () => {
     mockRelay;
     relayConnected = true;
 
+    const config = getConfig();
     const testConfig = {
-      ...CONFIG,
+      ...config,
       nostr: {
-        ...CONFIG.nostr,
+        ...config.nostr,
         relayUrls: ['ws://localhost:3334'],
       },
     };

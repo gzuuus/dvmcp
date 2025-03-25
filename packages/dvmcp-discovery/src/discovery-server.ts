@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { type Event, type Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
-import { CONFIG, type Config } from './config';
+import { getConfig, type Config } from './config';
 import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
@@ -77,13 +77,14 @@ export class DiscoveryServer {
   }
 
   private isAllowedDVM(pubkey: string): boolean {
+    const config = getConfig();
     if (
-      !CONFIG.whitelist?.allowedDVMs ||
-      CONFIG.whitelist.allowedDVMs.size == 0
+      !config.whitelist?.allowedDVMs ||
+      config.whitelist.allowedDVMs.size == 0
     ) {
       return true;
     }
-    return CONFIG.whitelist.allowedDVMs.has(pubkey);
+    return config.whitelist.allowedDVMs.has(pubkey);
   }
 
   private parseAnnouncement(content: string): DVMAnnouncement | null {

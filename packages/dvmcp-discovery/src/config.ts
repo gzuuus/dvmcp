@@ -154,4 +154,11 @@ export function createDefaultConfig(relayUrls: string[]): Config {
   };
 }
 
-export const CONFIG = loadConfig();
+let _CONFIG: Config | null = null;
+
+export function getConfig(): Config {
+  if (!_CONFIG) {
+    _CONFIG = loadConfig();
+  }
+  return _CONFIG;
+}

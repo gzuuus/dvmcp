@@ -1,4 +1,4 @@
-import { CONFIG } from './src/config';
+import { getConfig } from './src/config';
 import { DiscoveryServer } from './src/discovery-server';
 import type { DVMAnnouncement } from './src/direct-discovery';
 
@@ -9,7 +9,8 @@ export interface DirectServerInfo {
 
 async function main(directServerInfo?: DirectServerInfo | null) {
   try {
-    const server = new DiscoveryServer(CONFIG);
+    const config = getConfig();
+    const server = new DiscoveryServer(config);
 
     if (directServerInfo) {
       // If we have direct server info, register tools from that server only
@@ -25,8 +26,8 @@ async function main(directServerInfo?: DirectServerInfo | null) {
       await server.start();
     }
 
-    console.log(`DVMCP Discovery Server (${CONFIG.mcp.version}) started`);
-    console.log(`Connected to ${CONFIG.nostr.relayUrls.length} relays`);
+    console.log(`DVMCP Discovery Server (${config.mcp.version}) started`);
+    console.log(`Connected to ${config.nostr.relayUrls.length} relays`);
 
     // Handle shutdown
     const cleanup = () => {

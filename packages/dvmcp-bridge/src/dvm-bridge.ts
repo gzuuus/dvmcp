@@ -9,6 +9,7 @@ import {
   TOOL_REQUEST_KIND,
   TOOL_RESPONSE_KIND,
 } from '@dvmcp/commons/constants';
+import { loggerBridge } from '@dvmcp/commons/logger';
 
 export class DVMBridge {
   private mcpPool: MCPPool;
@@ -17,8 +18,8 @@ export class DVMBridge {
   private isRunning: boolean = false;
 
   constructor() {
-    console.log('Initializing DVM Bridge...');
-    console.log('public key:', keyManager.getPublicKey());
+    loggerBridge('Initializing DVM Bridge...');
+    loggerBridge('public key:', keyManager.getPublicKey());
     this.mcpPool = new MCPPool(CONFIG.mcp.servers);
     this.relayHandler = relayHandler;
     this.nostrAnnouncer = new NostrAnnouncer(this.mcpPool);
@@ -36,21 +37,21 @@ export class DVMBridge {
 
   async start() {
     if (this.isRunning) {
-      console.log('Bridge is already running');
+      loggerBridge('Bridge is already running');
       return;
     }
 
     try {
-      console.log('Connecting to MCP servers...');
+      loggerBridge('Connecting to MCP servers...');
       await this.mcpPool.connect();
 
       const tools = await this.mcpPool.listTools();
-      console.log(`Available MCP tools across all servers: ${tools.length}`);
+      loggerBridge(`Available MCP tools across all servers: ${tools.length}`);
 
-      console.log('Announcing service to Nostr network...');
+      loggerBridge('Announcing service to Nostr network...');
       await this.nostrAnnouncer.updateAnnouncement();
 
-      console.log('Setting up request handlers...');
+      loggerBridge('Setting up request handlers...');
       const publicKey = keyManager.getPublicKey();
       this.relayHandler.subscribeToRequests(this.handleRequest.bind(this), {
         kinds: [TOOL_REQUEST_KIND],
@@ -59,7 +60,7 @@ export class DVMBridge {
       });
 
       this.isRunning = true;
-      console.log('DVM Bridge is now running and ready to handle requests');
+      loggerBridge('DVM Bridge is now running and ready to handle requests');
     } catch (error) {
       console.error('Failed to start DVM Bridge:', error);
       throw error;
@@ -71,12 +72,12 @@ export class DVMBridge {
       return;
     }
 
-    console.log('Stopping DVM Bridge...');
+    loggerBridge('Stopping DVM Bridge...');
     try {
       await this.mcpPool.disconnect();
       this.relayHandler.cleanup();
       this.isRunning = false;
-      console.log('DVM Bridge stopped successfully');
+      loggerBridge('DVM Bridge stopped successfully');
     } catch (error) {
       console.error('Error stopping DVM Bridge:', error);
       throw error;
@@ -89,11 +90,11 @@ export class DVMBridge {
    * @returns The deletion event that was published
    */
   async deleteAnnouncement(reason?: string) {
-    console.log('Deleting service announcement from relays...');
+    loggerBridge('Deleting service announcement from relays...');
     try {
       const deletionEvent =
         await this.nostrAnnouncer.deleteAnnouncement(reason);
-      console.log('Service announcement deleted successfully');
+      loggerBridge('Service announcement deleted successfully');
       return deletionEvent;
     } catch (error) {
       console.error('Error deleting service announcement:', error);

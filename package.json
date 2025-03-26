@@ -1,7 +1,6 @@
 {
   "name": "dvmcp",
   "scripts": {
-    "start:mcp-dvm": "cd packages/mcp-dvm-bridge && bun start",
     "format": "prettier --write \"packages/**/*.{ts,tsx,js,jsx,json,md}\"",
     "publish:commons": "cd packages/dvmcp-commons && npm publish --access public",
     "publish:bridge": "cd packages/dvmcp-bridge && npm publish --access public",
@@ -13,5 +12,8 @@
   ],
   "devDependencies": {
     "prettier": "^3.5.1"
+  },
+  "dependencies": {
+    "@types/debug": "^4.1.12"
   }
 }

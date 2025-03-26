@@ -2,6 +2,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { CONFIG } from './config';
 import type { MCPServerConfig } from './types';
+import { loggerBridge } from '@dvmcp/commons/logger';
 
 export class MCPClientHandler {
   private client: Client;
@@ -29,7 +30,7 @@ export class MCPClientHandler {
 
   async connect() {
     await this.client.connect(this.transport);
-    console.log('Connected to MCP server');
+    loggerBridge('Connected to MCP server');
   }
 
   async listTools() {

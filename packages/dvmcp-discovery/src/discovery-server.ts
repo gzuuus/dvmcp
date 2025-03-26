@@ -9,6 +9,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
 import type { DVMAnnouncement } from './direct-discovery';
+import logger from './logger';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;
@@ -63,7 +64,7 @@ export class DiscoveryServer {
   private async handleDVMAnnouncement(event: Event) {
     try {
       if (!this.isAllowedDVM(event.pubkey)) {
-        console.log('DVM not in whitelist:', event.pubkey);
+        logger('DVM not in whitelist:', event.pubkey);
         return;
       }
 
@@ -103,7 +104,7 @@ export class DiscoveryServer {
     pubkey: string,
     announcement: DVMAnnouncement
   ) {
-    console.log('Starting discovery server with direct server tools...');
+    logger('Starting discovery server with direct server tools...');
 
     if (!announcement?.tools) {
       console.error('No tools found in server announcement');
@@ -112,27 +113,25 @@ export class DiscoveryServer {
 
     this.registerToolsFromAnnouncement(pubkey, announcement.tools);
 
-    console.log(
-      `Registered ${announcement.tools.length} tools from direct server`
-    );
+    logger(`Registered ${announcement.tools.length} tools from direct server`);
 
     // Connect the MCP server
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
 
-    console.log('DVMCP Discovery Server started');
+    logger('DVMCP Discovery Server started');
   }
 
   public async start() {
-    console.log('Starting discovery server...');
+    logger('Starting discovery server...');
 
     await this.startDiscovery();
-    console.log(`Discovered ${this.toolRegistry.listTools().length} tools`);
+    logger(`Discovered ${this.toolRegistry.listTools().length} tools`);
 
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
 
-    console.log('DVMCP Discovery Server started');
+    logger('DVMCP Discovery Server started');
   }
 
   public async cleanup(): Promise<void> {

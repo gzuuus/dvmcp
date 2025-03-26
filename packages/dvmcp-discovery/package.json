@@ -27,13 +27,15 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "@types/debug": "^4.1.12"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.5.0",
     "nostr-tools": "^2.10.4",
     "yaml": "^2.7.0",
-    "@dvmcp/commons": "^0.1.2"
+    "@dvmcp/commons": "^0.1.2",
+    "debug": "^4.4.0"
   },
   "publishConfig": {
     "access": "public"

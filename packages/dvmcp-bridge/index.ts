@@ -1,9 +1,10 @@
 import { DVMBridge } from './src/dvm-bridge';
+import { loggerBridge } from '@dvmcp/commons/logger';
 
 async function main() {
   const bridge = new DVMBridge();
   const shutdown = async () => {
-    console.log('Shutting down...');
+    loggerBridge('Shutting down...');
     try {
       await bridge.stop();
       process.exit(0);

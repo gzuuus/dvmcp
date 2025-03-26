@@ -39,9 +39,9 @@ export class RelayHandler {
   private async ensureRelay(url: string) {
     try {
       await this.pool.ensureRelay(url, { connectionTimeout: 5000 });
-      console.log(`Connected to relay: ${url}`);
+      logger(`Connected to relay: ${url}`);
     } catch (error) {
-      console.log(`Failed to connect to relay ${url}:`, error);
+      logger(`Failed to connect to relay ${url}:`, error);
     }
   }
 
@@ -68,16 +68,14 @@ export class RelayHandler {
 
     const sub = this.pool.subscribeMany(this.relayUrls, filters, {
       onevent(event) {
-        console.log(
-          `Event received(${event.kind}), id: ${event.id.slice(0, 12)}`
-        );
+        logger(`Event received(${event.kind}), id: ${event.id.slice(0, 12)}`);
         onRequest(event);
       },
       oneose() {
-        console.log('Reached end of stored events');
+        logger('Reached end of stored events');
       },
       onclose(reasons) {
-        console.log('Subscription closed:', reasons);
+        logger('Subscription closed:', reasons);
       },
     });
 

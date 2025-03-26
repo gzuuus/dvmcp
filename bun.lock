@@ -3,6 +3,9 @@
   "workspaces": {
     "": {
       "name": "dvmcp",
+      "dependencies": {
+        "@types/debug": "^4.1.12",
+      },
       "devDependencies": {
         "prettier": "^3.5.1",
       },
@@ -36,7 +39,7 @@
     },
     "packages/dvmcp-discovery": {
       "name": "@dvmcp/discovery",
-      "version": "0.1.17",
+      "version": "0.1.18",
       "bin": {
         "dvmcp-discovery": "./cli.ts",
       },

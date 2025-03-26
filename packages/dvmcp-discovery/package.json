@@ -27,7 +27,8 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "@types/debug": "^4.1.12"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.5.0",

@@ -1,6 +1,7 @@
 import { getConfig } from './src/config';
 import { DiscoveryServer } from './src/discovery-server';
 import type { DVMAnnouncement } from './src/direct-discovery';
+import logger from './src/logger';
 
 export interface DirectServerInfo {
   pubkey: string;
@@ -14,9 +15,7 @@ async function main(directServerInfo?: DirectServerInfo | null) {
 
     if (directServerInfo) {
       // If we have direct server info, register tools from that server only
-      console.log(
-        `Using direct server with pubkey: ${directServerInfo.pubkey}`
-      );
+      logger(`Using direct server with pubkey: ${directServerInfo.pubkey}`);
       await server.registerDirectServerTools(
         directServerInfo.pubkey,
         directServerInfo.announcement
@@ -26,8 +25,8 @@ async function main(directServerInfo?: DirectServerInfo | null) {
       await server.start();
     }
 
-    console.log(`DVMCP Discovery Server (${config.mcp.version}) started`);
-    console.log(`Connected to ${config.nostr.relayUrls.length} relays`);
+    logger(`DVMCP Discovery Server (${config.mcp.version}) started`);
+    logger(`Connected to ${config.nostr.relayUrls.length} relays`);
 
     // Handle shutdown
     const cleanup = () => {

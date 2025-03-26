@@ -8,6 +8,7 @@ import {
   TOOL_RESPONSE_KIND,
   DVM_NOTICE_KIND,
 } from '@dvmcp/commons/constants';
+import logger from './logger';
 
 interface ExecutionContext {
   timeoutId: ReturnType<typeof setTimeout>;
@@ -65,7 +66,7 @@ export class ToolExecutor {
 
   private createExecutionContext(executionId: string): ExecutionContext {
     const timeoutId = setTimeout(() => {
-      console.log('Execution timeout for:', executionId);
+      logger('Execution timeout for:', executionId);
       this.cleanupExecution(executionId);
     }, ToolExecutor.EXECUTION_TIMEOUT);
 

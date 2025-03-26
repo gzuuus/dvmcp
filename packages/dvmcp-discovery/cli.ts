@@ -21,9 +21,9 @@ import {
   fetchProviderAnnouncement,
   fetchServerAnnouncement,
   parseAnnouncement,
-  type DVMAnnouncement,
 } from './src/direct-discovery.js';
 import type { DirectServerInfo } from './index.js';
+import logger from './src/logger';
 
 const defaultConfigPath = join(process.cwd(), 'config.dvmcp.yml');
 let configPath = defaultConfigPath;
@@ -47,7 +47,7 @@ if (
   argv[configPathArgIndex + 1]
 ) {
   configPath = resolve(argv[configPathArgIndex + 1]);
-  console.log(`Using config path: ${configPath}`);
+  logger(`Using config path: ${configPath}`);
   setConfigPath(configPath);
 }
 
@@ -110,7 +110,7 @@ const configFields: Record<string, FieldConfig> = {
 };
 
 const configure = async () => {
-  console.log(
+  logger(
     `${CONFIG_EMOJIS.SETUP} DVMCP Discovery Configuration Setup ${CONFIG_EMOJIS.SETUP}`
   );
   const generator = new ConfigGenerator<Config>(configPath, configFields);
@@ -119,7 +119,7 @@ const configure = async () => {
 
 const runApp = async (directServerInfo?: DirectServerInfo) => {
   const main = await import('./index.js');
-  console.log(`${CONFIG_EMOJIS.INFO} Running main application...`);
+  logger(`${CONFIG_EMOJIS.INFO} Running main application...`);
   await main.default(directServerInfo);
 };
 
@@ -134,9 +134,7 @@ const setupInMemoryConfig = (relays: string[], pubkey: string) => {
 };
 
 const setupFromProvider = async (nprofileEntity: string) => {
-  console.log(
-    `${CONFIG_EMOJIS.INFO} Setting up from provider: ${nprofileEntity}`
-  );
+  logger(`${CONFIG_EMOJIS.INFO} Setting up from provider: ${nprofileEntity}`);
 
   const providerData = decodeNprofile(nprofileEntity);
   if (!providerData) {
@@ -152,7 +150,7 @@ const setupFromProvider = async (nprofileEntity: string) => {
     }
 
     setupInMemoryConfig(providerData.relays, providerData.pubkey);
-    console.log(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from provider`);
+    logger(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from provider`);
   } catch (error) {
     console.error(`Error: ${error}`);
     process.exit(1);
@@ -160,7 +158,7 @@ const setupFromProvider = async (nprofileEntity: string) => {
 };
 
 const setupFromServer = async (naddrEntity: string) => {
-  console.log(`${CONFIG_EMOJIS.INFO} Setting up from server: ${naddrEntity}`);
+  logger(`${CONFIG_EMOJIS.INFO} Setting up from server: ${naddrEntity}`);
 
   const addrData = decodeNaddr(naddrEntity);
   if (!addrData) {
@@ -182,7 +180,7 @@ const setupFromServer = async (naddrEntity: string) => {
     }
 
     setupInMemoryConfig(addrData.relays, addrData.pubkey);
-    console.log(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from server`);
+    logger(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from server`);
 
     return {
       pubkey: addrData.pubkey,
@@ -213,7 +211,7 @@ const cliMain = async () => {
   }
   // Handle normal config file mode
   else if (!existsSync(configPath)) {
-    console.log(
+    logger(
       `${CONFIG_EMOJIS.INFO} No configuration file found. Starting setup...`
     );
     await configure();

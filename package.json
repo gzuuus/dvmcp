@@ -13,5 +13,8 @@
   ],
   "devDependencies": {
     "prettier": "^3.5.1"
+  },
+  "dependencies": {
+    "@types/debug": "^4.1.12"
   }
 }

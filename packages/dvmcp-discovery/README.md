@@ -69,6 +69,14 @@ bun run start --server naddr1...
 
 This is useful when you want to work with a specific subset of tools rather than discovering all tools from a provider.
 
+## Debug
+
+You can enable debug mode by setting the `DEBUG` environment variable to `*`:
+
+```bash
+DEBUG=* npx @dvmcp/discovery
+```
+
 ## Testing
 
 Run the test suite:

@@ -51,7 +51,7 @@ export class DiscoveryServer {
   }
 
   private createToolId(toolName: string, pubkey: string): string {
-    return `${toolName}:${pubkey.slice(0, 4)}`;
+    return `${toolName}_${pubkey.slice(0, 4)}`;
   }
 
   private registerToolsFromAnnouncement(pubkey: string, tools: Tool[]): void {

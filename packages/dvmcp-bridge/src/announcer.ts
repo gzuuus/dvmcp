@@ -8,6 +8,7 @@ import {
   TOOL_REQUEST_KIND,
 } from '@dvmcp/commons/constants';
 import type { Event } from 'nostr-tools/pure';
+import { loggerBridge } from '@dvmcp/commons/logger';
 
 export const keyManager = createKeyManager(CONFIG.nostr.privateKey);
 
@@ -28,7 +29,7 @@ export class NostrAnnouncer {
     });
 
     await this.relayHandler.publishEvent(event);
-    console.log('Announced relay list metadata');
+    loggerBridge('Announced relay list metadata');
   }
 
   async announceService() {
@@ -52,7 +53,7 @@ export class NostrAnnouncer {
       ],
     });
     await this.relayHandler.publishEvent(event);
-    console.log(`Announced service with ${tools.length} tools`);
+    loggerBridge(`Announced service with ${tools.length} tools`);
   }
 
   async updateAnnouncement() {
@@ -82,7 +83,7 @@ export class NostrAnnouncer {
     });
 
     await this.relayHandler.publishEvent(deletionEvent);
-    console.log(`Published deletion event for service announcement`);
+    loggerBridge(`Published deletion event for service announcement`);
 
     return deletionEvent;
   }

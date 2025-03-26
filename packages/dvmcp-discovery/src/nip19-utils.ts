@@ -1,6 +1,6 @@
 import { nip19 } from 'nostr-tools';
 import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
-import logger from './logger';
+import { loggerDiscovery } from '@dvmcp/commons/logger';
 
 // Default fallback relay when no relay hints are provided
 export const DEFAULT_FALLBACK_RELAY = 'wss://relay.dvmcp.fun';
@@ -33,7 +33,7 @@ export function decodeNprofile(nprofileEntity: string): NprofileData | null {
     // Ensure we have at least one relay by using the fallback if necessary
     const profileData = data as NprofileData;
     if (!profileData.relays || profileData.relays.length === 0) {
-      logger(
+      loggerDiscovery(
         `No relay hints in nprofile, using fallback relay: ${DEFAULT_FALLBACK_RELAY}`
       );
       profileData.relays = [DEFAULT_FALLBACK_RELAY];
@@ -68,7 +68,7 @@ export function decodeNaddr(naddrEntity: string): NaddrData | null {
     // Ensure we have at least one relay by using the fallback if necessary
     const addrData = data as NaddrData;
     if (!addrData.relays || addrData.relays.length === 0) {
-      logger(
+      loggerDiscovery(
         `No relay hints in naddr, using fallback relay: ${DEFAULT_FALLBACK_RELAY}`
       );
       addrData.relays = [DEFAULT_FALLBACK_RELAY];

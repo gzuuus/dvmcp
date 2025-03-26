@@ -9,7 +9,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
 import type { DVMAnnouncement } from './direct-discovery';
-import logger from './logger';
+import { loggerDiscovery } from '@dvmcp/commons/logger';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;
@@ -64,7 +64,7 @@ export class DiscoveryServer {
   private async handleDVMAnnouncement(event: Event) {
     try {
       if (!this.isAllowedDVM(event.pubkey)) {
-        logger('DVM not in whitelist:', event.pubkey);
+        loggerDiscovery('DVM not in whitelist:', event.pubkey);
         return;
       }
 
@@ -104,7 +104,7 @@ export class DiscoveryServer {
     pubkey: string,
     announcement: DVMAnnouncement
   ) {
-    logger('Starting discovery server with direct server tools...');
+    loggerDiscovery('Starting discovery server with direct server tools...');
 
     if (!announcement?.tools) {
       console.error('No tools found in server announcement');
@@ -113,25 +113,27 @@ export class DiscoveryServer {
 
     this.registerToolsFromAnnouncement(pubkey, announcement.tools);
 
-    logger(`Registered ${announcement.tools.length} tools from direct server`);
+    loggerDiscovery(
+      `Registered ${announcement.tools.length} tools from direct server`
+    );
 
     // Connect the MCP server
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
 
-    logger('DVMCP Discovery Server started');
+    loggerDiscovery('DVMCP Discovery Server started');
   }
 
   public async start() {
-    logger('Starting discovery server...');
+    loggerDiscovery('Starting discovery server...');
 
     await this.startDiscovery();
-    logger(`Discovered ${this.toolRegistry.listTools().length} tools`);
+    loggerDiscovery(`Discovered ${this.toolRegistry.listTools().length} tools`);
 
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
 
-    logger('DVMCP Discovery Server started');
+    loggerDiscovery('DVMCP Discovery Server started');
   }
 
   public async cleanup(): Promise<void> {

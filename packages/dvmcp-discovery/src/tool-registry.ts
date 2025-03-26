@@ -2,7 +2,7 @@ import { type Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import logger from './logger';
+import { loggerDiscovery } from '@dvmcp/commons/logger';
 
 export class ToolRegistry {
   private discoveredTools: Map<string, { tool: Tool; providerPubkey: string }> =
@@ -73,7 +73,7 @@ export class ToolRegistry {
           }
         }
       );
-      logger('Tool registered successfully:', toolId);
+      loggerDiscovery('Tool registered successfully:', toolId);
     } catch (error) {
       console.error('Error registering tool:', toolId, error);
     }

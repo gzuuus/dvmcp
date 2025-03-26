@@ -2,7 +2,7 @@ import type { Event, Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
 import type { NaddrData, NprofileData } from './nip19-utils';
-import logger from './logger';
+import { loggerDiscovery } from '@dvmcp/commons/logger';
 
 export interface DVMAnnouncement {
   name: string;
@@ -20,7 +20,7 @@ async function fetchAnnouncement(
 
   try {
     // Query for the announcement event
-    logger('Querying for announcement event:', filter);
+    loggerDiscovery('Querying for announcement event:', filter);
     const events = await relayHandler.queryEvents(filter);
 
     if (events.length === 0) {

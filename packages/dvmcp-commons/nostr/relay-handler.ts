@@ -9,6 +9,7 @@ import {
   TOOL_REQUEST_KIND,
   TOOL_RESPONSE_KIND,
 } from '../constants';
+import { logger } from '../logger';
 
 useWebSocketImplementation(WebSocket);
 
@@ -47,9 +48,7 @@ export class RelayHandler {
   async publishEvent(event: Event): Promise<void> {
     try {
       await Promise.any(this.pool.publish(this.relayUrls, event));
-      console.log(
-        `Event published(${event.kind}), id: ${event.id.slice(0, 12)}`
-      );
+      logger(`Event published(${event.kind}), id: ${event.id.slice(0, 12)}`);
     } catch (error) {
       console.error('Failed to publish event:', error);
       throw error;

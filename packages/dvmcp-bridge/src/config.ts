@@ -84,22 +84,12 @@ function validateMCPServers(servers: any): MCPServerConfig[] {
   });
 }
 
-let allowMissingConfig = false;
-
-export function setAllowMissingConfig(allow: boolean) {
-  allowMissingConfig = allow;
-}
-
 function loadConfig(): Config {
   if (process.env.NODE_ENV === 'test') {
     return TEST_CONFIG;
   }
 
   if (!existsSync(CONFIG_PATH)) {
-    // If we're in CLI mode, return null to let the CLI handle it
-    if (allowMissingConfig) {
-      return null as unknown as Config;
-    }
     throw new Error(
       `No config file found at ${CONFIG_PATH}. Please create one based on config.example.yml`
     );
@@ -159,11 +149,9 @@ let cachedConfig: Config | null = null;
 export function getConfig(): Config {
   if (!cachedConfig) {
     cachedConfig = loadConfig();
-    if (cachedConfig === null) {
-      return TEST_CONFIG;
-    }
   }
   return cachedConfig;
 }
 
+// For backward compatibility
 export const CONFIG = getConfig();

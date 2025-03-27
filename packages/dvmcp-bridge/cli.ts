@@ -13,7 +13,7 @@ import {
 } from '@dvmcp/commons/config-generator';
 import { argv } from 'process';
 import type { Config } from './src/types';
-import { setConfigPath } from './src/config.js';
+import { setConfigPath, setAllowMissingConfig } from './src/config.js';
 import { DVMBridge } from './src/dvm-bridge.js';
 
 const defaultConfigPath = join(process.cwd(), 'config.dvmcp.yml');
@@ -145,6 +145,9 @@ const deleteAnnouncement = async () => {
 };
 
 const cliMain = async () => {
+  // Allow missing config in CLI mode
+  setAllowMissingConfig(true);
+
   if (argv.includes('--configure')) {
     await configure();
     return;

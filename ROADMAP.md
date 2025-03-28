@@ -1,6 +1,8 @@
 - [x] Add flag `--config-path` to cli
+- [x] Add one command, configless, quick run mode in discovery package
+- [ ] Add payments (#10)
+- [ ] Add env variables(#7)
+- [ ] Add resources to bridge package
+- [ ] Add sessions
 - [ ] Add encryption
-- [ ] Add payments
-- [ ] Add mcp inspector 
 - [ ] Discovery cli to bootstrap configuration
-- [ ] Add one command, configless, quick run mode

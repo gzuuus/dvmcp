@@ -152,6 +152,14 @@ function loadConfig(): Config {
             )
           : undefined,
       },
+      lightning: rawConfig.lightning?.address
+        ? {
+            address: rawConfig.lightning.address,
+            zapRelays: Array.isArray(rawConfig.lightning.zapRelays)
+              ? rawConfig.lightning.zapRelays
+              : undefined,
+          }
+        : undefined,
     };
 
     if (!HEX_KEYS_REGEX.test(config.nostr.privateKey)) {

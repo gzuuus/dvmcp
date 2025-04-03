@@ -10,6 +10,7 @@ import {
   TOOL_RESPONSE_KIND,
 } from '@dvmcp/commons/constants';
 import { loggerBridge } from '@dvmcp/commons/logger';
+import { generateZapRequest, verifyZapPayment } from './payment-handler';
 
 export class DVMBridge {
   private mcpPool: MCPPool;
@@ -136,10 +137,81 @@ export class DVMBridge {
             await this.relayHandler.publishEvent(processingStatus);
 
             try {
+              // Check if the tool has pricing information
+              const pricing = this.mcpPool.getToolPricing(jobRequest.name);
+
+              if (pricing?.price) {
+                loggerBridge(
+                  `Tool ${jobRequest.name} requires payment: ${pricing.price} ${pricing.unit || 'sats'}`
+                );
+
+                // Generate zap request for payment
+                const zapRequest = await generateZapRequest(
+                  pricing.price,
+                  jobRequest.name,
+                  event.id,
+                  event.pubkey
+                );
+
+                if (zapRequest) {
+                  // Send payment required status with zap invoice
+                  const paymentRequiredStatus = keyManager.signEvent({
+                    ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
+                    tags: [
+                      ['status', 'payment-required'],
+                      ['amount', pricing.price, pricing.unit || 'sats'],
+                      ['invoice', zapRequest.paymentRequest],
+                      ['e', event.id],
+                      ['p', event.pubkey],
+                    ],
+                  });
+                  await this.relayHandler.publishEvent(paymentRequiredStatus);
+
+                  loggerBridge(
+                    `Waiting for zap receipt for request ID: ${zapRequest.zapRequestId}`
+                  );
+
+                  const paymentVerified = await verifyZapPayment(
+                    zapRequest.relays,
+                    zapRequest.paymentRequest
+                  );
+
+                  if (!paymentVerified) {
+                    const paymentFailedStatus = keyManager.signEvent({
+                      ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
+                      tags: [
+                        [
+                          'status',
+                          'error',
+                          'Payment verification failed or timed out',
+                        ],
+                        ['e', event.id],
+                        ['p', event.pubkey],
+                      ],
+                    });
+                    await this.relayHandler.publishEvent(paymentFailedStatus);
+                    return;
+                  }
+
+                  // Payment verified via zap receipt, continue with tool execution
+                  const paymentAcceptedStatus = keyManager.signEvent({
+                    ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
+                    tags: [
+                      ['status', 'payment-accepted'],
+                      ['e', event.id],
+                      ['p', event.pubkey],
+                    ],
+                  });
+                  await this.relayHandler.publishEvent(paymentAcceptedStatus);
+                }
+              }
+
+              // Execute the tool
               const result = await this.mcpPool.callTool(
                 jobRequest.name,
                 jobRequest.parameters
               );
+
               if (result?.content) {
                 const successStatus = keyManager.signEvent({
                   ...keyManager.createEventTemplate(DVM_NOTICE_KIND),

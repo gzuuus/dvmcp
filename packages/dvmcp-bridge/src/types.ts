@@ -18,10 +18,16 @@ export interface WhitelistConfig {
   allowedPubkeys: Set<string> | undefined;
 }
 
+export interface LightningConfig {
+  address: string;
+  zapRelays?: string[];
+}
+
 export interface Config {
   nostr: NostrConfig;
   mcp: MCPConfig;
   whitelist: WhitelistConfig;
+  lightning?: LightningConfig;
 }
 
 export interface ToolPricing {

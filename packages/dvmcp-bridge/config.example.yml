@@ -48,3 +48,12 @@ mcp:
 # whitelist:
   # List of allowed public keys (leave empty for no restrictions)
   # allowedPubkeys: []
+
+# Lightning Payment Configuration
+# lightning:
+  # Lightning Address for generating invoices
+  # address: "your_lightning_address@getalby.com"
+  # Dedicated relays for zap receipt subscriptions (optional)
+  # zapRelays:
+    # - "wss://relay.damus.io"
+    # - "wss://nostr.mutinywallet.com"

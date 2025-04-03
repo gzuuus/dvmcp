@@ -3,6 +3,7 @@ import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { HEX_KEYS_REGEX } from '@dvmcp/commons/constants';
 import type { Config, MCPServerConfig } from './types';
+import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 let CONFIG_PATH = join(process.cwd(), 'config.dvmcp.yml');
 
@@ -76,10 +77,28 @@ function validateMCPServers(servers: any): MCPServerConfig[] {
         `Invalid MCP server configuration at index ${index}. Required fields: name, command, args[]`
       );
     }
+
+    // Process tool pricing configuration if present
+    const toolsConfig = Array.isArray(server.tools)
+      ? server.tools.map((tool: any) => {
+          if (!tool.name) {
+            throw new Error(
+              `Invalid tool configuration in server ${server.name}. Tool name is required.`
+            );
+          }
+          return {
+            name: tool.name,
+            price: tool.price ? String(tool.price) : undefined,
+            unit: tool.unit ? String(tool.unit) : undefined,
+          };
+        })
+      : undefined;
+
     return {
       name: server.name,
       command: server.command,
       args: server.args,
+      tools: toolsConfig,
     };
   });
 }

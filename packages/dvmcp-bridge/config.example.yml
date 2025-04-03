@@ -25,11 +25,24 @@ mcp:
       args: 
         - "run"
         - "src/external-mcp-server1.ts"
+      # Tool pricing configuration
+      tools:
+        - name: "tool-from-server1"
+          price: "1000"
+          unit: "sats"
+        - name: "another-tool-from-server1"
+          price: "2000"
+          unit: "sats"
     
     - name: "server2"
       command: "python"
       args:
         - "src/external-mcp-server2.py"
+      # Tool pricing configuration
+      tools:
+        - name: "tool-from-server2"
+          price: "500"
+          unit: "sats"
 
 # Optional: Whitelist Configuration
 # whitelist:

@@ -24,8 +24,15 @@ export interface Config {
   whitelist: WhitelistConfig;
 }
 
+export interface ToolPricing {
+  name: string;
+  price?: string;
+  unit?: string;
+}
+
 export interface MCPServerConfig {
   name: string;
   command: string;
   args: string[];
+  tools?: ToolPricing[];
 }

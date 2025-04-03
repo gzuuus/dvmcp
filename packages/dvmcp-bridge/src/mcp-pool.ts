@@ -1,15 +1,29 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { MCPClientHandler } from './mcp-client';
-import type { MCPServerConfig } from './types';
+import type { MCPServerConfig, ToolPricing } from './types';
 
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();
   private toolRegistry: Map<string, MCPClientHandler> = new Map();
+  private toolPricing: Map<string, { price?: string; unit?: string }> =
+    new Map();
 
   constructor(serverConfigs: MCPServerConfig[]) {
     serverConfigs.forEach((config) => {
       const client = new MCPClientHandler(config);
       this.clients.set(config.name, client);
+
+      // Register tool pricing if available
+      if (config.tools && config.tools.length > 0) {
+        config.tools.forEach((tool) => {
+          if (tool.price || tool.unit) {
+            this.toolPricing.set(tool.name, {
+              price: tool.price,
+              unit: tool.unit,
+            });
+          }
+        });
+      }
     });
   }
 
@@ -25,8 +39,8 @@ export class MCPPool {
       const tools = await client.listTools();
       tools.forEach((tool) => {
         this.toolRegistry.set(tool.name, client);
+        allTools.push(tool);
       });
-      allTools.push(...tools);
     }
     return allTools;
   }
@@ -38,6 +52,12 @@ export class MCPPool {
       return;
     }
     return await client.callTool(name, args);
+  }
+
+  getToolPricing(
+    toolName: string
+  ): { price?: string; unit?: string } | undefined {
+    return this.toolPricing.get(toolName);
   }
 
   async disconnect() {

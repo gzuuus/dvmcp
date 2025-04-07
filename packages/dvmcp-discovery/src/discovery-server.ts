@@ -17,8 +17,10 @@ export class DiscoveryServer {
   private keyManager: ReturnType<typeof createKeyManager>;
   private toolRegistry: ToolRegistry;
   private toolExecutor: ToolExecutor;
+  private config: Config;
 
   constructor(config: Config) {
+    this.config = config;
     this.relayHandler = new RelayHandler(config.nostr.relayUrls);
     this.keyManager = createKeyManager(config.nostr.privateKey);
     this.mcpServer = new McpServer({
@@ -45,6 +47,14 @@ export class DiscoveryServer {
       kinds: [DVM_ANNOUNCEMENT_KIND],
       '#t': ['mcp'],
     };
+
+    // Add limit to the filter if it's specified in the configuration
+    if (this.config.discovery?.limit !== undefined) {
+      filter.limit = this.config.discovery.limit;
+      loggerDiscovery(
+        `Limiting DVM discovery to ${this.config.discovery.limit}`
+      );
+    }
 
     const events = await this.relayHandler.queryEvents(filter);
     await Promise.all(events.map((event) => this.handleDVMAnnouncement(event)));

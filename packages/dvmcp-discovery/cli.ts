@@ -122,6 +122,13 @@ const CLI_OPTIONS: CliOption[] = [
     takesValue: true,
     valueDescription: CLI_FLAGS.WHITELIST_ALLOWED_DVMS.VALUE_DESC,
   },
+  // Add discovery configuration option
+  {
+    flag: CLI_FLAGS.DISCOVERY_LIMIT.LONG,
+    description: CLI_FLAGS.DISCOVERY_LIMIT.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.DISCOVERY_LIMIT.VALUE_DESC,
+  },
 ];
 
 /**
@@ -374,52 +381,55 @@ async function cliMain(): Promise<void> {
   const parsedArgs = parseArgs(argv);
 
   // Show help if requested
-  if (parsedArgs['--help']) {
+  if (parsedArgs[CLI_FLAGS.HELP.LONG]) {
     showHelp();
     process.exit(0);
   }
 
   // Set config path if provided
   let configPath = defaultConfigPath;
-  if (
-    parsedArgs['--config-path'] &&
-    typeof parsedArgs['--config-path'] === 'string'
-  ) {
-    configPath = resolve(parsedArgs['--config-path']);
-    logger(`Using config path: ${configPath}`);
-    setConfigPath(configPath);
+  if (parsedArgs[CLI_FLAGS.CONFIG_PATH.LONG]) {
+    const configPathArg = parsedArgs[CLI_FLAGS.CONFIG_PATH.LONG];
+    if (typeof configPathArg === 'string') {
+      configPath = resolve(configPathArg);
+      logger(`Using config path: ${configPath}`);
+      setConfigPath(configPath);
+    }
   }
 
   // Reset any cached configuration to ensure we use the latest settings
   resetConfig();
 
   // Run configuration wizard if requested
-  if (parsedArgs['--configure']) {
+  if (parsedArgs[CLI_FLAGS.CONFIGURE.LONG]) {
     await runConfigWizard(configPath);
     return;
   }
 
   // Handle direct connection options
-  if (
-    parsedArgs['--provider'] &&
-    typeof parsedArgs['--provider'] === 'string'
-  ) {
-    await setupFromProvider(parsedArgs['--provider']);
-    await runApp();
-    return;
+  if (parsedArgs[CLI_FLAGS.PROVIDER.LONG]) {
+    const providerArg = parsedArgs[CLI_FLAGS.PROVIDER.LONG];
+    if (typeof providerArg === 'string') {
+      await setupFromProvider(providerArg);
+      await runApp();
+      return;
+    }
   }
 
-  if (parsedArgs['--server'] && typeof parsedArgs['--server'] === 'string') {
-    const serverInfo = await setupFromServer(parsedArgs['--server']);
-    await runApp(serverInfo);
-    return;
+  if (parsedArgs[CLI_FLAGS.SERVER.LONG]) {
+    const serverArg = parsedArgs[CLI_FLAGS.SERVER.LONG];
+    if (typeof serverArg === 'string') {
+      const serverInfo = await setupFromServer(serverArg);
+      await runApp(serverInfo);
+      return;
+    }
   }
 
   // Only run the configuration wizard if explicitly requested
   // If config file exists, we'll use it; otherwise, we'll use defaults
 
   // Print configuration if verbose mode is enabled
-  if (parsedArgs['--verbose']) {
+  if (parsedArgs[CLI_FLAGS.VERBOSE.LONG]) {
     printConfig(true);
   }
 

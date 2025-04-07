@@ -52,6 +52,9 @@ npx dvmcp-discovery --nostr-private-key <hex-private-key>
 # Set MCP service details
 npx dvmcp-discovery --mcp-name "My DVMCP Service" --mcp-version "1.2.0"
 
+# Limit the number of DVMs to discover
+npx dvmcp-discovery --discovery-limit 5
+
 # Enable verbose output
 npx dvmcp-discovery -v
 # or
@@ -74,6 +77,9 @@ export DVMCP_MCP_ABOUT="Custom description"
 
 # Set NWC configuration
 export DVMCP_NWC_CONNECTION_STRING="nostr+walletconnect:..."
+
+# Limit the number of DVMs to discover
+export DVMCP_DISCOVERY_LIMIT=5
 
 # Run the service
 npx dvmcp-discovery

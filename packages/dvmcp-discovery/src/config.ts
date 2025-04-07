@@ -45,6 +45,14 @@ export interface WhitelistConfig {
 }
 
 /**
+ * Discovery configuration
+ */
+export interface DiscoveryConfig {
+  /** Limit the number of DVMs to discover */
+  limit?: number;
+}
+
+/**
  * Complete configuration interface
  */
 export interface Config {
@@ -56,6 +64,8 @@ export interface Config {
   nwc?: NWCConfig;
   /** Optional whitelist configuration */
   whitelist?: WhitelistConfig;
+  /** Optional discovery configuration */
+  discovery?: DiscoveryConfig;
 }
 
 /**
@@ -236,6 +246,13 @@ function loadConfigFromEnv(): Partial<Config> {
     };
   }
 
+  // Discovery configuration
+  if (process.env[ENV_VARS.DISCOVERY_LIMIT]) {
+    config.discovery = {
+      limit: parseInt(process.env[ENV_VARS.DISCOVERY_LIMIT] as string, 10),
+    };
+  }
+
   return config;
 }
 
@@ -315,6 +332,15 @@ function loadConfigFromCLI(args: string[]): Partial<Config> {
   if (allowedDVMs) {
     config.whitelist = {
       allowedDVMs: new Set(allowedDVMs.split(',').map((pk) => pk.trim())),
+    };
+  }
+
+  // Discovery configuration
+  const discoveryLimit = getArgValue([CLI_FLAGS.DISCOVERY_LIMIT.LONG]);
+
+  if (discoveryLimit) {
+    config.discovery = {
+      limit: parseInt(discoveryLimit, 10),
     };
   }
 
@@ -458,6 +484,11 @@ function mergeConfigs(...configs: Partial<Config>[]): Config {
     if (config.whitelist) {
       result.whitelist = { ...config.whitelist };
     }
+
+    // Merge discovery configuration
+    if (config.discovery) {
+      result.discovery = { ...config.discovery };
+    }
   }
 
   return result as Config;
@@ -478,6 +509,7 @@ export function resetConfig(): void {
  * @returns Merged configuration
  */
 export function getConfig(): Config {
+  // Return cached configuration if available
   if (_CONFIG) {
     return _CONFIG;
   }
@@ -507,7 +539,7 @@ export function getConfig(): Config {
     return userValue !== undefined ? userValue : defaultValue;
   };
 
-  // Merge all external configs with priority: file < env < cli
+  // Merge configurations with priority
   const externalConfig = mergeConfigs(
     {},
     fileConfig || {},
@@ -552,6 +584,8 @@ export function getConfig(): Config {
       whitelist: externalConfig.whitelist || defaultConfig.whitelist,
       // Only include NWC if provided in external config
       ...(externalConfig.nwc && { nwc: externalConfig.nwc }),
+      // Include discovery configuration if provided
+      ...(externalConfig.discovery && { discovery: externalConfig.discovery }),
     };
 
     _CONFIG = finalConfig;

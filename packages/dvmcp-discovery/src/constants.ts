@@ -85,6 +85,13 @@ export const CLI_FLAGS = {
     DESCRIPTION: 'Comma-separated list of allowed DVM public keys',
     VALUE_DESC: 'PUBKEYS',
   },
+
+  // Discovery configuration flags
+  DISCOVERY_LIMIT: {
+    LONG: '--discovery-limit',
+    DESCRIPTION: 'Limit the number of DVMs to discover',
+    VALUE_DESC: 'LIMIT',
+  },
 };
 
 /**
@@ -105,6 +112,9 @@ export const ENV_VARS = {
 
   // Whitelist configuration
   WHITELIST_ALLOWED_DVMS: 'DVMCP_WHITELIST_ALLOWED_DVMS',
+
+  // Discovery configuration
+  DISCOVERY_LIMIT: 'DVMCP_DISCOVERY_LIMIT',
 };
 
 /**

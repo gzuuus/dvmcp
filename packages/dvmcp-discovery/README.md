@@ -13,17 +13,70 @@ A MCP server implementation that aggregates tools from DVMs across the Nostr net
 
 ## Configuration
 
-When the package is run for the first time, it will detect if the `config.dvmcp.yml` file exists, and if not, it will launch a configuration wizard to help you create the configuration file. You can also create your configuration file by copying `config.example.yml` and changing the values of the fields
+DVMCP Discovery supports multiple configuration methods with a clear priority order: default < file < environment variables < CLI arguments.
+
+### Configuration File
+
+When the package is run for the first time, it will use sensible defaults. You can create a configuration file by copying `config.example.yml` and modifying it:
 
 ```bash
 cp config.example.yml config.dvmcp.yml
 nano config.dvmcp.yml
 ```
 
-You can also specify a custom configuration file path using the `--config-path` flag.
+You can also run the configuration wizard to create a configuration file interactively:
+
+```bash
+npx dvmcp-discovery --configure
+```
+
+To specify a custom configuration file path:
 
 ```bash
 npx dvmcp-discovery --config-path /path/to/custom/config.dvmcp.yml
+```
+
+### CLI Arguments
+
+You can add configuration settings using command-line arguments:
+
+```bash
+# Set Nostr relay URLs
+npx dvmcp-discovery -r wss://relay1.com,wss://relay2.com
+# or
+npx dvmcp-discovery --nostr-relay-urls wss://relay1.com,wss://relay2.com
+
+# Set Nostr private key
+npx dvmcp-discovery --nostr-private-key <hex-private-key>
+
+# Set MCP service details
+npx dvmcp-discovery --mcp-name "My DVMCP Service" --mcp-version "1.2.0"
+
+# Enable verbose output
+npx dvmcp-discovery -v
+# or
+npx dvmcp-discovery --verbose
+```
+
+### Environment Variables
+
+You can also configure the service using environment variables:
+
+```bash
+# Set Nostr configuration
+export DVMCP_NOSTR_PRIVATE_KEY=<hex-private-key>
+export DVMCP_NOSTR_RELAY_URLS=wss://relay1.com,wss://relay2.com
+
+# Set MCP service details
+export DVMCP_MCP_NAME="My DVMCP Service"
+export DVMCP_MCP_VERSION="1.2.0"
+export DVMCP_MCP_ABOUT="Custom description"
+
+# Set NWC configuration
+export DVMCP_NWC_CONNECTION_STRING="nostr+walletconnect:..."
+
+# Run the service
+npx dvmcp-discovery
 ```
 
 ### NWC Payment Configuration

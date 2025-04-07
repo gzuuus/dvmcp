@@ -34,6 +34,26 @@ export class NostrAnnouncer {
 
   async announceService() {
     const tools = await this.mcpPool.listTools();
+
+    // Create tool tags with pricing information from the toolPricing map
+    const toolTags: string[][] = [];
+    toolTags.push(['t', 'mcp']);
+
+    for (const tool of tools) {
+      const pricing = this.mcpPool.getToolPricing(tool.name);
+      if (pricing && pricing.price && pricing.unit) {
+        loggerBridge(
+          'Adding pricing to tool tag:',
+          tool.name,
+          pricing.price,
+          pricing.unit
+        );
+        toolTags.push(['t', tool.name, pricing.price, pricing.unit]);
+      } else {
+        toolTags.push(['t', tool.name]);
+      }
+    }
+
     const event = keyManager.signEvent({
       ...keyManager.createEventTemplate(DVM_ANNOUNCEMENT_KIND),
       content: JSON.stringify({
@@ -48,8 +68,7 @@ export class NostrAnnouncer {
         ['d', `dvm-announcement-${CONFIG.mcp.clientName}`],
         ['k', `${TOOL_REQUEST_KIND}`],
         ['capabilities', 'mcp-1.0'],
-        ['t', 'mcp'],
-        ...tools.map((tool) => ['t', tool.name]),
+        ...toolTags,
       ],
     });
     await this.relayHandler.publishEvent(event);

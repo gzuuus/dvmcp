@@ -18,7 +18,7 @@
   "scripts": {
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "dev": "bun --watch index.ts",
-    "start": "bun run cli.ts",
+    "start": "DEBUG=* bun run cli.ts",
     "typecheck": "tsc --noEmit",
     "lint": "bun run typecheck && bun run format",
     "test": "bun test",
@@ -31,11 +31,12 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@dvmcp/commons": "latest",
+    "@getalby/lightning-tools": "^5.1.2",
     "@modelcontextprotocol/sdk": "^1.4.1",
     "dotenv": "^16.4.7",
-    "nostr-tools": "^2.10.4",
-    "yaml": "^2.7.0",
-    "@dvmcp/commons": "latest"
+    "nostr-tools": "^2.12.0",
+    "yaml": "^2.7.0"
   },
   "publishConfig": {
     "access": "public"

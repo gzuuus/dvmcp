@@ -25,13 +25,35 @@ mcp:
       args: 
         - "run"
         - "src/external-mcp-server1.ts"
+      # Tool pricing configuration
+      tools:
+        - name: "tool-from-server1"
+          price: "1000"
+          unit: "sats"
+        - name: "another-tool-from-server1"
+          price: "2000"
+          unit: "sats"
     
     - name: "server2"
       command: "python"
       args:
         - "src/external-mcp-server2.py"
+      # Tool pricing configuration
+      tools:
+        - name: "tool-from-server2"
+          price: "500"
+          unit: "sats"
 
 # Optional: Whitelist Configuration
 # whitelist:
   # List of allowed public keys (leave empty for no restrictions)
   # allowedPubkeys: []
+
+# Lightning Payment Configuration
+# lightning:
+  # Lightning Address for generating invoices
+  # address: "your_lightning_address@getalby.com"
+  # Dedicated relays for zap receipt subscriptions (optional)
+  # zapRelays:
+    # - "wss://relay.damus.io"
+    # - "wss://nostr.mutinywallet.com"

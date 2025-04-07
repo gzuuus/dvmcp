@@ -15,6 +15,9 @@ export interface Config {
     version: string;
     about: string;
   };
+  nwc?: {
+    connectionString: string;
+  };
   whitelist?: {
     allowedDVMs?: Set<string>;
   };
@@ -118,6 +121,11 @@ function loadConfig(): Config {
           'DVMCP Discovery Server for aggregating MCP tools from DVMs'
         ),
       },
+      nwc: rawConfig.nwc?.connectionString
+        ? {
+            connectionString: rawConfig.nwc.connectionString,
+          }
+        : undefined,
       whitelist: {
         allowedDVMs: rawConfig.whitelist?.allowedDVMs
           ? new Set(

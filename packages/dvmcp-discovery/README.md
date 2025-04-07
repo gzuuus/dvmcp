@@ -7,6 +7,7 @@ A MCP server implementation that aggregates tools from DVMs across the Nostr net
 - Discovers MCP tools from DVMs across the Nostr network
 - Provides a unified interface to access tools from multiple DVMs
 - Tool execution handling and status tracking
+- Automatic payment for paid tools using Nostr Wallet Connect (NWC)
 - Configurable DVM whitelist
 - Direct connection to specific providers or servers
 
@@ -24,6 +25,19 @@ You can also specify a custom configuration file path using the `--config-path` 
 ```bash
 npx dvmcp-discovery --config-path /path/to/custom/config.dvmcp.yml
 ```
+
+### NWC Payment Configuration
+
+To enable automatic payment for tools that require payment, add the NWC (Nostr Wallet Connect) configuration to your `config.dvmcp.yml` file:
+
+```yaml
+nwc:
+  # Your NWC connection string
+  # Format: nostr+walletconnect:<pubkey>?relay=<relay_url>&secret=<secret>
+  connectionString: 'nostr+walletconnect:your_wallet_pubkey_here?relay=wss%3A%2F%2Frelay.example.com&secret=your_secret_here'
+```
+
+You can obtain an NWC connection string from compatible wallets like Alby or Coinos. When a tool requires payment, the discovery server will automatically pay the invoice using the configured NWC wallet.
 
 ## Usage
 

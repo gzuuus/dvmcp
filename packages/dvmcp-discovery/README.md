@@ -37,7 +37,7 @@ nwc:
   connectionString: 'nostr+walletconnect:your_wallet_pubkey_here?relay=wss%3A%2F%2Frelay.example.com&secret=your_secret_here'
 ```
 
-You can obtain an NWC connection string from compatible wallets like Alby or Mutiny. When a tool requires payment, the discovery server will automatically pay the invoice using the configured NWC wallet.
+You can obtain an NWC connection string from compatible wallets like Alby or Coinos. When a tool requires payment, the discovery server will automatically pay the invoice using the configured NWC wallet.
 
 ## Usage
 

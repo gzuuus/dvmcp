@@ -16,12 +16,10 @@ interface NWCConnection {
   secret: string;
 }
 
-// Define interfaces for our NWC types
 interface NWCPayInvoiceRequest {
   method: 'pay_invoice';
   params: {
     invoice: string;
-    amount?: number; // Optional amount in msats
   };
 }
 
@@ -33,7 +31,6 @@ interface NWCPayInvoiceResult {
   } | null;
   result: {
     preimage: string;
-    fees_paid?: number; // Optional fees in msats
   } | null;
 }
 
@@ -47,25 +44,19 @@ function parseConnectionString(connectionString: string): NWCConnection {
     throw new Error('invalid connection string');
   }
 
-  // Extract the pubkey from the prefix part
   const [prefix, query] = parts;
   if (!prefix) {
     throw new Error('invalid connection string');
   }
 
-  // Handle both formats: nostr+walletconnect:pubkey and nostr+walletconnect://pubkey
   let pubkey = '';
   if (prefix.includes('://')) {
-    // Format: nostr+walletconnect://pubkey
     const parts = prefix.split('://');
-    // Ensure we have a valid pubkey part
     if (parts.length > 1 && parts[1]) {
       pubkey = parts[1];
     }
   } else {
-    // Format: nostr+walletconnect:pubkey
     const parts = prefix.split(':');
-    // Ensure we have a valid pubkey part
     if (parts.length > 1 && parts[1]) {
       pubkey = parts[1];
     }
@@ -75,9 +66,7 @@ function parseConnectionString(connectionString: string): NWCConnection {
     throw new Error('invalid connection string');
   }
 
-  // Create URLSearchParams without arguments and then append from query string
   const params = new URLSearchParams();
-  // Parse the query string manually if it exists
   if (query) {
     query.split('&').forEach((param) => {
       const parts = param.split('=');
@@ -228,16 +217,9 @@ export class NWCPaymentHandler {
                 loggerDiscovery('Payment failed:', response.error.message);
                 sub.close();
                 reject(new Error(response.error.message));
-              } else if (response.result && response.result.preimage) {
+              } else if (response.result) {
                 loggerDiscovery('Payment successful!');
                 loggerDiscovery('Preimage:', response.result.preimage);
-                if (response.result.fees_paid) {
-                  loggerDiscovery(
-                    'Fees paid:',
-                    response.result.fees_paid,
-                    'msats'
-                  );
-                }
                 sub.close();
                 resolve(true);
               } else {
@@ -253,7 +235,6 @@ export class NWCPaymentHandler {
           },
         });
 
-        // Set a timeout for the payment
         const timeoutId = setTimeout(() => {
           loggerDiscovery('Payment request timed out after 60 seconds');
           sub.close();

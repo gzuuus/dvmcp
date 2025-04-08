@@ -152,14 +152,24 @@ export class DiscoveryServer {
     );
 
     // Register built-in tools
-    await this.registerBuiltInTools();
+    this.registerBuiltInTools();
 
-    // Start discovery
-    await this.startDiscovery();
-    loggerDiscovery(`Discovered ${this.toolRegistry.listTools().length} tools`);
-
+    // Connect the MCP server first to ensure it's ready
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
+    loggerDiscovery('MCP server connected');
+
+    // Start discovery only if we have relay URLs or if not in interactive-only mode
+    if (config.nostr.relayUrls.length > 0 || !isInteractive) {
+      await this.startDiscovery();
+      loggerDiscovery(
+        `Discovered ${this.toolRegistry.listTools().length} tools`
+      );
+    } else {
+      loggerDiscovery(
+        'Skipping discovery as no relay URLs are configured and running in interactive mode'
+      );
+    }
 
     loggerDiscovery('DVMCP Discovery Server started');
   }

@@ -45,6 +45,13 @@ export class ToolRegistry {
     return Array.from(this.tools.values()).map(({ tool }) => tool);
   }
 
+  public listToolsWithIds(): [string, Tool][] {
+    return Array.from(this.tools.entries()).map(([id, info]) => [
+      id,
+      info.tool,
+    ]);
+  }
+
   public clear(): void {
     // Remove all tools except built-in tools
     for (const [id, info] of this.tools.entries()) {
@@ -52,6 +59,96 @@ export class ToolRegistry {
         this.tools.delete(id);
       }
     }
+  }
+
+  /**
+   * Remove a tool from the registry
+   * @param toolId - ID of the tool to remove
+   * @returns true if the tool was removed, false if it wasn't found
+   */
+  /**
+   * Remove a tool from the registry by its ID
+   * @param toolId - ID of the tool to remove
+   * @returns true if the tool was removed, false if it wasn't found
+   */
+  public removeTool(toolId: string): boolean {
+    const toolInfo = this.tools.get(toolId);
+
+    // If tool doesn't exist, return false
+    if (!toolInfo) {
+      loggerDiscovery(`Tool not found for removal: ${toolId}`);
+      return false;
+    }
+
+    // Remove the tool from the registry
+    this.tools.delete(toolId);
+    loggerDiscovery(`Tool removed from registry: ${toolId}`);
+
+    // Note: The MCP server doesn't have a direct method to remove tools
+    // The tool list changed notification will be handled by the discovery server
+    return true;
+  }
+
+  /**
+   * Remove all tools from a specific provider
+   * @param providerPubkey - Public key of the provider whose tools should be removed
+   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
+   * @returns Array of removed tool IDs
+   */
+  public removeToolsByProvider(
+    providerPubkey: string,
+    excludeBuiltIn: boolean = true
+  ): string[] {
+    const removedToolIds: string[] = [];
+
+    // Find all tools from this provider
+    for (const [id, info] of this.tools.entries()) {
+      // Skip built-in tools if excludeBuiltIn is true
+      if (excludeBuiltIn && info.isBuiltIn) {
+        continue;
+      }
+
+      // Check if this tool belongs to the specified provider
+      if (info.providerPubkey === providerPubkey) {
+        // Remove the tool
+        this.tools.delete(id);
+        removedToolIds.push(id);
+        loggerDiscovery(`Removed tool ${id} from provider ${providerPubkey}`);
+      }
+    }
+
+    return removedToolIds;
+  }
+
+  /**
+   * Remove tools matching a regex pattern
+   * @param pattern - Regex pattern to match against tool IDs
+   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
+   * @returns Array of removed tool IDs
+   */
+  public removeToolsByPattern(
+    pattern: RegExp,
+    excludeBuiltIn: boolean = true
+  ): string[] {
+    const removedToolIds: string[] = [];
+
+    // Find all tools matching the pattern
+    for (const [id, info] of this.tools.entries()) {
+      // Skip built-in tools if excludeBuiltIn is true
+      if (excludeBuiltIn && info.isBuiltIn) {
+        continue;
+      }
+
+      // Check if this tool ID matches the pattern
+      if (pattern.test(id)) {
+        // Remove the tool
+        this.tools.delete(id);
+        removedToolIds.push(id);
+        loggerDiscovery(`Removed tool ${id} matching pattern ${pattern}`);
+      }
+    }
+
+    return removedToolIds;
   }
 
   private registerWithMcp(toolId: string, tool: Tool, isBuiltIn = false): void {

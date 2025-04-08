@@ -229,8 +229,75 @@ export class DiscoveryServer {
     }
   }
 
+  /**
+   * List all tools in the registry
+   * @returns Array of tools
+   */
   public async listTools(): Promise<Tool[]> {
     return this.toolRegistry.listTools();
+  }
+
+  /**
+   * List all tools in the registry with their IDs
+   * @returns Array of [toolId, tool] pairs
+   */
+  public async listToolsWithIds(): Promise<[string, Tool][]> {
+    return this.toolRegistry.listToolsWithIds();
+  }
+
+  /**
+   * Remove a tool from the registry by its ID
+   * @param toolId - ID of the tool to remove
+   * @returns true if the tool was removed, false if it wasn't found
+   */
+  public removeTool(toolId: string): boolean {
+    return this.toolRegistry.removeTool(toolId);
+  }
+
+  /**
+   * Remove all tools from a specific provider
+   * @param providerPubkey - Public key of the provider whose tools should be removed
+   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
+   * @returns Array of removed tool IDs
+   */
+  public removeToolsByProvider(
+    providerPubkey: string,
+    excludeBuiltIn: boolean = true
+  ): string[] {
+    const removedTools = this.toolRegistry.removeToolsByProvider(
+      providerPubkey,
+      excludeBuiltIn
+    );
+    if (removedTools.length > 0) {
+      this.notifyToolListChanged();
+      loggerDiscovery(
+        `Removed ${removedTools.length} tools from provider ${providerPubkey}`
+      );
+    }
+    return removedTools;
+  }
+
+  /**
+   * Remove tools matching a regex pattern
+   * @param pattern - Regex pattern to match against tool IDs
+   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
+   * @returns Array of removed tool IDs
+   */
+  public removeToolsByPattern(
+    pattern: RegExp,
+    excludeBuiltIn: boolean = true
+  ): string[] {
+    const removedTools = this.toolRegistry.removeToolsByPattern(
+      pattern,
+      excludeBuiltIn
+    );
+    if (removedTools.length > 0) {
+      this.notifyToolListChanged();
+      loggerDiscovery(
+        `Removed ${removedTools.length} tools matching pattern ${pattern}`
+      );
+    }
+    return removedTools;
   }
 
   public async registerDirectServerTools(

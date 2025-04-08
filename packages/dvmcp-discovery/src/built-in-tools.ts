@@ -92,14 +92,14 @@ export function setDiscoveryServerReference(server: any): void {
 const discoverAndIntegrateTool: Tool = {
   name: 'discover_and_integrate',
   description:
-    'Searches for tools matching specified keywords and optionally registers them for immediate use. Keywords can be separated words or exact matches enclosed in single or double quotes',
+    'Discovers available tools with optional keyword filtering and tool registration. Supports wide discovery or targeted searches. For wide discovery avoid using keywords.Keywords can be separated words or exact matches enclosed in single or double quotes',
   inputSchema: {
     type: 'object',
     properties: {
       keywords: {
         type: 'string',
         description:
-          'Keywords to search for in tool names and descriptions. Supports quoted phrases ("like this"), comma-separated values (word1,word2), or space-separated words',
+          'Optional keywords to filter tools. Supports quoted phrases, comma-separated values, or space-separated words',
       },
       relay: {
         type: 'string',
@@ -121,7 +121,6 @@ const discoverAndIntegrateTool: Tool = {
           'Whether to integrate (register) the discovered tools (default: true)',
       },
     },
-    required: ['keywords'],
   },
 };
 
@@ -181,10 +180,6 @@ builtInToolRegistry.registerTool(
       loggerDiscovery(`Parsed keywords: ${JSON.stringify(keywords)}`);
     }
 
-    if (keywords.length === 0) {
-      throw new Error('At least one keyword is required');
-    }
-
     if (!discoveryServerRef) {
       throw new Error('Discovery server reference not set');
     }
@@ -237,12 +232,15 @@ builtInToolRegistry.registerTool(
         `Found ${events.length} announcements, analyzing for keyword matches...`
       );
 
-      // Step 2: Filter announcements based on keywords
+      // Step 2: Filter announcements based on keywords (if provided)
       const matchedAnnouncements = [];
       const lowerKeywords = keywords.map((k) => k.toLowerCase());
+      const hasKeywords = keywords.length > 0;
 
       loggerDiscovery(
-        `Processing ${events.length} announcements for keyword matches...`
+        hasKeywords
+          ? `Processing ${events.length} announcements for keyword matches...`
+          : `Processing ${events.length} announcements for wide discovery...`
       );
 
       for (const event of events) {
@@ -258,7 +256,20 @@ builtInToolRegistry.registerTool(
           const providerName = (content.name || '').toLowerCase();
           const providerAbout = (content.about || '').toLowerCase();
 
-          // Track matching information
+          // If no keywords provided, include all tools with a minimum match count
+          if (!hasKeywords) {
+            matchedAnnouncements.push({
+              pubkey: event.pubkey,
+              identifier: dTag,
+              name: content.name || 'Unnamed DVM',
+              matchCount: 1, // Minimum match count for wide discovery
+              tools: content.tools,
+              content,
+            });
+            continue;
+          }
+
+          // Track matching information when keywords are provided
           let matchCount = 0;
           let providerMatched = false;
           const matchedTools = [];
@@ -318,33 +329,36 @@ builtInToolRegistry.registerTool(
             }
           }
 
-          // If provider matched, include all its tools
-          if (providerMatched) {
-            // If we're not already including all tools, replace with the complete set
-            if (matchedTools.length !== content.tools.length) {
-              loggerDiscovery(
-                `Provider '${content.name}' matched. Including all ${content.tools.length} tools.`
-              );
-              // Start fresh with all tools
-              matchedTools.length = 0;
-              matchedTools.push(...content.tools);
+          // Only process this section if we have keywords
+          if (hasKeywords) {
+            // If provider matched, include all its tools
+            if (providerMatched) {
+              // If we're not already including all tools, replace with the complete set
+              if (matchedTools.length !== content.tools.length) {
+                loggerDiscovery(
+                  `Provider '${content.name}' matched. Including all ${content.tools.length} tools.`
+                );
+                // Start fresh with all tools
+                matchedTools.length = 0;
+                matchedTools.push(...content.tools);
+              }
             }
-          }
 
-          // Add to matched announcements if we meet the threshold
-          if (matchCount >= matchThreshold) {
-            loggerDiscovery(
-              `Found matching announcement: ${content.name} with ${matchedTools.length} tools (score: ${matchCount})`
-            );
+            // Add to matched announcements if we meet the threshold
+            if (matchCount >= matchThreshold) {
+              loggerDiscovery(
+                `Found matching announcement: ${content.name} with ${matchedTools.length} tools (score: ${matchCount})`
+              );
 
-            matchedAnnouncements.push({
-              pubkey: event.pubkey,
-              identifier: dTag,
-              name: content.name || 'Unnamed DVM',
-              matchCount,
-              tools: matchedTools,
-              content,
-            });
+              matchedAnnouncements.push({
+                pubkey: event.pubkey,
+                identifier: dTag,
+                name: content.name || 'Unnamed DVM',
+                matchCount,
+                tools: matchedTools,
+                content,
+              });
+            }
           }
         } catch (error) {
           loggerDiscovery(`Failed to parse announcement: ${error}`);
@@ -355,7 +369,10 @@ builtInToolRegistry.registerTool(
       if (matchedAnnouncements.length === 0) {
         return {
           success: false,
-          message: `No tools matching keywords (${keywords.join(', ')}) found`,
+          message:
+            keywords.length > 0
+              ? `No tools matching keywords (${keywords.join(', ')}) found`
+              : 'No tools found in the specified relay',
           matchedTools: 0,
           integratedTools: 0,
         };
@@ -369,7 +386,10 @@ builtInToolRegistry.registerTool(
       if (!integrate) {
         return {
           success: true,
-          message: `Successfully discovered ${matchedAnnouncements.length} announcements with tools matching keywords (${keywords.join(', ')})`,
+          message:
+            keywords.length > 0
+              ? `Successfully discovered ${matchedAnnouncements.length} announcements with tools matching keywords (${keywords.join(', ')})`
+              : `Successfully discovered ${matchedAnnouncements.length} announcements with tools`,
           matchedAnnouncements: matchedAnnouncements.length,
           matchedTools: matchedAnnouncements.reduce(
             (count, announcement) => count + announcement.tools.length,
@@ -495,8 +515,12 @@ builtInToolRegistry.registerTool(
         success: totalIntegratedTools > 0,
         message:
           totalIntegratedTools > 0
-            ? `Successfully discovered and integrated ${totalIntegratedTools} tools matching keywords (${keywords.join(', ')})`
-            : `Found matching tools but failed to integrate any`,
+            ? keywords.length > 0
+              ? `Successfully discovered and integrated ${totalIntegratedTools} tools matching keywords (${keywords.join(', ')})`
+              : `Successfully discovered and integrated ${totalIntegratedTools} tools`
+            : keywords.length > 0
+              ? `Found matching tools but failed to integrate any`
+              : `Found tools but failed to integrate any`,
         matchedAnnouncements: matchedAnnouncements.length,
         integratedTools: totalIntegratedTools,
         providers: integratedProviders,

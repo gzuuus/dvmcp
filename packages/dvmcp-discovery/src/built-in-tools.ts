@@ -78,299 +78,21 @@ export const builtInToolRegistry = new BuiltInToolRegistry();
 
 // Built-in tools are defined below
 
-// Define the discovery tool
-const discoveryTool: Tool = {
-  name: 'discover_tools',
-  description:
-    'Discovers and retrieves a list of available DVMCP tools from a specified Nostr relay, with optional filtering by tool name or description',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      relay: {
-        type: 'string',
-        description:
-          'Nostr relay URL to query for tools (must start with ws:// or wss://).',
-      },
-      limit: {
-        type: 'integer',
-        description:
-          'Optional limit for the number of announcements to retrieve',
-      },
-    },
-    // Relay is no longer required as we'll use a default value
-  },
-};
-
-// Register the discovery tool with its execution function
-builtInToolRegistry.registerTool(
-  'discover_tools',
-  discoveryTool,
-  async (params: unknown) => {
-    // Extract parameters with defaults
-    const { relay: userRelay, limit } = params as {
-      relay?: string;
-      limit?: number;
-    };
-
-    // Use default relay if not provided
-    const relay = userRelay || DEFAULT_VALUES.DEFAULT_RELAY_URL;
-
-    // Validate relay URL
-    try {
-      const url = new URL(relay);
-      if (!url.protocol.startsWith('ws')) {
-        throw new Error('Relay URL must start with ws:// or wss://');
-      }
-    } catch (error) {
-      throw new Error(`Invalid relay URL: ${relay}`);
-    }
-
-    // Create a filter for DVM announcements
-    const filter: Filter = {
-      kinds: [DVM_ANNOUNCEMENT_KIND],
-      '#t': ['mcp'],
-    };
-
-    // Add limit to the filter if specified
-    if (limit !== undefined && limit > 0) {
-      filter.limit = limit;
-    }
-
-    // Create a temporary relay handler for this query
-    const relayHandler = new RelayHandler([relay]);
-
-    try {
-      loggerDiscovery(`Querying relay ${relay} for DVM announcements...`);
-      const events = await relayHandler.queryEvents(filter);
-
-      // Process the events to extract announcement details
-      const announcements = events.map((event) => {
-        try {
-          const content = JSON.parse(event.content) as DVMAnnouncement;
-
-          // Find the 'd' tag which is the immutable identifier
-          const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1] || '';
-
-          // Extract tool information to include in the response
-          const toolInfo =
-            content.tools?.map((tool) => ({
-              name: tool.name,
-              description: tool.description || 'No description provided',
-            })) || [];
-
-          return {
-            identifier: dTag, // Use 'd' tag as the immutable identifier
-            pubkey: event.pubkey,
-            name: content.name || 'Unnamed DVM',
-            about: content.about || 'No description provided',
-            toolCount: content.tools?.length || 0,
-            tools: toolInfo, // Include detailed tool information
-            content, // Store the full content for later use
-            created_at: event.created_at,
-          };
-        } catch (error) {
-          loggerDiscovery(`Failed to parse announcement: ${error}`);
-
-          // Find the 'd' tag even for invalid announcements
-          const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1] || '';
-
-          return {
-            identifier: dTag, // Use 'd' tag as the immutable identifier
-            pubkey: event.pubkey,
-            name: 'Invalid Announcement',
-            about: 'Failed to parse announcement content',
-            toolCount: 0,
-            tools: [], // Empty tools array for invalid announcements
-            created_at: event.created_at,
-          };
-        }
-      });
-
-      return {
-        relay,
-        count: announcements.length,
-        announcements: announcements,
-      };
-    } catch (error) {
-      throw new Error(`Failed to query relay: ${error}`);
-    } finally {
-      // Clean up the relay handler
-      relayHandler.cleanup();
-    }
-  }
-);
-
-// Define the integration tool
-const integrationTool: Tool = {
-  name: 'integrate_tools',
-  description:
-    'Registers specific tools from a DVM provider into the current session, making them available for immediate use',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      pubkey: {
-        type: 'string',
-        description: 'Public key of the DVM provider',
-      },
-      identifier: {
-        type: 'string',
-        description:
-          'Unique identifier (d tag) of the DVM announcement to integrate, obtained from the discover tool',
-      },
-      relay: {
-        type: 'string',
-        description: 'Nostr relay URL where the tool announcement is published',
-      },
-    },
-    required: ['pubkey', 'identifier'],
-  },
-};
-
-// We'll need to store a reference to the discovery server to access it from the integration tool
 let discoveryServerRef: DiscoveryServer | null = null;
 
 /**
- * Set the discovery server reference for the integration tool
+ * Set the discovery server reference for the tool
  * @param server - Discovery server instance
  */
 export function setDiscoveryServerReference(server: any): void {
   discoveryServerRef = server;
 }
 
-// Register the integration tool with its execution function
-builtInToolRegistry.registerTool(
-  'integrate_tools',
-  integrationTool,
-  async (params: unknown) => {
-    const {
-      relay: userRelay,
-      pubkey,
-      identifier,
-    } = params as {
-      relay?: string;
-      pubkey: string;
-      identifier: string;
-    };
-
-    // Use default relay if not provided
-    const relay = userRelay || DEFAULT_VALUES.DEFAULT_RELAY_URL;
-
-    if (!discoveryServerRef) {
-      throw new Error('Discovery server reference not set');
-    }
-
-    // Create a temporary relay handler for this query
-    const relayHandler = new RelayHandler([relay]);
-
-    try {
-      // Query for the specific announcement event
-      // Query using the 'd' tag as the identifier
-      const filter: Filter = {
-        authors: [pubkey],
-        kinds: [DVM_ANNOUNCEMENT_KIND],
-        '#d': [identifier],
-      };
-
-      loggerDiscovery(
-        `Querying relay ${relay} for announcement with identifier ${identifier} from ${pubkey}...`
-      );
-
-      const events = await relayHandler.queryEvents(filter);
-
-      if (events.length === 0) {
-        throw new Error('Announcement not found');
-      }
-
-      const event = events[0];
-
-      // Parse the announcement
-      let announcement: DVMAnnouncement;
-      try {
-        announcement = JSON.parse(event.content);
-      } catch (error) {
-        throw new Error(`Failed to parse announcement: ${error}`);
-      }
-
-      if (!announcement.tools || announcement.tools.length === 0) {
-        return {
-          success: false,
-          message: 'No tools found in the announcement',
-          toolsRegistered: 0,
-        };
-      }
-
-      // IMPORTANT: Add the relay to the main relay handler to ensure communication works
-      // This is critical for the tool execution to work properly
-      try {
-        const relayAdded = discoveryServerRef.addRelay(relay);
-        loggerDiscovery(
-          `Relay integration result: ${relayAdded ? 'added new relay' : 'relay already integrated'}`
-        );
-      } catch (error) {
-        loggerDiscovery(
-          `Warning: Failed to add relay to the main handler: ${error}`
-        );
-        // Continue with tool integration even if relay integration fails
-        // This way we at least register the tools, even if execution might fail
-      }
-
-      // Register the tools from the announcement
-      let registeredCount = 0;
-      const registeredTools = [];
-
-      // Register each tool individually without notification
-      for (const tool of announcement.tools) {
-        try {
-          const toolId = `${tool.name}_${pubkey.slice(0, 4)}`;
-          // Don't notify for each individual tool to avoid multiple notifications
-          discoveryServerRef.registerToolFromAnnouncement(pubkey, tool, false);
-          registeredTools.push({
-            name: tool.name,
-            toolId: toolId,
-          });
-          registeredCount++;
-        } catch (error) {
-          loggerDiscovery(`Failed to register tool: ${error}`);
-        }
-      }
-
-      // Send a single notification after all tools are registered
-      if (registeredCount > 0) {
-        try {
-          // Notify clients that the tool list has changed
-          discoveryServerRef.notifyToolListChanged();
-          loggerDiscovery(
-            `Notified clients about ${registeredCount} new tools`
-          );
-        } catch (error) {
-          loggerDiscovery(
-            `Warning: Failed to notify clients about tool list change: ${error}`
-          );
-        }
-      }
-
-      // Return a simplified response with only the most meaningful information
-      return {
-        success: true,
-        message: `Successfully integrated ${registeredCount} tools from ${announcement.name || 'Unnamed DVM'}`,
-        provider: announcement.name || 'Unnamed DVM',
-        toolCount: registeredCount,
-        toolNames: registeredTools.map((tool) => tool.name),
-      };
-    } catch (error) {
-      throw new Error(`Failed to integrate tools: ${error}`);
-    } finally {
-      // Clean up the temporary relay handler
-      relayHandler.cleanup();
-    }
-  }
-);
-
 // Define the discover_and_integrate tool ("I'm feeling lucky")
 const discoverAndIntegrateTool: Tool = {
   name: 'discover_and_integrate',
   description:
-    'Searches for tools matching specified keywords and automatically registers them for immediate use in a single operation',
+    'Searches for tools matching specified keywords and optionally registers them for immediate use. Keywords can be separated words or exact matches enclosed in single or double quotes',
   inputSchema: {
     type: 'object',
     properties: {
@@ -393,6 +115,11 @@ const discoverAndIntegrateTool: Tool = {
         description:
           'Minimum match score required to include a tool (default: 1)',
       },
+      integrate: {
+        type: 'boolean',
+        description:
+          'Whether to integrate (register) the discovered tools (default: true)',
+      },
     },
     required: ['keywords'],
   },
@@ -408,11 +135,13 @@ builtInToolRegistry.registerTool(
       relay: userRelay,
       limit,
       matchThreshold = 1,
+      integrate = true,
     } = params as {
       keywords: string;
       relay?: string;
       limit?: number;
       matchThreshold?: number;
+      integrate?: boolean;
     };
 
     // Process keywords with enhanced parsing for multi-word inputs
@@ -635,6 +364,27 @@ builtInToolRegistry.registerTool(
       loggerDiscovery(
         `Found ${matchedAnnouncements.length} announcements with matching keywords`
       );
+
+      // If integration is not requested, return discovery results only
+      if (!integrate) {
+        return {
+          success: true,
+          message: `Successfully discovered ${matchedAnnouncements.length} announcements with tools matching keywords (${keywords.join(', ')})`,
+          matchedAnnouncements: matchedAnnouncements.length,
+          matchedTools: matchedAnnouncements.reduce(
+            (count, announcement) => count + announcement.tools.length,
+            0
+          ),
+          providers: matchedAnnouncements.map((announcement) => ({
+            name: announcement.name,
+            pubkey: announcement.pubkey,
+            identifier: announcement.identifier,
+            toolCount: announcement.tools.length,
+            toolNames: announcement.tools.map((tool) => tool.name),
+          })),
+          integratedTools: 0,
+        };
+      }
 
       // Step 3: Integrate matched tools
       let totalIntegratedTools = 0;

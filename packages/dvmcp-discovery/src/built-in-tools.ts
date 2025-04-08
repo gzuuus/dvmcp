@@ -1,4 +1,11 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
+import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
+import { loggerDiscovery } from '@dvmcp/commons/logger';
+import type { Filter } from 'nostr-tools';
+import type { DVMAnnouncement } from './direct-discovery';
+import type { DiscoveryServer } from './discovery-server';
+import { DEFAULT_VALUES } from './constants';
 
 /**
  * Built-in tool definition with execution function
@@ -69,30 +76,687 @@ export class BuiltInToolRegistry {
  */
 export const builtInToolRegistry = new BuiltInToolRegistry();
 
-// Define the greeting tool
-const greetingTool: Tool = {
-  name: 'greeting',
+// Built-in tools are defined below
+
+// Define the discovery tool
+const discoveryTool: Tool = {
+  name: 'discover_tools',
   description:
-    'A simple greeting tool that returns a greeting for the provided name',
+    'Discovers and retrieves a list of available DVMCP tools from a specified Nostr relay, with optional filtering by tool name or description',
   inputSchema: {
     type: 'object',
     properties: {
-      name: {
+      relay: {
         type: 'string',
-        description: 'Name to greet',
+        description:
+          'Nostr relay URL to query for tools (must start with ws:// or wss://).',
+      },
+      limit: {
+        type: 'integer',
+        description:
+          'Optional limit for the number of announcements to retrieve',
       },
     },
-    required: ['name'],
+    // Relay is no longer required as we'll use a default value
   },
 };
 
-// Register the greeting tool with its execution function
+// Register the discovery tool with its execution function
 builtInToolRegistry.registerTool(
-  'built_in_greeting',
-  greetingTool,
+  'discover_tools',
+  discoveryTool,
   async (params: unknown) => {
-    const { name } = params as { name: string };
-    return `Hello, ${name}!`;
+    // Extract parameters with defaults
+    const { relay: userRelay, limit } = params as {
+      relay?: string;
+      limit?: number;
+    };
+
+    // Use default relay if not provided
+    const relay = userRelay || DEFAULT_VALUES.DEFAULT_RELAY_URL;
+
+    // Validate relay URL
+    try {
+      const url = new URL(relay);
+      if (!url.protocol.startsWith('ws')) {
+        throw new Error('Relay URL must start with ws:// or wss://');
+      }
+    } catch (error) {
+      throw new Error(`Invalid relay URL: ${relay}`);
+    }
+
+    // Create a filter for DVM announcements
+    const filter: Filter = {
+      kinds: [DVM_ANNOUNCEMENT_KIND],
+      '#t': ['mcp'],
+    };
+
+    // Add limit to the filter if specified
+    if (limit !== undefined && limit > 0) {
+      filter.limit = limit;
+    }
+
+    // Create a temporary relay handler for this query
+    const relayHandler = new RelayHandler([relay]);
+
+    try {
+      loggerDiscovery(`Querying relay ${relay} for DVM announcements...`);
+      const events = await relayHandler.queryEvents(filter);
+
+      // Process the events to extract announcement details
+      const announcements = events.map((event) => {
+        try {
+          const content = JSON.parse(event.content) as DVMAnnouncement;
+
+          // Find the 'd' tag which is the immutable identifier
+          const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1] || '';
+
+          // Extract tool information to include in the response
+          const toolInfo =
+            content.tools?.map((tool) => ({
+              name: tool.name,
+              description: tool.description || 'No description provided',
+            })) || [];
+
+          return {
+            identifier: dTag, // Use 'd' tag as the immutable identifier
+            pubkey: event.pubkey,
+            name: content.name || 'Unnamed DVM',
+            about: content.about || 'No description provided',
+            toolCount: content.tools?.length || 0,
+            tools: toolInfo, // Include detailed tool information
+            content, // Store the full content for later use
+            created_at: event.created_at,
+          };
+        } catch (error) {
+          loggerDiscovery(`Failed to parse announcement: ${error}`);
+
+          // Find the 'd' tag even for invalid announcements
+          const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1] || '';
+
+          return {
+            identifier: dTag, // Use 'd' tag as the immutable identifier
+            pubkey: event.pubkey,
+            name: 'Invalid Announcement',
+            about: 'Failed to parse announcement content',
+            toolCount: 0,
+            tools: [], // Empty tools array for invalid announcements
+            created_at: event.created_at,
+          };
+        }
+      });
+
+      return {
+        relay,
+        count: announcements.length,
+        announcements: announcements,
+      };
+    } catch (error) {
+      throw new Error(`Failed to query relay: ${error}`);
+    } finally {
+      // Clean up the relay handler
+      relayHandler.cleanup();
+    }
+  }
+);
+
+// Define the integration tool
+const integrationTool: Tool = {
+  name: 'integrate_tools',
+  description:
+    'Registers specific tools from a DVM provider into the current session, making them available for immediate use',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      pubkey: {
+        type: 'string',
+        description: 'Public key of the DVM provider',
+      },
+      identifier: {
+        type: 'string',
+        description:
+          'Unique identifier (d tag) of the DVM announcement to integrate, obtained from the discover tool',
+      },
+      relay: {
+        type: 'string',
+        description: 'Nostr relay URL where the tool announcement is published',
+      },
+    },
+    required: ['pubkey', 'identifier'],
+  },
+};
+
+// We'll need to store a reference to the discovery server to access it from the integration tool
+let discoveryServerRef: DiscoveryServer | null = null;
+
+/**
+ * Set the discovery server reference for the integration tool
+ * @param server - Discovery server instance
+ */
+export function setDiscoveryServerReference(server: any): void {
+  discoveryServerRef = server;
+}
+
+// Register the integration tool with its execution function
+builtInToolRegistry.registerTool(
+  'integrate_tools',
+  integrationTool,
+  async (params: unknown) => {
+    const {
+      relay: userRelay,
+      pubkey,
+      identifier,
+    } = params as {
+      relay?: string;
+      pubkey: string;
+      identifier: string;
+    };
+
+    // Use default relay if not provided
+    const relay = userRelay || DEFAULT_VALUES.DEFAULT_RELAY_URL;
+
+    if (!discoveryServerRef) {
+      throw new Error('Discovery server reference not set');
+    }
+
+    // Create a temporary relay handler for this query
+    const relayHandler = new RelayHandler([relay]);
+
+    try {
+      // Query for the specific announcement event
+      // Query using the 'd' tag as the identifier
+      const filter: Filter = {
+        authors: [pubkey],
+        kinds: [DVM_ANNOUNCEMENT_KIND],
+        '#d': [identifier],
+      };
+
+      loggerDiscovery(
+        `Querying relay ${relay} for announcement with identifier ${identifier} from ${pubkey}...`
+      );
+
+      const events = await relayHandler.queryEvents(filter);
+
+      if (events.length === 0) {
+        throw new Error('Announcement not found');
+      }
+
+      const event = events[0];
+
+      // Parse the announcement
+      let announcement: DVMAnnouncement;
+      try {
+        announcement = JSON.parse(event.content);
+      } catch (error) {
+        throw new Error(`Failed to parse announcement: ${error}`);
+      }
+
+      if (!announcement.tools || announcement.tools.length === 0) {
+        return {
+          success: false,
+          message: 'No tools found in the announcement',
+          toolsRegistered: 0,
+        };
+      }
+
+      // IMPORTANT: Add the relay to the main relay handler to ensure communication works
+      // This is critical for the tool execution to work properly
+      try {
+        const relayAdded = discoveryServerRef.addRelay(relay);
+        loggerDiscovery(
+          `Relay integration result: ${relayAdded ? 'added new relay' : 'relay already integrated'}`
+        );
+      } catch (error) {
+        loggerDiscovery(
+          `Warning: Failed to add relay to the main handler: ${error}`
+        );
+        // Continue with tool integration even if relay integration fails
+        // This way we at least register the tools, even if execution might fail
+      }
+
+      // Register the tools from the announcement
+      let registeredCount = 0;
+      const registeredTools = [];
+
+      // Register each tool individually without notification
+      for (const tool of announcement.tools) {
+        try {
+          const toolId = `${tool.name}_${pubkey.slice(0, 4)}`;
+          // Don't notify for each individual tool to avoid multiple notifications
+          discoveryServerRef.registerToolFromAnnouncement(pubkey, tool, false);
+          registeredTools.push({
+            name: tool.name,
+            toolId: toolId,
+          });
+          registeredCount++;
+        } catch (error) {
+          loggerDiscovery(`Failed to register tool: ${error}`);
+        }
+      }
+
+      // Send a single notification after all tools are registered
+      if (registeredCount > 0) {
+        try {
+          // Notify clients that the tool list has changed
+          discoveryServerRef.notifyToolListChanged();
+          loggerDiscovery(
+            `Notified clients about ${registeredCount} new tools`
+          );
+        } catch (error) {
+          loggerDiscovery(
+            `Warning: Failed to notify clients about tool list change: ${error}`
+          );
+        }
+      }
+
+      // Return a simplified response with only the most meaningful information
+      return {
+        success: true,
+        message: `Successfully integrated ${registeredCount} tools from ${announcement.name || 'Unnamed DVM'}`,
+        provider: announcement.name || 'Unnamed DVM',
+        toolCount: registeredCount,
+        toolNames: registeredTools.map((tool) => tool.name),
+      };
+    } catch (error) {
+      throw new Error(`Failed to integrate tools: ${error}`);
+    } finally {
+      // Clean up the temporary relay handler
+      relayHandler.cleanup();
+    }
+  }
+);
+
+// Define the discover_and_integrate tool ("I'm feeling lucky")
+const discoverAndIntegrateTool: Tool = {
+  name: 'discover_and_integrate',
+  description:
+    'Searches for tools matching specified keywords and automatically registers them for immediate use in a single operation',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      keywords: {
+        type: 'string',
+        description:
+          'Keywords to search for in tool names and descriptions. Supports quoted phrases ("like this"), comma-separated values (word1,word2), or space-separated words',
+      },
+      relay: {
+        type: 'string',
+        description:
+          'Nostr relay URL to search for tools. Uses default relay if not specified',
+      },
+      limit: {
+        type: 'integer',
+        description: 'Maximum number of tool announcements to process',
+      },
+      matchThreshold: {
+        type: 'integer',
+        description:
+          'Minimum match score required to include a tool (default: 1)',
+      },
+    },
+    required: ['keywords'],
+  },
+};
+
+// Register the discover_and_integrate tool with its execution function
+builtInToolRegistry.registerTool(
+  'discover_and_integrate',
+  discoverAndIntegrateTool,
+  async (params: unknown) => {
+    const {
+      keywords: keywordsInput,
+      relay: userRelay,
+      limit,
+      matchThreshold = 1,
+    } = params as {
+      keywords: string;
+      relay?: string;
+      limit?: number;
+      matchThreshold?: number;
+    };
+
+    // Process keywords with enhanced parsing for multi-word inputs
+    let keywords: string[] = [];
+
+    if (keywordsInput) {
+      /**
+       * Parse keywords from input string, supporting:
+       * 1. Quoted phrases ("like this" or 'like this')
+       * 2. Comma-separated values (word1,word2)
+       * 3. Space-separated words (word1 word2)
+       */
+      const parseInput = (input: string): string[] => {
+        // Regular expression to match:
+        // - Quoted strings (both single and double quotes)
+        // - Words separated by commas or spaces
+        const regex = /(['"])(.+?)\1|[^\s,]+/g;
+        const matches = [];
+        let match;
+
+        while ((match = regex.exec(input)) !== null) {
+          // If it's a quoted string, use the content inside quotes (match[2])
+          // Otherwise use the whole match (match[0])
+          const keyword = match[2] || match[0];
+          if (keyword.trim()) {
+            matches.push(keyword.trim());
+          }
+        }
+
+        return matches;
+      };
+
+      // Parse the keywords input
+      keywords = parseInput(keywordsInput);
+
+      // Log the parsed keywords for debugging
+      loggerDiscovery(`Parsed keywords: ${JSON.stringify(keywords)}`);
+    }
+
+    if (keywords.length === 0) {
+      throw new Error('At least one keyword is required');
+    }
+
+    if (!discoveryServerRef) {
+      throw new Error('Discovery server reference not set');
+    }
+
+    // Use default relay if not provided
+    const relay = userRelay || DEFAULT_VALUES.DEFAULT_RELAY_URL;
+
+    // Validate relay URL
+    try {
+      const url = new URL(relay);
+      if (!url.protocol.startsWith('ws')) {
+        throw new Error('Relay URL must start with ws:// or wss://');
+      }
+    } catch (error) {
+      throw new Error(`Invalid relay URL: ${relay}`);
+    }
+
+    // Create a temporary relay handler for this query
+    const relayHandler = new RelayHandler([relay]);
+
+    try {
+      // Step 1: Discover tools
+      loggerDiscovery(
+        `Querying relay ${relay} for tools matching keywords: ${keywords.join(', ')}...`
+      );
+
+      // Create a filter for DVM announcements
+      const filter: Filter = {
+        kinds: [DVM_ANNOUNCEMENT_KIND],
+        '#t': ['mcp'],
+      };
+
+      // Add limit to the filter if specified
+      if (limit !== undefined && limit > 0) {
+        filter.limit = limit;
+      }
+
+      const events = await relayHandler.queryEvents(filter);
+
+      if (events.length === 0) {
+        return {
+          success: false,
+          message: 'No announcements found on the specified relay',
+          matchedTools: 0,
+          integratedTools: 0,
+        };
+      }
+
+      loggerDiscovery(
+        `Found ${events.length} announcements, analyzing for keyword matches...`
+      );
+
+      // Step 2: Filter announcements based on keywords
+      const matchedAnnouncements = [];
+      const lowerKeywords = keywords.map((k) => k.toLowerCase());
+
+      loggerDiscovery(
+        `Processing ${events.length} announcements for keyword matches...`
+      );
+
+      for (const event of events) {
+        try {
+          const content = JSON.parse(event.content) as DVMAnnouncement;
+
+          // Skip announcements without tools
+          if (!content.tools || content.tools.length === 0) {
+            continue;
+          }
+
+          const dTag = event.tags.find((tag) => tag[0] === 'd')?.[1] || '';
+          const providerName = (content.name || '').toLowerCase();
+          const providerAbout = (content.about || '').toLowerCase();
+
+          // Track matching information
+          let matchCount = 0;
+          let providerMatched = false;
+          const matchedTools = [];
+
+          // Check if provider information matches any keywords
+          for (const keyword of lowerKeywords) {
+            // Check for exact matches first (higher score)
+            if (providerName === keyword || providerAbout === keyword) {
+              matchCount += 2;
+              providerMatched = true;
+              loggerDiscovery(
+                `Provider '${content.name}' exactly matches keyword '${keyword}'`
+              );
+            }
+            // Then check for partial matches
+            else if (
+              providerName.includes(keyword) ||
+              providerAbout.includes(keyword)
+            ) {
+              matchCount++;
+              providerMatched = true;
+              loggerDiscovery(
+                `Provider '${content.name}' contains keyword '${keyword}'`
+              );
+            }
+          }
+
+          // Check each tool for keyword matches
+          for (const tool of content.tools) {
+            const toolName = (tool.name || '').toLowerCase();
+            const toolDescription = (tool.description || '').toLowerCase();
+            let toolMatched = false;
+
+            for (const keyword of lowerKeywords) {
+              // Prioritize exact matches in tool name (highest score)
+              if (toolName === keyword) {
+                matchCount += 3;
+                toolMatched = true;
+              }
+              // Then exact matches in description
+              else if (toolDescription === keyword) {
+                matchCount += 2;
+                toolMatched = true;
+              }
+              // Finally partial matches
+              else if (
+                toolName.includes(keyword) ||
+                toolDescription.includes(keyword)
+              ) {
+                matchCount++;
+                toolMatched = true;
+              }
+            }
+
+            if (toolMatched) {
+              matchedTools.push(tool);
+            }
+          }
+
+          // If provider matched, include all its tools
+          if (providerMatched) {
+            // If we're not already including all tools, replace with the complete set
+            if (matchedTools.length !== content.tools.length) {
+              loggerDiscovery(
+                `Provider '${content.name}' matched. Including all ${content.tools.length} tools.`
+              );
+              // Start fresh with all tools
+              matchedTools.length = 0;
+              matchedTools.push(...content.tools);
+            }
+          }
+
+          // Add to matched announcements if we meet the threshold
+          if (matchCount >= matchThreshold) {
+            loggerDiscovery(
+              `Found matching announcement: ${content.name} with ${matchedTools.length} tools (score: ${matchCount})`
+            );
+
+            matchedAnnouncements.push({
+              pubkey: event.pubkey,
+              identifier: dTag,
+              name: content.name || 'Unnamed DVM',
+              matchCount,
+              tools: matchedTools,
+              content,
+            });
+          }
+        } catch (error) {
+          loggerDiscovery(`Failed to parse announcement: ${error}`);
+          continue;
+        }
+      }
+
+      if (matchedAnnouncements.length === 0) {
+        return {
+          success: false,
+          message: `No tools matching keywords (${keywords.join(', ')}) found`,
+          matchedTools: 0,
+          integratedTools: 0,
+        };
+      }
+
+      loggerDiscovery(
+        `Found ${matchedAnnouncements.length} announcements with matching keywords`
+      );
+
+      // Step 3: Integrate matched tools
+      let totalIntegratedTools = 0;
+      const integratedProviders = [];
+
+      // IMPORTANT: Add the relay to the main relay handler to ensure communication works
+      try {
+        const relayAdded = discoveryServerRef.addRelay(relay);
+        loggerDiscovery(
+          `Relay integration result: ${relayAdded ? 'added new relay' : 'relay already integrated'}`
+        );
+      } catch (error) {
+        loggerDiscovery(
+          `Warning: Failed to add relay to the main handler: ${error}`
+        );
+        // Continue with tool integration even if relay integration fails
+      }
+
+      // Integrate tools from each matched announcement
+      for (const announcement of matchedAnnouncements) {
+        try {
+          const registeredToolNames = [];
+          let registeredCount = 0;
+
+          loggerDiscovery(
+            `Integrating ${announcement.tools.length} tools from ${announcement.name}`
+          );
+
+          // Skip if no valid content or tools
+          if (!announcement.content?.tools?.length) {
+            loggerDiscovery(
+              `No valid tools found in announcement from ${announcement.name}`
+            );
+            continue;
+          }
+
+          // Process each tool for registration
+          for (const tool of announcement.tools) {
+            try {
+              const toolId = discoveryServerRef.createToolId(
+                tool.name,
+                announcement.pubkey
+              ); //`${tool.name}_${announcement.pubkey.slice(0, 4)}`;
+
+              // Skip already registered tools
+              if (
+                discoveryServerRef.isToolRegistered(
+                  tool.name,
+                  announcement.pubkey
+                )
+              ) {
+                loggerDiscovery(
+                  `Tool ${tool.name} already registered, skipping`
+                );
+                registeredToolNames.push(tool.name);
+                registeredCount++;
+                continue;
+              }
+
+              // Register the tool
+              discoveryServerRef.registerToolFromAnnouncement(
+                announcement.pubkey,
+                tool,
+                false // Don't notify for each individual tool
+              );
+
+              loggerDiscovery(`Registered tool: ${tool.name} (${toolId})`);
+              registeredToolNames.push(tool.name);
+              registeredCount++;
+            } catch (error) {
+              loggerDiscovery(`Failed to register ${tool.name}: ${error}`);
+            }
+          }
+
+          // Track successful integrations
+          if (registeredCount > 0) {
+            totalIntegratedTools += registeredCount;
+            integratedProviders.push({
+              name: announcement.name,
+              toolCount: registeredCount,
+              toolNames: registeredToolNames,
+            });
+          }
+        } catch (error) {
+          loggerDiscovery(
+            `Failed to integrate tools from ${announcement.name}: ${error}`
+          );
+        }
+      }
+
+      // Send a single notification after all tools are registered
+      if (totalIntegratedTools > 0) {
+        try {
+          // Notify clients that the tool list has changed
+          discoveryServerRef.notifyToolListChanged();
+          loggerDiscovery(
+            `Notified clients about ${totalIntegratedTools} new tools`
+          );
+        } catch (error) {
+          loggerDiscovery(
+            `Warning: Failed to notify clients about tool list change: ${error}`
+          );
+        }
+      }
+
+      // Return the results
+      return {
+        success: totalIntegratedTools > 0,
+        message:
+          totalIntegratedTools > 0
+            ? `Successfully discovered and integrated ${totalIntegratedTools} tools matching keywords (${keywords.join(', ')})`
+            : `Found matching tools but failed to integrate any`,
+        matchedAnnouncements: matchedAnnouncements.length,
+        integratedTools: totalIntegratedTools,
+        providers: integratedProviders,
+      };
+    } catch (error) {
+      throw new Error(`Failed to discover and integrate tools: ${error}`);
+    } finally {
+      // Clean up the temporary relay handler
+      relayHandler.cleanup();
+    }
   }
 );
 

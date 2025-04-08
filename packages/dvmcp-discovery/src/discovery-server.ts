@@ -10,7 +10,10 @@ import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
 import type { DVMAnnouncement } from './direct-discovery';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
-import { builtInToolRegistry } from './built-in-tools';
+import {
+  builtInToolRegistry,
+  setDiscoveryServerReference,
+} from './built-in-tools';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;
@@ -19,6 +22,7 @@ export class DiscoveryServer {
   private toolRegistry: ToolRegistry;
   private toolExecutor: ToolExecutor;
   private config: Config;
+  private integratedRelays: Set<string> = new Set();
 
   constructor(config: Config) {
     this.config = config;
@@ -41,8 +45,10 @@ export class DiscoveryServer {
       if (!tool) throw new Error('Tool not found');
       return this.toolExecutor.executeTool(toolId, tool, args);
     });
-  }
 
+    // Set the discovery server reference for the integration tool
+    setDiscoveryServerReference(this);
+  }
   private async startDiscovery() {
     const filter: Filter = {
       kinds: [DVM_ANNOUNCEMENT_KIND],
@@ -61,7 +67,7 @@ export class DiscoveryServer {
     await Promise.all(events.map((event) => this.handleDVMAnnouncement(event)));
   }
 
-  private createToolId(toolName: string, pubkey: string): string {
+  public createToolId(toolName: string, pubkey: string): string {
     return `${toolName}_${pubkey.slice(0, 4)}`;
   }
 
@@ -70,6 +76,122 @@ export class DiscoveryServer {
       const toolId = this.createToolId(tool.name, pubkey);
       this.toolRegistry.registerTool(toolId, tool, pubkey);
     }
+  }
+
+  /**
+   * Check if a tool is already registered
+   * @param toolName - Tool name
+   * @param pubkey - Provider public key
+   * @returns Boolean indicating if the tool is already registered
+   */
+  public isToolRegistered(toolName: string, pubkey: string): boolean {
+    const toolId = this.createToolId(toolName, pubkey);
+    return this.toolRegistry.getTool(toolId) !== undefined;
+  }
+
+  /**
+   * Register a tool from an announcement (public method for built-in tools)
+   * @param pubkey - Provider public key
+   * @param tool - Tool definition
+   * @param notifyClient - Whether to notify clients about the tool list change
+   * @returns Tool ID
+   */
+  public registerToolFromAnnouncement(
+    pubkey: string,
+    tool: Tool,
+    notifyClient: boolean = false
+  ): string {
+    const toolId = this.createToolId(tool.name, pubkey);
+
+    // Check if the tool is already registered
+    if (this.isToolRegistered(tool.name, pubkey)) {
+      loggerDiscovery(
+        `Tool ${tool.name} (${toolId}) is already registered, skipping registration`
+      );
+      return toolId;
+    }
+
+    this.toolRegistry.registerTool(toolId, tool, pubkey);
+    loggerDiscovery(`Registered tool from announcement: ${toolId}`);
+
+    // If notifyClient is true, notify clients about the tool list change
+    if (notifyClient) {
+      this.notifyToolListChanged();
+    }
+
+    return toolId;
+  }
+
+  /**
+   * Notify clients that the tool list has changed
+   * This uses the MCP protocol to signal that tools have been added or removed
+   */
+  public notifyToolListChanged(): void {
+    try {
+      // Send the tool list changed notification to clients
+      this.mcpServer.server
+        .sendToolListChanged()
+        .then(() => {
+          loggerDiscovery('Sent tool list changed notification to clients');
+        })
+        .catch((error) => {
+          console.error(
+            'Failed to send tool list changed notification:',
+            error
+          );
+        });
+    } catch (error) {
+      console.error('Error sending tool list changed notification:', error);
+    }
+  }
+
+  /**
+   * Add a relay to the relay handler and track it as an integrated relay
+   * @param relayUrl - Relay URL to add
+   * @returns true if the relay was added, false if it was already in the list
+   */
+  public addRelay(relayUrl: string): boolean {
+    if (this.integratedRelays.has(relayUrl)) {
+      loggerDiscovery(`Relay ${relayUrl} is already integrated`);
+      return false;
+    }
+
+    // Track the integrated relay
+    this.integratedRelays.add(relayUrl);
+    loggerDiscovery(`Added relay ${relayUrl} to integrated relays`);
+
+    // Create a new relay handler with all relays (existing + new)
+    const currentRelays = this.config.nostr.relayUrls;
+    const allRelays = [...new Set([...currentRelays, relayUrl])];
+
+    // Update the config with the new relay list
+    this.config.nostr.relayUrls = allRelays;
+
+    // Create a new relay handler with the updated relay list
+    const newRelayHandler = new RelayHandler(allRelays);
+
+    // Clean up the old relay handler
+    this.relayHandler.cleanup();
+
+    // Replace the relay handler with the new one
+    this.relayHandler = newRelayHandler;
+
+    // Update the tool executor with the new relay handler
+    this.toolExecutor.updateRelayHandler(this.relayHandler);
+
+    loggerDiscovery(
+      `Updated relay handler with new relay: ${relayUrl}. Total relays: ${allRelays.length}`
+    );
+
+    return true;
+  }
+
+  /**
+   * Get the relay handler instance
+   * @returns The relay handler instance
+   */
+  public getRelayHandler(): RelayHandler {
+    return this.relayHandler;
   }
 
   private async handleDVMAnnouncement(event: Event) {

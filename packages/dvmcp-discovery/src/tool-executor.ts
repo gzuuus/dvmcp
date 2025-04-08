@@ -37,6 +37,16 @@ export class ToolExecutor {
     }
   }
 
+  /**
+   * Update the relay handler reference
+   * This is needed when new relays are added to the pool
+   * @param relayHandler - The updated relay handler
+   */
+  public updateRelayHandler(relayHandler: RelayHandler): void {
+    this.relayHandler = relayHandler;
+    loggerDiscovery('Updated relay handler in tool executor');
+  }
+
   public async executeTool(
     toolId: string,
     tool: Tool,

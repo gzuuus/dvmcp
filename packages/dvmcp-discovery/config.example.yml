@@ -23,3 +23,9 @@ mcp:
 #   allowedDVMs:
 #     - "pubkey1"
 #     - "pubkey2"
+
+# Feature flags for enabling/disabling specific features
+# featureFlags:
+#   # Enable interactive mode to load built-in tools and skip default relay connections
+#   # When enabled with no relay URLs specified, the server will run without connecting to any relays
+#   interactive: false

@@ -37,11 +37,36 @@ export class ToolExecutor {
     }
   }
 
+  /**
+   * Update the relay handler reference
+   * This is needed when new relays are added to the pool
+   * @param relayHandler - The updated relay handler
+   */
+  public updateRelayHandler(relayHandler: RelayHandler): void {
+    this.relayHandler = relayHandler;
+    loggerDiscovery('Updated relay handler in tool executor');
+  }
+
   public async executeTool(
     toolId: string,
     tool: Tool,
     params: unknown
   ): Promise<unknown> {
+    // Get tool info to determine if it's built-in
+    const toolInfo = this.toolRegistry.getToolInfo(toolId);
+
+    // Check if this is a built-in tool
+    if (toolInfo?.isBuiltIn) {
+      try {
+        // Execute built-in tool directly
+        return await this.toolRegistry.executeBuiltInTool(toolId, params);
+      } catch (error) {
+        loggerDiscovery(`Error executing built-in tool ${toolId}:`, error);
+        throw error;
+      }
+    }
+
+    // Handle external tools via Nostr
     return new Promise((resolve, reject) => {
       const request = this.createToolRequest(toolId, tool, params);
       const executionId = request.id;
@@ -189,11 +214,16 @@ export class ToolExecutor {
     request.content = JSON.stringify({
       name: tool.name,
       parameters,
-      providerPubkey: toolInfo.providerPubkey,
+      providerPubkey: toolInfo?.providerPubkey || '',
     });
 
     request.tags.push(['c', 'execute-tool']);
-    request.tags.push(['p', toolInfo.providerPubkey]);
+
+    // Only add provider pubkey tag if it exists
+    if (toolInfo?.providerPubkey) {
+      request.tags.push(['p', toolInfo.providerPubkey]);
+    }
+
     return this.keyManager.signEvent(request);
   }
 }

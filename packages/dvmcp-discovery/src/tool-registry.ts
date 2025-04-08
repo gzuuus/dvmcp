@@ -3,10 +3,18 @@ import { ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { builtInToolRegistry } from './built-in-tools';
 
 export class ToolRegistry {
-  private discoveredTools: Map<string, { tool: Tool; providerPubkey: string }> =
-    new Map();
+  // Store all tools with their source information
+  private tools: Map<
+    string,
+    {
+      tool: Tool;
+      providerPubkey?: string;
+      isBuiltIn?: boolean;
+    }
+  > = new Map();
 
   constructor(private mcpServer: McpServer) {}
 
@@ -17,7 +25,7 @@ export class ToolRegistry {
   ): void {
     try {
       ToolSchema.parse(tool);
-      this.discoveredTools.set(toolId, { tool, providerPubkey });
+      this.tools.set(toolId, { tool, providerPubkey });
       this.registerWithMcp(toolId, tool);
     } catch (error) {
       console.error(`Invalid MCP tool format for ${toolId}:`, error);
@@ -26,22 +34,124 @@ export class ToolRegistry {
   }
 
   public getToolInfo(toolId: string) {
-    return this.discoveredTools.get(toolId);
+    return this.tools.get(toolId);
   }
 
   public getTool(toolId: string): Tool | undefined {
-    return this.discoveredTools.get(toolId)?.tool;
+    return this.tools.get(toolId)?.tool;
   }
 
   public listTools(): Tool[] {
-    return Array.from(this.discoveredTools.values()).map(({ tool }) => tool);
+    return Array.from(this.tools.values()).map(({ tool }) => tool);
+  }
+
+  public listToolsWithIds(): [string, Tool][] {
+    return Array.from(this.tools.entries()).map(([id, info]) => [
+      id,
+      info.tool,
+    ]);
   }
 
   public clear(): void {
-    this.discoveredTools.clear();
+    // Remove all tools except built-in tools
+    for (const [id, info] of this.tools.entries()) {
+      if (!info.isBuiltIn) {
+        this.tools.delete(id);
+      }
+    }
   }
 
-  private registerWithMcp(toolId: string, tool: Tool): void {
+  /**
+   * Remove a tool from the registry
+   * @param toolId - ID of the tool to remove
+   * @returns true if the tool was removed, false if it wasn't found
+   */
+  /**
+   * Remove a tool from the registry by its ID
+   * @param toolId - ID of the tool to remove
+   * @returns true if the tool was removed, false if it wasn't found
+   */
+  public removeTool(toolId: string): boolean {
+    const toolInfo = this.tools.get(toolId);
+
+    // If tool doesn't exist, return false
+    if (!toolInfo) {
+      loggerDiscovery(`Tool not found for removal: ${toolId}`);
+      return false;
+    }
+
+    // Remove the tool from the registry
+    this.tools.delete(toolId);
+    loggerDiscovery(`Tool removed from registry: ${toolId}`);
+
+    // Note: The MCP server doesn't have a direct method to remove tools
+    // The tool list changed notification will be handled by the discovery server
+    return true;
+  }
+
+  /**
+   * Remove all tools from a specific provider
+   * @param providerPubkey - Public key of the provider whose tools should be removed
+   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
+   * @returns Array of removed tool IDs
+   */
+  public removeToolsByProvider(
+    providerPubkey: string,
+    excludeBuiltIn: boolean = true
+  ): string[] {
+    const removedToolIds: string[] = [];
+
+    // Find all tools from this provider
+    for (const [id, info] of this.tools.entries()) {
+      // Skip built-in tools if excludeBuiltIn is true
+      if (excludeBuiltIn && info.isBuiltIn) {
+        continue;
+      }
+
+      // Check if this tool belongs to the specified provider
+      if (info.providerPubkey === providerPubkey) {
+        // Remove the tool
+        this.tools.delete(id);
+        removedToolIds.push(id);
+        loggerDiscovery(`Removed tool ${id} from provider ${providerPubkey}`);
+      }
+    }
+
+    return removedToolIds;
+  }
+
+  /**
+   * Remove tools matching a regex pattern
+   * @param pattern - Regex pattern to match against tool IDs
+   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
+   * @returns Array of removed tool IDs
+   */
+  public removeToolsByPattern(
+    pattern: RegExp,
+    excludeBuiltIn: boolean = true
+  ): string[] {
+    const removedToolIds: string[] = [];
+
+    // Find all tools matching the pattern
+    for (const [id, info] of this.tools.entries()) {
+      // Skip built-in tools if excludeBuiltIn is true
+      if (excludeBuiltIn && info.isBuiltIn) {
+        continue;
+      }
+
+      // Check if this tool ID matches the pattern
+      if (pattern.test(id)) {
+        // Remove the tool
+        this.tools.delete(id);
+        removedToolIds.push(id);
+        loggerDiscovery(`Removed tool ${id} matching pattern ${pattern}`);
+      }
+    }
+
+    return removedToolIds;
+  }
+
+  private registerWithMcp(toolId: string, tool: Tool, isBuiltIn = false): void {
     try {
       this.mcpServer.tool(
         toolId,
@@ -49,7 +159,17 @@ export class ToolRegistry {
         this.mapJsonSchemaToZod(tool.inputSchema),
         async (args: unknown) => {
           try {
-            const result = await this.executionCallback?.(toolId, args);
+            let result;
+
+            const toolInfo = this.tools.get(toolId);
+
+            // Handle built-in tools directly, otherwise use the execution callback
+            if (toolInfo?.isBuiltIn) {
+              result = await this.executeBuiltInTool(toolId, args);
+            } else {
+              result = await this.executionCallback?.(toolId, args);
+            }
+
             return {
               content: [
                 {
@@ -75,8 +195,43 @@ export class ToolRegistry {
       );
       loggerDiscovery('Tool registered successfully:', toolId);
     } catch (error) {
+      // TODO: Handle collisions more intelligently, by keeping the newest
       console.error('Error registering tool:', toolId, error);
     }
+  }
+
+  /**
+   * Register a built-in tool with the registry
+   * @param toolId - ID of the tool
+   * @param tool - Tool definition
+   */
+  public registerBuiltInTool(toolId: string, tool: Tool): void {
+    try {
+      ToolSchema.parse(tool);
+      this.tools.set(toolId, { tool, isBuiltIn: true });
+      this.registerWithMcp(toolId, tool, true);
+    } catch (error) {
+      console.error(`Invalid MCP built-in tool format for ${toolId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Execute a built-in tool
+   * @param toolId - ID of the tool
+   * @param args - Tool arguments
+   * @returns Tool execution result
+   */
+  public async executeBuiltInTool(
+    toolId: string,
+    args: unknown
+  ): Promise<unknown> {
+    const builtInTool = builtInToolRegistry.getTool(toolId);
+    if (!builtInTool) {
+      throw new Error(`Built-in tool ${toolId} not found`);
+    }
+
+    return builtInTool.execute(args);
   }
 
   private executionCallback?: (

@@ -10,6 +10,7 @@ A MCP server implementation that aggregates tools from DVMs across the Nostr net
 - Automatic payment for paid tools using Nostr Wallet Connect (NWC)
 - Configurable DVM whitelist
 - Direct connection to specific providers or servers
+- Interactive mode with built-in tools
 
 ## Configuration
 
@@ -48,6 +49,14 @@ npx dvmcp-discovery --nostr-relay-urls wss://relay1.com,wss://relay2.com
 
 # Set Nostr private key
 npx dvmcp-discovery --nostr-private-key <hex-private-key>
+
+# Enable interactive mode with built-in tools
+npx dvmcp-discovery -i
+# or
+npx dvmcp-discovery --interactive
+
+# Run in interactive mode without connecting to any relays
+npx dvmcp-discovery --interactive
 
 # Set MCP service details
 npx dvmcp-discovery --mcp-name "My DVMCP Service" --mcp-version "1.2.0"
@@ -94,6 +103,11 @@ nwc:
   # Your NWC connection string
   # Format: nostr+walletconnect:<pubkey>?relay=<relay_url>&secret=<secret>
   connectionString: 'nostr+walletconnect:your_wallet_pubkey_here?relay=wss%3A%2F%2Frelay.example.com&secret=your_secret_here'
+
+# Feature flags for enabling/disabling specific features
+featureFlags:
+  # Enable interactive mode to load built-in tools and skip default relay connections
+  interactive: false
 ```
 
 You can obtain an NWC connection string from compatible wallets like Alby or Coinos. When a tool requires payment, the discovery server will automatically pay the invoice using the configured NWC wallet.
@@ -141,6 +155,25 @@ bun run start --server naddr1...
 ```
 
 This is useful when you want to work with a specific subset of tools rather than discovering all tools from a provider.
+
+## Interactive Mode
+
+Interactive mode enables built-in tools that are only loaded when this mode is active. This provides a more streamlined experience when you want to use the discovery server with just the built-in tools.
+
+```bash
+# Enable interactive mode
+npx dvmcp-discovery --interactive
+# or
+npx dvmcp-discovery -i
+```
+
+When interactive mode is enabled:
+
+1. Built-in tools are registered and available for use
+2. If no relay URLs are specified, the server will run without connecting to any Nostr relays
+3. This allows for a self-contained experience using only the built-in tools
+
+This is particularly useful for testing or when you want to use the discovery server without relying on external Nostr relays.
 
 ## Debug
 

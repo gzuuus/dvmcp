@@ -53,6 +53,14 @@ export interface DiscoveryConfig {
 }
 
 /**
+ * Feature flags configuration
+ */
+export interface FeatureFlagsConfig {
+  /** Enable interactive mode with built-in tools */
+  interactive?: boolean;
+}
+
+/**
  * Complete configuration interface
  */
 export interface Config {
@@ -66,6 +74,8 @@ export interface Config {
   whitelist?: WhitelistConfig;
   /** Optional discovery configuration */
   discovery?: DiscoveryConfig;
+  /** Optional feature flags configuration */
+  featureFlags?: FeatureFlagsConfig;
 }
 
 /**
@@ -117,6 +127,9 @@ const TEST_CONFIG: Config = {
   },
   whitelist: {
     allowedDVMs: new Set(),
+  },
+  featureFlags: {
+    interactive: false,
   },
 };
 
@@ -248,9 +261,25 @@ function loadConfigFromEnv(): Partial<Config> {
 
   // Discovery configuration
   if (process.env[ENV_VARS.DISCOVERY_LIMIT]) {
-    config.discovery = {
-      limit: parseInt(process.env[ENV_VARS.DISCOVERY_LIMIT] as string, 10),
-    };
+    const limit = parseInt(process.env[ENV_VARS.DISCOVERY_LIMIT] as string, 10);
+    if (!isNaN(limit)) {
+      config.discovery = {
+        limit,
+      };
+    }
+  }
+
+  // Feature flags configuration
+  if (process.env[ENV_VARS.INTERACTIVE]) {
+    const interactive = process.env[ENV_VARS.INTERACTIVE];
+    if (
+      interactive &&
+      ['true', '1', 'yes'].includes(interactive.toLowerCase())
+    ) {
+      config.featureFlags = {
+        interactive: true,
+      };
+    }
   }
 
   return config;
@@ -344,6 +373,16 @@ function loadConfigFromCLI(args: string[]): Partial<Config> {
     };
   }
 
+  const hasInteractiveFlag =
+    args.includes(CLI_FLAGS.INTERACTIVE.LONG) ||
+    args.includes(CLI_FLAGS.INTERACTIVE.SHORT);
+
+  if (hasInteractiveFlag) {
+    config.featureFlags = {
+      interactive: true,
+    };
+  }
+
   return config;
 }
 
@@ -390,6 +429,13 @@ function loadConfigFromFile(): Config | null {
       },
     };
 
+    // Parse feature flags if present
+    if (rawConfig.featureFlags?.interactive !== undefined) {
+      config.featureFlags = {
+        interactive: Boolean(rawConfig.featureFlags.interactive),
+      };
+    }
+
     if (!HEX_KEYS_REGEX.test(config.nostr.privateKey)) {
       throw new Error('privateKey must be a 32-byte hex string');
     }
@@ -406,10 +452,14 @@ function loadConfigFromFile(): Config | null {
  * @returns Default configuration
  */
 export function createDefaultConfig(relayUrls: string[]): Config {
+  // Generate a new private key
+  const privateKey = bytesToHex(generateSecretKey());
+
   return {
     nostr: {
-      privateKey: bytesToHex(generateSecretKey()),
-      relayUrls: validateRelayUrls(relayUrls),
+      privateKey,
+      relayUrls:
+        relayUrls.length > 0 ? relayUrls : [DEFAULT_VALUES.DEFAULT_RELAY_URL],
     },
     mcp: {
       name: DEFAULT_VALUES.DEFAULT_MCP_NAME,
@@ -418,6 +468,9 @@ export function createDefaultConfig(relayUrls: string[]): Config {
     },
     whitelist: {
       allowedDVMs: new Set(),
+    },
+    featureFlags: {
+      interactive: false, // Default to not using interactive mode
     },
   };
 }
@@ -438,6 +491,9 @@ function mergeConfigs(...configs: Partial<Config>[]): Config {
       name: '',
       version: '',
       about: '',
+    },
+    featureFlags: {
+      interactive: false,
     },
   };
 
@@ -489,6 +545,11 @@ function mergeConfigs(...configs: Partial<Config>[]): Config {
     if (config.discovery) {
       result.discovery = { ...config.discovery };
     }
+
+    // Merge feature flags configuration
+    if (config.featureFlags) {
+      result.featureFlags = { ...result.featureFlags, ...config.featureFlags };
+    }
   }
 
   return result as Config;
@@ -539,6 +600,11 @@ export function getConfig(): Config {
     return userValue !== undefined ? userValue : defaultValue;
   };
 
+  // Check if interactive mode is enabled via CLI or env (highest priority sources)
+  const isInteractiveModeExplicit =
+    cliConfig.featureFlags?.interactive === true ||
+    envConfig.featureFlags?.interactive === true;
+
   // Merge configurations with priority
   const externalConfig = mergeConfigs(
     {},
@@ -547,49 +613,53 @@ export function getConfig(): Config {
     cliConfig
   );
 
-  // Check if we have any external configuration
-  const hasExternalConfig = Object.keys(externalConfig).length > 0;
+  // Check if we have any external configuration for nostr.privateKey
+  const hasExternalPrivateKey = !!externalConfig.nostr?.privateKey;
 
-  if (!hasExternalConfig) {
-    // No external configuration, use default configuration
-    _CONFIG = defaultConfig;
-  } else {
-    // Create a new config object with defaults applied where needed
-    const finalConfig: Config = {
-      nostr: {
-        // Use external privateKey if available, otherwise use default
-        privateKey: applyDefaults(
-          externalConfig.nostr?.privateKey,
-          defaultConfig.nostr.privateKey
-        ),
-        // For relay URLs, only use default if external is empty or undefined
-        relayUrls:
-          externalConfig.nostr?.relayUrls?.length > 0
-            ? externalConfig.nostr.relayUrls
-            : defaultConfig.nostr.relayUrls,
-      },
-      mcp: {
-        // Apply defaults for MCP fields
-        name: applyDefaults(externalConfig.mcp?.name, defaultConfig.mcp.name),
-        version: applyDefaults(
-          externalConfig.mcp?.version,
-          defaultConfig.mcp.version
-        ),
-        about: applyDefaults(
-          externalConfig.mcp?.about,
-          defaultConfig.mcp.about
-        ),
-      },
-      // Apply defaults for optional fields
-      whitelist: externalConfig.whitelist || defaultConfig.whitelist,
-      // Only include NWC if provided in external config
-      ...(externalConfig.nwc && { nwc: externalConfig.nwc }),
-      // Include discovery configuration if provided
-      ...(externalConfig.discovery && { discovery: externalConfig.discovery }),
-    };
+  // Create a new config object with defaults applied where needed
+  const finalConfig: Config = {
+    nostr: {
+      // Always use external privateKey if available, otherwise use default
+      privateKey: hasExternalPrivateKey
+        ? externalConfig.nostr.privateKey
+        : defaultConfig.nostr.privateKey,
+      // For relay URLs:
+      // 1. If interactive mode is enabled via CLI or env, use empty array (no relays)
+      // 2. Otherwise, if external relays are provided, use them
+      // 3. Otherwise use default relays
+      relayUrls: (() => {
+        if (isInteractiveModeExplicit) {
+          // If interactive mode is explicitly enabled via CLI or env, use empty array
+          return [];
+        } else if (externalConfig.nostr?.relayUrls?.length > 0) {
+          // If external relays are explicitly provided, use them
+          return externalConfig.nostr.relayUrls;
+        } else if (externalConfig.featureFlags?.interactive === true) {
+          // If interactive mode is enabled via config file, use empty array
+          return [];
+        } else {
+          // Otherwise use default relays
+          return defaultConfig.nostr.relayUrls;
+        }
+      })(),
+    },
+    mcp: {
+      // Apply defaults for MCP fields
+      name: externalConfig.mcp?.name || defaultConfig.mcp.name,
+      version: externalConfig.mcp?.version || defaultConfig.mcp.version,
+      about: externalConfig.mcp?.about || defaultConfig.mcp.about,
+    },
+    // Apply defaults for optional fields
+    whitelist: externalConfig.whitelist || defaultConfig.whitelist,
+    // Only include NWC if provided in external config
+    ...(externalConfig.nwc && { nwc: externalConfig.nwc }),
+    // Include discovery configuration if provided
+    ...(externalConfig.discovery && { discovery: externalConfig.discovery }),
+    // Include feature flags configuration, with defaults if not provided
+    featureFlags: externalConfig.featureFlags || defaultConfig.featureFlags,
+  };
 
-    _CONFIG = finalConfig;
-  }
+  _CONFIG = finalConfig;
 
   // Validate the merged configuration
   if (!_CONFIG.nostr.privateKey) {
@@ -600,9 +670,13 @@ export function getConfig(): Config {
     throw new Error('privateKey must be a 32-byte hex string');
   }
 
-  if (!_CONFIG.nostr.relayUrls || _CONFIG.nostr.relayUrls.length === 0) {
+  // Only require relay URLs if interactive mode is not enabled
+  if (
+    !_CONFIG.featureFlags?.interactive &&
+    (!_CONFIG.nostr.relayUrls || _CONFIG.nostr.relayUrls.length === 0)
+  ) {
     throw new Error(
-      'At least one relay URL must be provided in nostr.relayUrls'
+      'At least one relay URL must be provided in nostr.relayUrls when not in interactive mode'
     );
   }
 

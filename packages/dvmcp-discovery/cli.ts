@@ -129,6 +129,13 @@ const CLI_OPTIONS: CliOption[] = [
     takesValue: true,
     valueDescription: CLI_FLAGS.DISCOVERY_LIMIT.VALUE_DESC,
   },
+  // Add interactive mode option
+  {
+    flag: CLI_FLAGS.INTERACTIVE.LONG,
+    shortFlag: CLI_FLAGS.INTERACTIVE.SHORT,
+    description: CLI_FLAGS.INTERACTIVE.DESCRIPTION,
+    takesValue: false,
+  },
 ];
 
 /**

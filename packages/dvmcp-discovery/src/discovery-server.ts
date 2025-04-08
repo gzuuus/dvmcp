@@ -10,6 +10,7 @@ import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
 import type { DVMAnnouncement } from './direct-discovery';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { builtInToolRegistry } from './built-in-tools';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;
@@ -116,6 +117,9 @@ export class DiscoveryServer {
   ) {
     loggerDiscovery('Starting discovery server with direct server tools...');
 
+    // Register built-in tools first
+    this.registerBuiltInTools();
+
     if (!announcement?.tools) {
       console.error('No tools found in server announcement');
       return;
@@ -135,8 +139,22 @@ export class DiscoveryServer {
   }
 
   public async start() {
-    loggerDiscovery('Starting discovery server...');
+    const config = getConfig();
+    this.config = config;
 
+    // Log interactive mode and relay configuration
+    const isInteractive = config.featureFlags?.interactive === true;
+    loggerDiscovery(
+      `Starting discovery server with interactive mode: ${isInteractive ? 'enabled' : 'disabled'}`
+    );
+    loggerDiscovery(
+      `Relay URLs: ${config.nostr.relayUrls.length > 0 ? config.nostr.relayUrls.join(', ') : 'none'}`
+    );
+
+    // Register built-in tools
+    await this.registerBuiltInTools();
+
+    // Start discovery
     await this.startDiscovery();
     loggerDiscovery(`Discovered ${this.toolRegistry.listTools().length} tools`);
 
@@ -144,6 +162,48 @@ export class DiscoveryServer {
     await this.mcpServer.connect(transport);
 
     loggerDiscovery('DVMCP Discovery Server started');
+  }
+
+  /**
+   * Register built-in tools with the tool registry
+   * @private
+   */
+  private registerBuiltInTools(): void {
+    // Check if interactive mode is enabled in the configuration
+    const config = getConfig();
+
+    const isInteractiveMode = config.featureFlags?.interactive === true;
+
+    if (!isInteractiveMode) {
+      loggerDiscovery(
+        'Interactive mode is disabled. Skipping built-in tools registration.'
+      );
+      return;
+    }
+
+    loggerDiscovery(
+      'Interactive mode is enabled. Registering built-in tools...'
+    );
+
+    // Get all built-in tools and register them
+    const builtInTools = builtInToolRegistry.getAllTools();
+    let registeredCount = 0;
+
+    for (const [toolId, builtInTool] of builtInTools) {
+      try {
+        this.toolRegistry.registerBuiltInTool(toolId, builtInTool.tool);
+        loggerDiscovery(`Registered built-in tool: ${toolId}`);
+        registeredCount++;
+      } catch (error) {
+        console.error(`Failed to register built-in tool ${toolId}:`, error);
+      }
+    }
+
+    if (registeredCount > 0) {
+      loggerDiscovery(`Registered ${registeredCount} built-in tools`);
+    } else {
+      loggerDiscovery('No built-in tools were registered');
+    }
   }
 
   public async cleanup(): Promise<void> {

@@ -92,6 +92,13 @@ export const CLI_FLAGS = {
     DESCRIPTION: 'Limit the number of DVMs to discover',
     VALUE_DESC: 'LIMIT',
   },
+
+  // Interactive mode flag
+  INTERACTIVE: {
+    LONG: '--interactive',
+    SHORT: '-i',
+    DESCRIPTION: 'Enable interactive mode with built-in tools',
+  },
 };
 
 /**
@@ -115,6 +122,9 @@ export const ENV_VARS = {
 
   // Discovery configuration
   DISCOVERY_LIMIT: 'DVMCP_DISCOVERY_LIMIT',
+
+  // Interactive mode
+  INTERACTIVE: 'DVMCP_INTERACTIVE',
 };
 
 /**

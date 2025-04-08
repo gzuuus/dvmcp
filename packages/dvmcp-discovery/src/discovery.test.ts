@@ -54,7 +54,7 @@ describe('DiscoveryServer E2E', () => {
     console.log('Found tool:', mockTool);
 
     const toolRegistry = discoveryServer['toolRegistry'];
-    const toolIds = Array.from(toolRegistry['discoveredTools'].keys());
+    const toolIds = Array.from(toolRegistry['tools'].keys());
     console.log('Available tool IDs:', toolIds);
 
     const toolId = toolIds.find((id) => id.startsWith(`${mockTool.name}`));

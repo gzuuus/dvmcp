@@ -92,7 +92,7 @@ export function setDiscoveryServerReference(server: any): void {
 const discoverAndIntegrateTool: Tool = {
   name: 'discover',
   description:
-    'Discovers available tools with optional keyword filtering and tool integration. Use no keywords for broad discovery, or provide keywords as individual words or exact matches in quotes. Only integrate tools when explicitly required.',
+    'Discovers new tools with optional keyword filtering and tool integration. Use no keywords for broad discovery, or provide keywords as individual words or exact matches in quotes. Only integrate tools when explicitly required.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -215,6 +215,7 @@ builtInToolRegistry.registerTool(
       const filter: Filter = {
         kinds: [DVM_ANNOUNCEMENT_KIND],
         '#t': ['mcp'],
+        since: Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60,
       };
 
       // Add limit to the filter if specified

@@ -1,7 +1,7 @@
 import { LightningAddress } from '@getalby/lightning-tools';
 import { CONFIG } from './config';
 import { loggerBridge } from '@dvmcp/commons/logger';
-import { Event } from 'nostr-tools/pure';
+import type { Event } from 'nostr-tools/pure';
 import { SimplePool } from 'nostr-tools/pool';
 import type { SubCloser } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';

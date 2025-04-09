@@ -3,7 +3,6 @@ import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 import { HEX_KEYS_REGEX } from '@dvmcp/commons/constants';
 import type { Config, MCPServerConfig } from './types';
-import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 let CONFIG_PATH = join(process.cwd(), 'config.dvmcp.yml');
 

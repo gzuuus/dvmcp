@@ -12,7 +12,7 @@
     },
     "packages/dvmcp-bridge": {
       "name": "@dvmcp/bridge",
-      "version": "0.1.22",
+      "version": "0.1.23",
       "bin": {
         "dvmcp-bridge": "./cli.ts",
       },
@@ -21,7 +21,7 @@
         "@getalby/lightning-tools": "^5.1.2",
         "@modelcontextprotocol/sdk": "^1.4.1",
         "dotenv": "^16.4.7",
-        "nostr-tools": "^2.10.4",
+        "nostr-tools": "^2.12.0",
         "yaml": "^2.7.0",
       },
       "devDependencies": {
@@ -44,7 +44,7 @@
     },
     "packages/dvmcp-discovery": {
       "name": "@dvmcp/discovery",
-      "version": "0.1.21",
+      "version": "0.1.24",
       "bin": {
         "dvmcp-discovery": "./cli.ts",
       },
@@ -194,7 +194,7 @@
 
     "negotiator": ["negotiator@1.0.0", "", {}, "sha512-8Ofs/AUQh8MaEcrlq5xOX0CQ9ypTF5dl78mjlMNfOK08fzpgTHQRQPBxcPlEtIw0yRpws+Zo/3r+5WRby7u3Gg=="],
 
-    "nostr-tools": ["nostr-tools@2.10.4", "", { "dependencies": { "@noble/ciphers": "^0.5.1", "@noble/curves": "1.2.0", "@noble/hashes": "1.3.1", "@scure/base": "1.1.1", "@scure/bip32": "1.3.1", "@scure/bip39": "1.2.1" }, "optionalDependencies": { "nostr-wasm": "0.1.0" }, "peerDependencies": { "typescript": ">=5.0.0" }, "optionalPeers": ["typescript"] }, "sha512-biU7sk+jxHgVASfobg2T5ttxOGGSt69wEVBC51sHHOEaKAAdzHBLV/I2l9Rf61UzClhliZwNouYhqIso4a3HYg=="],
+    "nostr-tools": ["nostr-tools@2.12.0", "", { "dependencies": { "@noble/ciphers": "^0.5.1", "@noble/curves": "1.2.0", "@noble/hashes": "1.3.1", "@scure/base": "1.1.1", "@scure/bip32": "1.3.1", "@scure/bip39": "1.2.1" }, "optionalDependencies": { "nostr-wasm": "0.1.0" }, "peerDependencies": { "typescript": ">=5.0.0" }, "optionalPeers": ["typescript"] }, "sha512-pUWEb020gTvt1XZvTa8AKNIHWFapjsv2NKyk43Ez2nnvz6WSXsrTFE0XtkNLSRBjPn6EpxumKeNiVzLz74jNSA=="],
 
     "nostr-wasm": ["nostr-wasm@0.1.0", "", {}, "sha512-78BTryCLcLYv96ONU8Ws3Q1JzjlAt+43pWQhIl86xZmWeegYCNLPml7yQ+gG3vR6V5h4XGj+TxO+SS5dsThQIA=="],
 
@@ -269,8 +269,6 @@
     "@dvmcp/bridge/@dvmcp/commons": ["@dvmcp/commons@0.1.5", "", { "dependencies": { "debug": "^4.4.0" }, "peerDependencies": { "@types/debug": "^4.1.12", "typescript": "^5.0.0" } }, "sha512-+crf1KadIi7J3ab4GXz3++od7C7XCFqwzpw9TZSmmG5fSNIvN9QekPCFDuANY49Ohda5WR+G3m9w3mrFsfWWbg=="],
 
     "@dvmcp/discovery/@dvmcp/commons": ["@dvmcp/commons@0.1.5", "", { "dependencies": { "debug": "^4.4.0" }, "peerDependencies": { "@types/debug": "^4.1.12", "typescript": "^5.0.0" } }, "sha512-+crf1KadIi7J3ab4GXz3++od7C7XCFqwzpw9TZSmmG5fSNIvN9QekPCFDuANY49Ohda5WR+G3m9w3mrFsfWWbg=="],
-
-    "@dvmcp/discovery/nostr-tools": ["nostr-tools@2.12.0", "", { "dependencies": { "@noble/ciphers": "^0.5.1", "@noble/curves": "1.2.0", "@noble/hashes": "1.3.1", "@scure/base": "1.1.1", "@scure/bip32": "1.3.1", "@scure/bip39": "1.2.1" }, "optionalDependencies": { "nostr-wasm": "0.1.0" }, "peerDependencies": { "typescript": ">=5.0.0" }, "optionalPeers": ["typescript"] }, "sha512-pUWEb020gTvt1XZvTa8AKNIHWFapjsv2NKyk43Ez2nnvz6WSXsrTFE0XtkNLSRBjPn6EpxumKeNiVzLz74jNSA=="],
 
     "@noble/curves/@noble/hashes": ["@noble/hashes@1.3.2", "", {}, "sha512-MVC8EAQp7MvEcm30KWENFjgR+Mkmf+D189XJTkFIlwohU5hcBbn1ZkKq7KVTi2Hme3PMGF390DaL52beVrIihQ=="],
 

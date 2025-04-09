@@ -53,6 +53,7 @@ export class DiscoveryServer {
     const filter: Filter = {
       kinds: [DVM_ANNOUNCEMENT_KIND],
       '#t': ['mcp'],
+      since: Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60,
     };
 
     // Add limit to the filter if it's specified in the configuration
@@ -343,12 +344,7 @@ export class DiscoveryServer {
     // Register built-in tools
     this.registerBuiltInTools();
 
-    // Connect the MCP server first to ensure it's ready
-    const transport = new StdioServerTransport();
-    await this.mcpServer.connect(transport);
-    loggerDiscovery('MCP server connected');
-
-    // Start discovery only if we have relay URLs or if not in interactive-only mode
+    // Only if we have relay URLs or if not in interactive-only mode
     if (config.nostr.relayUrls.length > 0 || !isInteractive) {
       await this.startDiscovery();
       loggerDiscovery(
@@ -359,6 +355,11 @@ export class DiscoveryServer {
         'Skipping discovery as no relay URLs are configured and running in interactive mode'
       );
     }
+
+    // Connect the MCP server AFTER all tools are registered
+    const transport = new StdioServerTransport();
+    await this.mcpServer.connect(transport);
+    loggerDiscovery('MCP server connected');
 
     loggerDiscovery('DVMCP Discovery Server started');
   }

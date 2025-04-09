@@ -6,6 +6,8 @@ import type { Filter } from 'nostr-tools';
 import type { DVMAnnouncement } from './direct-discovery';
 import type { DiscoveryServer } from './discovery-server';
 import { DEFAULT_VALUES } from './constants';
+import { NWCPaymentHandler } from './nwc-payment';
+import { getConfig } from './config';
 
 /**
  * Built-in tool definition with execution function
@@ -636,6 +638,79 @@ const listToolsTool: Tool = {
 };
 
 // Register the list_tools tool with its execution function
+/**
+ * Register the pay_invoice tool if NWC is configured
+ */
+function registerPayInvoiceTool(): void {
+  // Check if NWC is configured
+  const config = getConfig();
+  if (!config.nwc?.connectionString) {
+    loggerDiscovery(
+      'NWC connection string not configured. Skipping pay_invoice tool registration.'
+    );
+    return;
+  }
+
+  // Define the pay_invoice tool
+  const payInvoiceTool: Tool = {
+    name: 'pay_invoice',
+    description:
+      'Pay a Lightning invoice using the configured NWC (Nostr Wallet Connect) connection. Returns true if payment was successful, false otherwise.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        invoice: {
+          type: 'string',
+          description: 'The Lightning invoice (BOLT11) to pay',
+        },
+      },
+      required: ['invoice'],
+    },
+  };
+
+  // Register the pay_invoice tool with its execution function
+  builtInToolRegistry.registerTool(
+    'pay_invoice',
+    payInvoiceTool,
+    async (params: unknown) => {
+      // Type assertion for params
+      const typedParams = params as { invoice: string };
+      const { invoice } = typedParams;
+
+      if (!invoice) {
+        throw new Error('Invoice is required');
+      }
+
+      try {
+        // Create a new NWC payment handler
+        const paymentHandler = new NWCPaymentHandler();
+
+        // Attempt to pay the invoice
+        loggerDiscovery(
+          `Attempting to pay invoice: ${invoice.substring(0, 20)}...`
+        );
+        const result = await paymentHandler.payInvoice(invoice);
+
+        // Clean up resources
+        paymentHandler.cleanup();
+
+        // Return the payment result
+        return result;
+      } catch (error) {
+        loggerDiscovery('Error paying invoice:', error);
+        throw new Error(
+          `Failed to pay invoice: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+  );
+
+  loggerDiscovery('Registered pay_invoice tool successfully');
+}
+
+// Call the function to register the pay_invoice tool if NWC is configured
+registerPayInvoiceTool();
+
 builtInToolRegistry.registerTool(
   'list_tools',
   listToolsTool,

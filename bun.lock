@@ -12,12 +12,12 @@
     },
     "packages/dvmcp-bridge": {
       "name": "@dvmcp/bridge",
-      "version": "0.1.25",
+      "version": "0.1.26",
       "bin": {
         "dvmcp-bridge": "./cli.ts",
       },
       "dependencies": {
-        "@dvmcp/commons": "0.1.9",
+        "@dvmcp/commons": "latest",
         "@getalby/lightning-tools": "^5.1.2",
         "@modelcontextprotocol/sdk": "^1.4.1",
         "dotenv": "^16.4.7",
@@ -265,6 +265,8 @@
     "zod": ["zod@3.24.2", "", {}, "sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ=="],
 
     "zod-to-json-schema": ["zod-to-json-schema@3.24.3", "", { "peerDependencies": { "zod": "^3.24.1" } }, "sha512-HIAfWdYIt1sssHfYZFCXp4rU1w2r8hVVXYIlmoa0r0gABLs5di3RCqPU5DDROogVz1pAdYBaz7HK5n9pSUNs3A=="],
+
+    "@dvmcp/bridge/@dvmcp/commons": ["@dvmcp/commons@0.1.9", "", { "dependencies": { "debug": "^4.4.0" }, "peerDependencies": { "@types/debug": "^4.1.12", "typescript": "^5.0.0" } }, "sha512-0NKs2p9FJ+PYDX9PeUdejbARfm+Adf97Mpw0haVfVGfljaQSWVnF/Nn10v42+bJMZHHfFKZUTjQTYRdRGSKA/A=="],
 
     "@dvmcp/discovery/@dvmcp/commons": ["@dvmcp/commons@0.1.5", "", { "dependencies": { "debug": "^4.4.0" }, "peerDependencies": { "@types/debug": "^4.1.12", "typescript": "^5.0.0" } }, "sha512-+crf1KadIi7J3ab4GXz3++od7C7XCFqwzpw9TZSmmG5fSNIvN9QekPCFDuANY49Ohda5WR+G3m9w3mrFsfWWbg=="],
 

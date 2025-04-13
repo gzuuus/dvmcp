@@ -5,7 +5,8 @@ import type { Event } from 'nostr-tools/pure';
 import { SimplePool } from 'nostr-tools/pool';
 import type { SubCloser } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
-import { nostrAdapter } from './nostr-adapter';
+import { createNostrProvider } from '@dvmcp/commons/nostr/key-manager';
+import { keyManager } from './announcer';
 
 interface ZapInvoiceResponse {
   paymentRequest: string;
@@ -106,7 +107,7 @@ export async function generateZapRequest(
     };
 
     const zapOptions = {
-      nostr: nostrAdapter,
+      nostr: createNostrProvider(keyManager),
     };
 
     const invoice = (await ln.zapInvoice(

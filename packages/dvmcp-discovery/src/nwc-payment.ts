@@ -3,12 +3,12 @@ import {
   type Event,
   type VerifiedEvent,
 } from 'nostr-tools/pure';
-import { SimplePool } from 'nostr-tools/pool';
 import { NWCWalletRequest, NWCWalletResponse } from 'nostr-tools/kinds';
 import { hexToBytes } from '@noble/hashes/utils';
 import { encrypt, decrypt } from 'nostr-tools/nip04';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { getConfig } from './config';
+import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 
 interface NWCConnection {
   pubkey: string;
@@ -126,7 +126,7 @@ export async function makeNwcRequestEvent(
  * Payment handler for processing lightning invoices using NWC
  */
 export class NWCPaymentHandler {
-  private pool: SimplePool;
+  private relayHandler: RelayHandler;
   private walletPubkey: string;
   private walletRelay: string;
   private secret: Uint8Array;
@@ -153,8 +153,8 @@ export class NWCPaymentHandler {
       this.walletRelay = relay;
       this.secret = hexToBytes(secret);
 
-      // Create a SimplePool for relay communication
-      this.pool = new SimplePool();
+      // Create a RelayHandler for relay communication
+      this.relayHandler = new RelayHandler([this.walletRelay]);
 
       loggerDiscovery('NWC payment handler initialized successfully');
       loggerDiscovery('Using wallet pubkey:', this.walletPubkey);
@@ -196,44 +196,42 @@ export class NWCPaymentHandler {
           'Setting up subscription to listen for payment response...'
         );
 
-        // Subscribe to the relay for the response
-        const sub = this.pool.subscribe([this.walletRelay], filter, {
-          onevent: async (event: Event) => {
-            loggerDiscovery('Received response event:', event.id);
-            try {
-              // Decrypt the response
-              const decryptedContent = decrypt(
-                this.secret,
-                event.pubkey,
-                event.content
-              );
-              const response = JSON.parse(
-                decryptedContent
-              ) as NWCPayInvoiceResult;
+        // Subscribe to the relay for the response using RelayHandler
+        const sub = this.relayHandler.subscribeToRequests((event: Event) => {
+          loggerDiscovery('Received response event:', event.id);
+          try {
+            // Decrypt the response
+            const decryptedContent = decrypt(
+              this.secret,
+              event.pubkey,
+              event.content
+            );
+            const response = JSON.parse(
+              decryptedContent
+            ) as NWCPayInvoiceResult;
 
-              loggerDiscovery('Payment response:', response);
+            loggerDiscovery('Payment response:', response);
 
-              if (response.error) {
-                loggerDiscovery('Payment failed:', response.error.message);
-                sub.close();
-                reject(new Error(response.error.message));
-              } else if (response.result) {
-                loggerDiscovery('Payment successful!');
-                loggerDiscovery('Preimage:', response.result.preimage);
-                sub.close();
-                resolve(true);
-              } else {
-                loggerDiscovery('Unexpected response format:', response);
-                sub.close();
-                reject(new Error('Unexpected response format from wallet'));
-              }
-            } catch (error) {
-              loggerDiscovery('Error decrypting response:', error);
+            if (response.error) {
+              loggerDiscovery('Payment failed:', response.error.message);
               sub.close();
-              reject(error);
+              reject(new Error(response.error.message));
+            } else if (response.result) {
+              loggerDiscovery('Payment successful!');
+              loggerDiscovery('Preimage:', response.result.preimage);
+              sub.close();
+              resolve(true);
+            } else {
+              loggerDiscovery('Unexpected response format:', response);
+              sub.close();
+              reject(new Error('Unexpected response format from wallet'));
             }
-          },
-        });
+          } catch (error) {
+            loggerDiscovery('Error decrypting response:', error);
+            sub.close();
+            reject(error);
+          }
+        }, filter);
 
         const timeoutId = setTimeout(() => {
           loggerDiscovery('Payment request timed out after 60 seconds');
@@ -243,7 +241,7 @@ export class NWCPaymentHandler {
 
         // Publish the payment request
         loggerDiscovery('Publishing payment request to relay...');
-        this.pool.publish([this.walletRelay], paymentRequest);
+        await this.relayHandler.publishEvent(paymentRequest);
         loggerDiscovery(
           'Payment request published successfully. Waiting for response...'
         );
@@ -258,6 +256,7 @@ export class NWCPaymentHandler {
    * Clean up resources
    */
   public cleanup(): void {
-    this.pool.close([this.walletRelay]);
+    this.relayHandler.cleanup();
+    loggerDiscovery('NWC payment handler cleaned up');
   }
 }

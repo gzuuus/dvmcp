@@ -25,6 +25,11 @@ mcp:
       args: 
         - "run"
         - "src/external-mcp-server1.ts"
+      # Environment variables to pass to the server process
+      env:
+        API_KEY: "your_api_key_here"
+        DEBUG: "true"
+        NODE_ENV: "production"
       # Tool pricing configuration
       tools:
         - name: "tool-from-server1"
@@ -49,11 +54,11 @@ mcp:
   # List of allowed public keys (leave empty for no restrictions)
   # allowedPubkeys: []
 
-# Lightning Payment Configuration
-# lightning:
+# Optional: Lightning Payment Configuration (required if pricing is configured)
+lightning:
   # Lightning Address for generating invoices
-  # address: "your_lightning_address@getalby.com"
+  address: "your_lightning_address@getalby.com"
   # Dedicated relays for zap receipt subscriptions (optional)
-  # zapRelays:
-    # - "wss://relay.damus.io"
-    # - "wss://nostr.mutinywallet.com"
+  zapRelays:
+    - "wss://relay.damus.io"
+    - "wss://nostr.mutinywallet.com"

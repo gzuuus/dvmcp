@@ -12,7 +12,7 @@
     },
     "packages/dvmcp-bridge": {
       "name": "@dvmcp/bridge",
-      "version": "0.1.24",
+      "version": "0.1.26",
       "bin": {
         "dvmcp-bridge": "./cli.ts",
       },
@@ -33,7 +33,7 @@
     },
     "packages/dvmcp-commons": {
       "name": "@dvmcp/commons",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "dependencies": {
         "debug": "^4.4.0",
       },
@@ -44,7 +44,7 @@
     },
     "packages/dvmcp-discovery": {
       "name": "@dvmcp/discovery",
-      "version": "0.1.27",
+      "version": "0.1.28",
       "bin": {
         "dvmcp-discovery": "./cli.ts",
       },
@@ -266,7 +266,7 @@
 
     "zod-to-json-schema": ["zod-to-json-schema@3.24.3", "", { "peerDependencies": { "zod": "^3.24.1" } }, "sha512-HIAfWdYIt1sssHfYZFCXp4rU1w2r8hVVXYIlmoa0r0gABLs5di3RCqPU5DDROogVz1pAdYBaz7HK5n9pSUNs3A=="],
 
-    "@dvmcp/bridge/@dvmcp/commons": ["@dvmcp/commons@0.1.8", "", { "dependencies": { "debug": "^4.4.0" }, "peerDependencies": { "@types/debug": "^4.1.12", "typescript": "^5.0.0" } }, "sha512-2T9nRJ06YFYDENksJjDsWQHu+e3lB2v/qPHAJj3jze23gRDEu3OZbxjhe41f48xS9+Bl/xwLX+0nNkbVKb4Z6w=="],
+    "@dvmcp/bridge/@dvmcp/commons": ["@dvmcp/commons@0.1.9", "", { "dependencies": { "debug": "^4.4.0" }, "peerDependencies": { "@types/debug": "^4.1.12", "typescript": "^5.0.0" } }, "sha512-0NKs2p9FJ+PYDX9PeUdejbARfm+Adf97Mpw0haVfVGfljaQSWVnF/Nn10v42+bJMZHHfFKZUTjQTYRdRGSKA/A=="],
 
     "@dvmcp/discovery/@dvmcp/commons": ["@dvmcp/commons@0.1.5", "", { "dependencies": { "debug": "^4.4.0" }, "peerDependencies": { "@types/debug": "^4.1.12", "typescript": "^5.0.0" } }, "sha512-+crf1KadIi7J3ab4GXz3++od7C7XCFqwzpw9TZSmmG5fSNIvN9QekPCFDuANY49Ohda5WR+G3m9w3mrFsfWWbg=="],
 

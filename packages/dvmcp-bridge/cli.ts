@@ -13,17 +13,218 @@ import {
 } from '@dvmcp/commons/config-generator';
 import { argv } from 'process';
 import type { Config } from './src/types';
-import { setConfigPath } from './src/config.js';
+import {
+  setConfigPath,
+  resetConfig,
+  getConfig,
+  printConfig,
+} from './src/config.js';
 import { DVMBridge } from './src/dvm-bridge.js';
+import { CLI_FLAGS } from './src/constants';
 
+// CLI argument definitions
+interface CliOption {
+  flag: string;
+  shortFlag?: string;
+  description: string;
+  takesValue: boolean;
+  valueDescription?: string;
+}
+
+const CLI_OPTIONS: CliOption[] = [
+  {
+    flag: CLI_FLAGS.CONFIG_PATH.LONG,
+    shortFlag: CLI_FLAGS.CONFIG_PATH.SHORT,
+    description: CLI_FLAGS.CONFIG_PATH.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.CONFIG_PATH.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.CONFIGURE.LONG,
+    description: CLI_FLAGS.CONFIGURE.DESCRIPTION,
+    takesValue: false,
+  },
+  {
+    flag: CLI_FLAGS.HELP.LONG,
+    shortFlag: CLI_FLAGS.HELP.SHORT,
+    description: CLI_FLAGS.HELP.DESCRIPTION,
+    takesValue: false,
+  },
+  {
+    flag: CLI_FLAGS.VERBOSE.LONG,
+    shortFlag: CLI_FLAGS.VERBOSE.SHORT,
+    description: CLI_FLAGS.VERBOSE.DESCRIPTION,
+    takesValue: false,
+  },
+  {
+    flag: CLI_FLAGS.DELETE_ANNOUNCEMENT.LONG,
+    description: CLI_FLAGS.DELETE_ANNOUNCEMENT.DESCRIPTION,
+    takesValue: false,
+  },
+  {
+    flag: CLI_FLAGS.REASON.LONG,
+    description: CLI_FLAGS.REASON.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.REASON.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.NOSTR_PRIVATE_KEY.LONG,
+    description: CLI_FLAGS.NOSTR_PRIVATE_KEY.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.NOSTR_PRIVATE_KEY.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.NOSTR_RELAY_URLS.LONG,
+    shortFlag: CLI_FLAGS.NOSTR_RELAY_URLS.SHORT,
+    description: CLI_FLAGS.NOSTR_RELAY_URLS.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.NOSTR_RELAY_URLS.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.MCP_NAME.LONG,
+    description: CLI_FLAGS.MCP_NAME.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.MCP_NAME.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.MCP_ABOUT.LONG,
+    description: CLI_FLAGS.MCP_ABOUT.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.MCP_ABOUT.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.MCP_CLIENT_NAME.LONG,
+    description: CLI_FLAGS.MCP_CLIENT_NAME.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.MCP_CLIENT_NAME.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.MCP_CLIENT_VERSION.LONG,
+    description: CLI_FLAGS.MCP_CLIENT_VERSION.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.MCP_CLIENT_VERSION.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.MCP_PICTURE.LONG,
+    description: CLI_FLAGS.MCP_PICTURE.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.MCP_PICTURE.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.MCP_WEBSITE.LONG,
+    description: CLI_FLAGS.MCP_WEBSITE.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.MCP_WEBSITE.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.MCP_BANNER.LONG,
+    description: CLI_FLAGS.MCP_BANNER.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.MCP_BANNER.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.WHITELIST_ALLOWED_PUBKEYS.LONG,
+    description: CLI_FLAGS.WHITELIST_ALLOWED_PUBKEYS.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.WHITELIST_ALLOWED_PUBKEYS.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.LIGHTNING_ADDRESS.LONG,
+    description: CLI_FLAGS.LIGHTNING_ADDRESS.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.LIGHTNING_ADDRESS.VALUE_DESC,
+  },
+  {
+    flag: CLI_FLAGS.LIGHTNING_ZAP_RELAYS.LONG,
+    description: CLI_FLAGS.LIGHTNING_ZAP_RELAYS.DESCRIPTION,
+    takesValue: true,
+    valueDescription: CLI_FLAGS.LIGHTNING_ZAP_RELAYS.VALUE_DESC,
+  },
+];
+
+/**
+ * Parse command line arguments
+ * @param args - Command line arguments
+ * @returns Parsed arguments as a record
+ */
+function parseArgs(args: string[]): Record<string, string | boolean> {
+  const result: Record<string, string | boolean> = {};
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    const option = CLI_OPTIONS.find(
+      (opt) => opt.flag === arg || opt.shortFlag === arg
+    );
+
+    if (option) {
+      if (option.takesValue && i + 1 < args.length) {
+        // If the next argument doesn't start with - or --, it's a value
+        const nextArg = args[i + 1];
+        if (!nextArg.startsWith('-')) {
+          result[option.flag] = nextArg;
+          i++; // Skip the value in the next iteration
+        } else {
+          // If the option takes a value but none is provided, set it to true
+          result[option.flag] = true;
+        }
+      } else {
+        // If the option doesn't take a value, set it to true
+        result[option.flag] = true;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Show help message
+ */
+function showHelp(): void {
+  console.log(`
+${CONFIG_EMOJIS.INFO} DVMCP Bridge - A MCP-enabled DVM providing AI and computational tools
+
+Usage: dvmcp-bridge [options]
+
+Options:`);
+
+  for (const option of CLI_OPTIONS) {
+    const flagStr = option.shortFlag
+      ? `${option.shortFlag}, ${option.flag}`
+      : `    ${option.flag}`;
+
+    const valueStr =
+      option.takesValue && option.valueDescription
+        ? ` <${option.valueDescription}>`
+        : '';
+
+    console.log(`  ${flagStr.padEnd(30)}${option.description}${valueStr}`);
+  }
+
+  console.log(`
+Examples:
+  dvmcp-bridge --nostr-relay-urls wss://relay.damus.io,wss://relay.dvmcp.fun
+  dvmcp-bridge --config-path /path/to/config.yml
+  dvmcp-bridge --configure
+  dvmcp-bridge --delete-announcement --reason "Service maintenance"
+`);
+}
+
+// Default configuration path
 const defaultConfigPath = join(process.cwd(), 'config.dvmcp.yml');
 let configPath = defaultConfigPath;
 
-const configPathArgIndex = argv.indexOf('--config-path');
-if (configPathArgIndex !== -1 && argv[configPathArgIndex + 1]) {
-  configPath = resolve(argv[configPathArgIndex + 1]);
-  console.log(`Using config path: ${configPath}`);
-  setConfigPath(configPath);
+// Parse command line arguments
+const parsedArgs = parseArgs(argv);
+
+// Set config path if provided
+if (parsedArgs[CLI_FLAGS.CONFIG_PATH.LONG]) {
+  const configPathArg = parsedArgs[CLI_FLAGS.CONFIG_PATH.LONG];
+  if (typeof configPathArg === 'string') {
+    configPath = resolve(configPathArg);
+    console.log(`${CONFIG_EMOJIS.INFO} Using config path: ${configPath}`);
+    setConfigPath(configPath);
+  }
 }
 
 const configFields: Record<string, FieldConfig> = {
@@ -120,10 +321,9 @@ const runApp = async () => {
 };
 
 const deleteAnnouncement = async () => {
-  const reasonIndex = argv.indexOf('--reason');
   const reason =
-    reasonIndex !== -1 && argv[reasonIndex + 1]
-      ? argv[reasonIndex + 1]
+    typeof parsedArgs[CLI_FLAGS.REASON.LONG] === 'string'
+      ? (parsedArgs[CLI_FLAGS.REASON.LONG] as string)
       : undefined;
 
   const bridge = new DVMBridge();
@@ -144,13 +344,27 @@ const deleteAnnouncement = async () => {
   }
 };
 
+/**
+ * Main CLI function
+ */
 const cliMain = async () => {
-  if (argv.includes('--configure')) {
+  // Reset any cached configuration to ensure we use the latest settings
+  resetConfig();
+
+  // Show help if requested
+  if (parsedArgs[CLI_FLAGS.HELP.LONG]) {
+    showHelp();
+    process.exit(0);
+  }
+
+  // Run configuration wizard if requested
+  if (parsedArgs[CLI_FLAGS.CONFIGURE.LONG]) {
     await configure();
     return;
   }
 
-  if (argv.includes('--delete-announcement')) {
+  // Handle delete announcement request
+  if (parsedArgs[CLI_FLAGS.DELETE_ANNOUNCEMENT.LONG]) {
     if (!existsSync(configPath)) {
       console.error(
         `${CONFIG_EMOJIS.INFO} No configuration file found at ${configPath}`
@@ -161,6 +375,7 @@ const cliMain = async () => {
     return;
   }
 
+  // Only run the configuration wizard if no config file exists
   if (!existsSync(configPath)) {
     console.log(
       `${CONFIG_EMOJIS.INFO} No configuration file found. Starting setup...`
@@ -168,6 +383,12 @@ const cliMain = async () => {
     await configure();
   }
 
+  // Print configuration if verbose mode is enabled
+  if (parsedArgs[CLI_FLAGS.VERBOSE.LONG]) {
+    printConfig(true);
+  }
+
+  // Run the application
   await runApp();
 };
 

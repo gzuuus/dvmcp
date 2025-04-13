@@ -41,4 +41,5 @@ export interface MCPServerConfig {
   command: string;
   args: string[];
   tools?: ToolPricing[];
+  env?: Record<string, string>;
 }

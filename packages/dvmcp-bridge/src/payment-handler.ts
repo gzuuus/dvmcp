@@ -2,10 +2,11 @@ import { LightningAddress } from '@getalby/lightning-tools';
 import { CONFIG } from './config';
 import { loggerBridge } from '@dvmcp/commons/logger';
 import type { Event } from 'nostr-tools/pure';
-import { SimplePool } from 'nostr-tools/pool';
 import type { SubCloser } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
-import { nostrAdapter } from './nostr-adapter';
+import { createNostrProvider } from '@dvmcp/commons/nostr/key-manager';
+import { keyManager } from './announcer';
+import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 
 interface ZapInvoiceResponse {
   paymentRequest: string;
@@ -26,29 +27,21 @@ function subscribeToRelays(
   filter: Filter
 ): SubCloser {
   const relayUrls = relays.length > 0 ? relays : CONFIG.nostr.relayUrls;
-  const pool = new SimplePool();
+  const relayHandler = new RelayHandler(relayUrls);
 
   loggerBridge(`Setting up subscription on relays: ${relayUrls.join(', ')}`);
 
-  const sub = pool.subscribeMany(relayUrls, [filter], {
-    onevent(event) {
-      loggerBridge(
-        `Event received(${event.kind}) from relay, id: ${event.id.slice(0, 12)}`
-      );
-      onEvent(event);
-    },
-    oneose() {
-      loggerBridge('Reached end of stored events on relay');
-    },
-    onclose(reason) {
-      loggerBridge(`Subscription closed on relay: ${reason}`);
-      pool.close(relayUrls);
-    },
-  });
+  const sub = relayHandler.subscribeToRequests((event) => {
+    loggerBridge(
+      `Event received(${event.kind}) from relay, id: ${event.id.slice(0, 12)}`
+    );
+    onEvent(event);
+  }, filter);
+
   return {
     close: () => {
       sub.close();
-      pool.close(relayUrls);
+      relayHandler.cleanup();
     },
   };
 }
@@ -106,7 +99,7 @@ export async function generateZapRequest(
     };
 
     const zapOptions = {
-      nostr: nostrAdapter,
+      nostr: createNostrProvider(keyManager),
     };
 
     const invoice = (await ln.zapInvoice(

@@ -19,6 +19,25 @@ export const createMockServer = async (name: string) => {
     })
   );
 
+  // Add a tool to return environment variables
+  server.tool(
+    `${name}-env`,
+    `Environment variable tool for ${name}`,
+    {
+      key: z.string().optional(),
+    },
+    async ({ key }) => {
+      if (key) {
+        return {
+          content: [{ type: 'text' as const, text: process.env[key] || '' }],
+        };
+      }
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify(process.env) }],
+      };
+    }
+  );
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
 

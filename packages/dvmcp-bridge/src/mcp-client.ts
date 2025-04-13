@@ -12,6 +12,7 @@ export class MCPClientHandler {
     this.transport = new StdioClientTransport({
       command: config.command,
       args: config.args,
+      env: config.env,
     });
     this.client = new Client(
       {

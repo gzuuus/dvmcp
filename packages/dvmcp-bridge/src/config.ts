@@ -123,11 +123,24 @@ function validateMCPServers(servers: any): MCPServerConfig[] {
         })
       : undefined;
 
+    // Process environment variables if present
+    const envConfig =
+      typeof server.env === 'object' && server.env !== null
+        ? Object.entries(server.env).reduce(
+            (acc, [key, value]) => {
+              acc[key] = String(value);
+              return acc;
+            },
+            {} as Record<string, string>
+          )
+        : undefined;
+
     return {
       name: server.name,
       command: server.command,
       args: server.args,
       tools: toolsConfig,
+      env: envConfig,
     };
   });
 }

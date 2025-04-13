@@ -9,10 +9,12 @@ export class MCPClientHandler {
   private transport: StdioClientTransport;
 
   constructor(config: MCPServerConfig) {
+    const mergedEnv = this.prepareEnvironmentVariables(config.env);
+
     this.transport = new StdioClientTransport({
       command: config.command,
       args: config.args,
-      env: config.env,
+      env: mergedEnv,
     });
     this.client = new Client(
       {
@@ -47,5 +49,27 @@ export class MCPClientHandler {
 
   async disconnect() {
     await this.transport.close();
+  }
+
+  /**
+   * Prepare environment variables by merging custom env with process.env
+   * @param customEnv - Custom environment variables to merge
+   * @returns Merged environment variables or undefined if no custom env
+   */
+  private prepareEnvironmentVariables(
+    customEnv?: Record<string, string>
+  ): Record<string, string> | undefined {
+    if (!customEnv) return undefined;
+
+    // Convert process.env to Record<string, string> by filtering out undefined values
+    const processEnv: Record<string, string> = {};
+    Object.entries(process.env).forEach(([key, value]) => {
+      if (value !== undefined) {
+        processEnv[key] = value;
+      }
+    });
+
+    // Merge with custom environment variables
+    return { ...processEnv, ...customEnv };
   }
 }

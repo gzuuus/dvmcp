@@ -80,7 +80,6 @@ describe('MCPPool', () => {
 
     // Verify that the server config is stored correctly
     const configs = pool.getServerConfigs();
-    console.log(configs);
     expect(configs.length).toBe(1);
     expect(configs[0].name).toBe('test-server');
     expect(configs[0].env).toEqual(envVars);

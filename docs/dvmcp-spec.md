@@ -24,7 +24,7 @@ While DVMs already provide a framework for computational services, and MCP offer
 ## Protocol Overview
 
 There are three main actors in this workflow:
-
+<!-- Rethink the definition of the actors, customer's definition is not accurate, there arent nostr clients, can be anything and use dvmcp discovery, be more explicit about the role of the dvms, providers can run multiple dvms  -->
 - Service providers: Entities running MCP servers that expose tools and capabilities
 - DVMs: Bridge components that translate between Nostr and MCP protocols
 - Customers: Nostr clients that discover and utilize the exposed capabilities
@@ -47,7 +47,7 @@ This specification defines these event kinds:
 | 7000  | Job Feedback                          |
 
 Operations are differentiated using the `c` tag, which specifies the command being executed:
-
+<!-- Does we need a `c` tag for the responses? -->
 | Command Value         | Type     | Kind | Description                               |
 | --------------------- | -------- | ---- | ----------------------------------------- |
 | list-tools            | Request  | 5910 | Request available tools catalog           |
@@ -66,10 +66,10 @@ Clients MAY use either method or both depending on their needs. Each method has 
 
 ## Discovery via NIP-89 Announcements
 
-You can query relays by creating a filter for events with kind `31990`, and `t` tag `mcp`. DVMs SHOULD include their available tools directly in their kind:31990 announcement events. This enables immediate tool discovery and execution without requiring an additional request/response cycle. Here's an example of a complete announcement:
+You can query relays by creating a filter for events with kind `31990`, and `t` tag `mcp`. DVMs MUST include their available tools directly in their kind:31990 announcement events. This enables immediate tool discovery and execution without requiring an additional request/response cycle. Here's an example of a complete announcement:
 
 Example announcement:
-
+<!-- Move metadata to tags, like name, about, etc, let the content just for the mcp schema. Maybe use tags for dvm capabilities as well, like support encryption etc -->
 ```json
 {
   "kind": 31990,
@@ -103,7 +103,7 @@ Example announcement:
   ]
 }
 ```
-
+<!-- This should be refactor as well due the comments above -->
 ### Tool Listing Content
 
 Each tool in the `tools` array MUST include:
@@ -132,7 +132,7 @@ Another way to do discovery using the previous list tools request is to query re
   "content": "",
   "tags": [
     ["c", "list-tools"],
-    ["output", "application/json"]
+    ["output", "application/json"] // Remove this as the output will always match the raw output of the mcp tool defined in the mcp protocol
   ]
 }
 ```
@@ -199,7 +199,7 @@ Clients MUST:
 2. Handle cases where tools may be unavailable or specifications may have changed
 
 DVMs that publish NIP-89 announcements SHOULD:
-
+<!-- Remove 1 point -->
 1. Keep announcements lightweight by omitting full schemas
 2. Maintain announcement accuracy by updating when tool availability changes
 3. Include all announced tools in list-tools responses
@@ -223,7 +223,7 @@ Tools are executed through request/response pairs using kinds 5910/6910.
   "tags": [
     ["c", "execute-tool"],
     ["p", "<provider-pubkey>"],
-    ["output", "application/json"]
+    ["output", "application/json"] // Remove this
   ]
 }
 ```
@@ -265,6 +265,7 @@ The content object MAY include:
     }
   },
   "tags": [
+    // The c tag seems superflous
     ["c", "execute-tool-response"],
     ["e", "<job-request-id>"],
     ["status", "success"]
@@ -273,7 +274,7 @@ The content object MAY include:
 ```
 
 ## Job Feedback
-
+<!-- Rethink the payment-required status tags to include a separated invoice tag that might be multiple due different payment options -->
 Following NIP-90, DVMs use kind 7000 events to provide updates about job status and payment requirements:
 
 ```json
@@ -311,7 +312,7 @@ A typical payment flow proceeds as follows:
 
 ## Error Handling
 
-DVMs MUST handle both protocol and execution errors appropriately:
+DVMs MUST handle both protocol and execution errors:
 
 ### Protocol Errors
 

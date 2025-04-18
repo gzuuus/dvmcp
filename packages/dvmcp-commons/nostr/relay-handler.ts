@@ -10,6 +10,7 @@ import {
   TOOL_RESPONSE_KIND,
 } from '../constants';
 import { logger } from '../logger';
+import { EventEmitter } from 'node:events';
 
 useWebSocketImplementation(WebSocket);
 
@@ -18,6 +19,7 @@ export class RelayHandler {
   private relayUrls: string[];
   private subscriptions: SubCloser[] = [];
   private reconnectInterval?: ReturnType<typeof setTimeout>;
+  private emitter = new EventEmitter();
 
   constructor(relayUrls: string[]) {
     this.pool = new SimplePool();
@@ -40,9 +42,14 @@ export class RelayHandler {
     try {
       await this.pool.ensureRelay(url, { connectionTimeout: 5000 });
       logger(`Connected to relay: ${url}`);
+      this.emitter.emit('relayReconnected', url);
     } catch (error) {
       logger(`Failed to connect to relay ${url}:`, error);
     }
+  }
+
+  onRelayReconnected(handler: (url: string) => void) {
+    this.emitter.on('relayReconnected', handler);
   }
 
   async publishEvent(event: Event): Promise<void> {

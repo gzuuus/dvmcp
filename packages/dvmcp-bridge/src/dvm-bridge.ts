@@ -54,10 +54,18 @@ export class DVMBridge {
 
       loggerBridge('Setting up request handlers...');
       const publicKey = keyManager.getPublicKey();
-      this.relayHandler.subscribeToRequests(this.handleRequest.bind(this), {
-        kinds: [TOOL_REQUEST_KIND],
-        '#p': [publicKey],
-        since: Math.floor(Date.now() / 1000),
+      const subscribe = () => {
+        this.relayHandler.subscribeToRequests(this.handleRequest.bind(this), {
+          kinds: [TOOL_REQUEST_KIND],
+          '#p': [publicKey],
+          since: Math.floor(Date.now() / 1000),
+        });
+      };
+      subscribe();
+
+      this.relayHandler.onRelayReconnected((url) => {
+        loggerBridge(`Relay reconnected: ${url}, re-subscribing to requests`);
+        subscribe();
       });
 
       this.isRunning = true;

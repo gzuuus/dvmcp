@@ -2,15 +2,15 @@
   "name": "dvmcp",
   "scripts": {
     "format": "prettier --write \"packages/**/*.{ts,tsx,js,jsx,json,md}\"",
-    "publish:commons": "cd packages/dvmcp-commons && npm publish --access public",
-    "publish:bridge": "cd packages/dvmcp-bridge && npm publish --access public",
-    "publish:discovery": "cd packages/dvmcp-discovery && npm publish --access public",
-    "publish:all": "npm run publish:commons && npm run publish:bridge && npm run publish:discovery"
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "publish-packages": "changeset publish"
   },
   "workspaces": [
     "packages/*"
   ],
   "devDependencies": {
+    "@changesets/cli": "^2.29.2",
     "prettier": "^3.5.1"
   },
   "dependencies": {

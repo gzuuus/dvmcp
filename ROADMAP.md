@@ -1,5 +1,6 @@
 - [x] Add flag `--config-path` to cli
 - [x] Add one command, configless, quick run mode in discovery package
+- [ ] Review for 2025-03-26
 - [ ] Add payments (#10)
 - [ ] Add env variables(#7)
 - [ ] Add resources to bridge package

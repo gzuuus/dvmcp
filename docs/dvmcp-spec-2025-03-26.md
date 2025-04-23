@@ -80,7 +80,7 @@ DVMCP maintains consistent message structures across all operations:
 2. **Nostr Tags for Metadata**: All Nostr-specific metadata uses event tags:
    - `s`: Server identifier for targeting specific servers
    - `p`: Public key for addressing providers or clients
-   - `e`: Event references for correlating requests and responses
+   - `e`: Event id, references for correlating requests and responses
    - `method`: Method name for easy filtering and routing
 
 3. **Event Kind Separation**: Different event kinds are used for different message categories:
@@ -750,22 +750,44 @@ sequenceDiagram
     participant Relay as Nostr Relay
     participant DVM as DVMCP-Bridge
     participant Server as MCP Server
+    participant Provider as Provider
 
     rect rgb(240, 240, 240)
-        Note over Client,Server: Discovery Path A: Public Server
-        Client->>Relay: Query kind:31316 (Server Announcement)
-        Relay-->>Client: Server information
-        Client->>Relay: Query kind:31317 (Tools List)
-        Relay-->>Client: Available tools
+        Note over Client,Server: Discovery Path A: Public Server (Event-based)
+        Provider->>Relay: Publish kind:31316 (Server Announcement)
+        Provider->>Relay: Publish kind:31317 (Tools List)
+        Provider->>Relay: Publish kind:31318 (Resources List)
+        Provider->>Relay: Publish kind:31319 (Prompts List)
+        
+        Note over Client,Relay: Later, client discovers servers
+        Client->>Relay: Subscribe to kind:31316 events
+        Relay-->>Client: Server announcements
+        Client->>Relay: Subscribe to kind:31317-31319 for specific servers
+        Relay-->>Client: Capability listings (tools, resources, prompts)
     end
 
     rect rgb(240, 240, 240)
-        Note over Client,Server: Discovery Path B: Direct Request
+        Note over Client,Server: Discovery Path B: Direct Request (RPC-based)
         Client->>DVM: kind:5910, method:initialize
         DVM->>Server: Initialize connection
         Server-->>DVM: Capability response
         DVM-->>Client: kind:6910, Server capabilities
-        Client->>DVM: kind:7000, notifications/initialized
+        
+        Note over Client,DVM: Direct capability requests
+        Client->>DVM: kind:5910, method:tools/list
+        DVM->>Server: Request tools list
+        Server-->>DVM: Tools list
+        DVM-->>Client: kind:6910, Tools list
+        
+        Client->>DVM: kind:5910, method:resources/list
+        DVM->>Server: Request resources list
+        Server-->>DVM: Resources list
+        DVM-->>Client: kind:6910, Resources list
+        
+        Client->>DVM: kind:5910, method:prompts/list
+        DVM->>Server: Request prompts list
+        Server-->>DVM: Prompts list
+        DVM-->>Client: kind:6910, Prompts list
     end
 
     Note over Client,Server: Tool Execution (Same for both paths)
@@ -812,41 +834,3 @@ Unlike direct MCP connections, Nostr's pub/sub model requires special handling f
    - When an error occurs during processing
    - When the client explicitly sends a cancellation request
    - When the connection times out due to network issues
-
-## Payment Protocol Flow
-
-The following diagram illustrates the detailed flow for payment handling in DVMCP:
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant DVM
-    participant Server
-    participant LN as Lightning Network
-
-    Client->>DVM: kind:5910, method:tools/call
-    DVM->>Server: Check if payment required
-    Server-->>DVM: Payment required
-    DVM-->>Client: kind:7000, status:payment-required, amount:XXX
-    
-    Note over Client,LN: Payment Flow
-    Client->>LN: Pay Lightning Invoice
-    LN-->>DVM: Payment notification
-    
-    DVM->>DVM: Verify payment
-    DVM->>Server: Execute tool (now paid)
-    Server-->>DVM: Processing tool
-    DVM-->>Client: kind:7000, status:processing
-    
-    alt Long-running operation
-        loop Until completion
-            Server-->>DVM: Progress update
-            DVM-->>Client: kind:7000, notification:progress
-        end
-    end
-    
-    Server-->>DVM: Tool results
-    DVM-->>Client: kind:6910, Tool results
-```
-
-This flow demonstrates how payment verification integrates with the standard tool execution process, including handling of long-running operations with progress notifications.

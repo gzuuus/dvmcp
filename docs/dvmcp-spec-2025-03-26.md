@@ -746,24 +746,23 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 
 ```mermaid
 sequenceDiagram
-    participant Client as Nostr Client
+    participant Client as Nostr Client/DVMCP-Discovery
     participant Relay as Nostr Relay
     participant DVM as DVMCP-Bridge
     participant Server as MCP Server
-    participant Provider as Provider
 
     rect rgb(240, 240, 240)
         Note over Client,Server: Discovery Path A: Public Server (Event-based)
-        Provider->>Relay: Publish kind:31316 (Server Announcement)
-        Provider->>Relay: Publish kind:31317 (Tools List)
-        Provider->>Relay: Publish kind:31318 (Resources List)
-        Provider->>Relay: Publish kind:31319 (Prompts List)
+        Note over Relay: Server events already published to relay
         
-        Note over Client,Relay: Later, client discovers servers
-        Client->>Relay: Subscribe to kind:31316 events
+        Client->>Relay: Subscribe to kind:31316 events (Server Announcements)
         Relay-->>Client: Server announcements
-        Client->>Relay: Subscribe to kind:31317-31319 for specific servers
-        Relay-->>Client: Capability listings (tools, resources, prompts)
+        Client->>Relay: Subscribe to kind:31317 events (Tools List)
+        Relay-->>Client: Available tools
+        Client->>Relay: Subscribe to kind:31318 events (Resources List)
+        Relay-->>Client: Available resources
+        Client->>Relay: Subscribe to kind:31319 events (Prompts List)
+        Relay-->>Client: Available prompts
     end
 
     rect rgb(240, 240, 240)
@@ -779,15 +778,7 @@ sequenceDiagram
         Server-->>DVM: Tools list
         DVM-->>Client: kind:6910, Tools list
         
-        Client->>DVM: kind:5910, method:resources/list
-        DVM->>Server: Request resources list
-        Server-->>DVM: Resources list
-        DVM-->>Client: kind:6910, Resources list
-        
-        Client->>DVM: kind:5910, method:prompts/list
-        DVM->>Server: Request prompts list
-        Server-->>DVM: Prompts list
-        DVM-->>Client: kind:6910, Prompts list
+        Note over Client,DVM: (Similar flows for resources/list and prompts/list)
     end
 
     Note over Client,Server: Tool Execution (Same for both paths)

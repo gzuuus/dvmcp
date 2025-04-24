@@ -14,7 +14,6 @@ This document defines how Nostr and Data Vending Machines can be used to expose 
 - [Protocol Overview](#protocol-overview)
 - [Protocol Consistency and Security](#protocol-consistency-and-security)
   - [Message Structure Consistency](#message-structure-consistency)
-  - [Public Key Cryptography](#public-key-cryptography)
 - [Event Kinds](#event-kinds)
 - [Server Discovery](#server-discovery)
   - [Discovery via Server Announcements (Public Servers)](#discovery-via-server-announcements-public-servers)
@@ -32,11 +31,16 @@ This document defines how Nostr and Data Vending Machines can be used to expose 
 - [Implementation Requirements](#implementation-requirements)
 - [Complete Protocol Flow](#complete-protocol-flow)
 - [Subscription Management](#subscription-management)
-- [Payment Protocol Flow](#payment-protocol-flow)
 
 ## Introduction
 
 The [Model Context Protocol](https://modelcontextprotocol.io/introduction) provides a protocol specification to create servers exposing capabilities and clients consuming them. Meanwhile, the Nostr network and Data Vending Machines offer a decentralized way to announce and consume computational services. This specification defines how to bridge these protocols, allowing MCP servers to advertise and provide their services through the Nostr network.
+
+While Nostr DVMs already provide a protocol for computational services over Nostr, and MCP offers a standardized way to expose capabilities and consume them, there hasn't been a standardized way to bridge these protocols. This specification aims to:
+
+1. Enable discovery of MCP servers and their capabilities through the Nostr network
+2. Provide a consistent experience for clients accessing capabilities
+3. Maintain compatibility with both protocols while preserving their security models
 
 By integrating these protocols, DVMCP combines the standardized capability framework of MCP with the decentralized, cryptographically secure messaging of Nostr. This integration enables several key advantages:
 
@@ -46,48 +50,6 @@ By integrating these protocols, DVMCP combines the standardized capability frame
 - **Interoperability**: Existing MCP and Nostr clients can interact with minimal adaptation
 
 The integration preserves the security model of both protocols while enabling new patterns of interaction between humans, AI systems and computational services.
-
-## Motivation
-
-While Nostr DVMs already provide a protocol for computational services over nostr, and MCP offers a standardized way to expose capabilities and consume them, there hasn't been a standardized way to bridge these protocols. This specification aims to:
-
-1. Enable discovery of MCP servers and their capabilities through the Nostr network
-2. Provide a consistent experience for clients accessing capabilities
-3. Maintain compatibility with both protocols while preserving their security models
-
-## Protocol Overview
-In order to provide a consistent and compatible experience between the two protocols, this specification has the convention of using the `content` field of the events for the JSON RPC messages defined in the model context protocol, avoiding transformations between protocols, and placing all nostr related stuff in the tags of the events. This ensures a smooth transition between the two protocols while preserving their unique features. We also have other conventions to leverage the nostr capabilities of the protocol, such as using nostr events for discoverability, notifications, and payments.
-
-There are four main actors in this workflow:
-- **Providers**: Entities running MCP server(s), operating behind a Nostr public key
-- **Servers**: MCP servers exposing capabilities, operated by a provider
-- **DVMs**: Bridge protocol that translates between Nostr and MCP protocols
-- **Clients**: MCP or Nostr clients that discover and consume capabilities from servers
-
-The protocol consists of three main phases:
-1. **Discovery**: Finding available MCP servers in Nostr and retrieving available capabilities
-2. **Capability Execution/Read**: Requesting tool execution, reading resources, or prompts, and receiving results
-3. **Capability Feedback**: Status updates, notifications, and payment handling
-
-## Protocol Consistency and Security
-
-### Message Structure Consistency
-
-DVMCP maintains consistent message structures across all operations:
-
-1. **JSON-RPC in Content**: All MCP JSON-RPC messages are placed in the Nostr event `content` field without modification, preserving the MCP protocol structure.
-
-2. **Nostr Tags for Metadata**: All Nostr-specific metadata uses event tags:
-   - `s`: Server identifier for targeting specific servers
-   - `p`: Public key for addressing providers or clients
-   - `e`: Event id, references for correlating requests and responses
-   - `method`: Method name for easy filtering and routing
-
-3. **Event Kind Separation**: Different event kinds are used for different message categories:
-   - `31316`-`31319`: Server announcements and capability listings
-   - `5910`: Client requests
-   - `6910`: Server responses
-   - `7000`: Notifications and feedback
 
 ### Public Key Cryptography
 
@@ -105,6 +67,39 @@ DVMCP leverages Nostr's public key cryptography to ensure message authenticity a
 
 3. **Authorization Flow**: The cryptographic properties enable secure authorization flows for paid services and private capabilities without requiring centralized authentication services.
 
+## Protocol Overview
+In order to provide a consistent and compatible experience between the two protocols, this specification has the convention of using the `content` field of the events for the stringified JSON RPC messages defined in the model context protocol, avoiding transformations between protocols, and placing all nostr related stuff in the tags of the events. Because Nostr's content field is always text, the JSON RPC messages must be properly stringified before placement in the content field. This ensures a smooth transition between the two protocols while preserving their unique features.
+There are four main actors in this workflow:
+- **Providers**: Entities running MCP server(s), operating behind a Nostr public key
+- **Servers**: MCP servers exposing capabilities, operated by a provider
+- **DVMs**: Bridge protocol that translates between Nostr and MCP protocols
+- **Clients**: MCP or Nostr clients that discover and consume capabilities from servers
+
+The protocol consists of three main phases:
+1. **Discovery**: Finding available MCP servers in Nostr and retrieving available capabilities
+2. **Capability Execution/Read**: Requesting tool execution, reading resources, or prompts, and receiving results
+3. **Capability Feedback**: Status updates, notifications, and payment handling
+
+## Protocol Consistency and Security
+
+### Message Structure Consistency
+
+DVMCP maintains consistent message structures across all operations:
+
+1. **JSON-RPC in Content**: All MCP JSON-RPC messages are placed in the Nostr event `content` field as stringified JSON, since Nostr event content is always text. The JSON-RPC messages must be properly stringified when added to the content field and parsed when retrieved.
+
+2. **Nostr Tags for Metadata**: All Nostr-specific metadata uses event tags:
+   - `s`: Server identifier for targeting specific servers
+   - `p`: Public key for addressing providers or clients
+   - `e`: Event id, references for correlating requests and responses
+   - `method`: Method name for easy filtering and routing
+
+3. **Event Kind Separation**: Different event kinds are used for different message categories:
+   - `31316`-`31319`: Server announcements and capability listings
+   - `5910`: Client requests
+   - `6910`: Server responses
+   - `20123`: Notifications and feedback (ephemeral)
+
 ## Event Kinds
 
 This specification defines these event kinds:
@@ -117,10 +112,10 @@ This specification defines these event kinds:
 | 31319 | Prompts List                                     |
 | 5910  | Requests                                         |
 | 6910  | Responses                                        |
-| 7000  | Feedback/Notifications                           |
+| 20123 | Feedback/Notifications (Ephemeral)               |
 
 ## Server Discovery
-DVMCP provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability when providing a "public" or accessible service. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key.
+DVMCP provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability when providing a "public" or accessible service. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key or server identifier.
 
 ### Discovery via Server Announcements (Public Servers)
 
@@ -338,7 +333,8 @@ For servers that are not publicly announced, clients can use the MCP initializat
     }
   },
   "tags": [
-    ["e", "<client-init-request-id>"]
+    ["e", "<client-init-request-id>"],
+    ["d", "<server-identifier>"]
   ]
 }
 ```
@@ -609,15 +605,17 @@ To list prompts, use the list operation template with `method: "prompts/list"` a
 
 Notifications in DVMCP are divided into two categories: MCP-compliant notifications that follow the Model Context Protocol specification, and Nostr-specific notifications that leverage Nostr's event-based architecture for features like payment handling.
 
+For notifications, we use an ephemeral event type (20123), meaning they are not expected to be stored by relays.
+
 ### MCP Notifications
 
-MCP notifications are sent using kind 7000 events with MCP-compliant notification methods. The direction of the notifications is determined by the `p` tag used. Client to server notifications are signed by the client pubkey and use the server pubkey as `p` tag, server to client notifications are signed by the server's provider pubkey and use the client pubkey as `p` tag.
+MCP notifications are sent using kind 20123 events with MCP-compliant notification methods. The direction of the notifications is determined by the `p` tag used. Client to server notifications are signed by the client pubkey and use the server pubkey as `p` tag, server to client notifications are signed by the server's provider pubkey and use the client pubkey as `p` tag.
 
 #### Notification Template
 
 ```json
 {
-  "kind": 7000,
+  "kind": 20123,
   "pubkey": "<provider-pubkey>",
   "content": {
     "jsonrpc": "2.0",
@@ -659,7 +657,7 @@ For Nostr-specific features like payment handling, we use the event tags while k
 
 ```json
 {
-  "kind": 7000,
+  "kind": 20123,
   "pubkey": "<provider-pubkey>",
   "content": "",
   "tags": [

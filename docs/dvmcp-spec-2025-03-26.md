@@ -36,10 +36,10 @@ This document defines how Nostr and Data Vending Machines can be used to expose 
 
 The [Model Context Protocol](https://modelcontextprotocol.io/introduction) provides a protocol specification to create servers exposing capabilities and clients consuming them. Meanwhile, the Nostr network and Data Vending Machines offer a decentralized way to announce and consume computational services. This specification defines how to bridge these protocols, allowing MCP servers to advertise and provide their services through the Nostr network.
 
-While Nostr DVMs already provide a protocol for computational services over Nostr, and MCP offers a standardized way to expose capabilities and consume them, there hasn't been a standardized way to bridge these protocols. This specification aims to:
+This specification aims to:
 
 1. Enable discovery of MCP servers and their capabilities through the Nostr network
-2. Provide a consistent experience for clients accessing capabilities
+2. Provide a consistent experience for clients accessing capabilities, and servers exposing their capabilities
 3. Maintain compatibility with both protocols while preserving their security models
 
 By integrating these protocols, DVMCP combines the standardized capability framework of MCP with the decentralized, cryptographically secure messaging of Nostr. This integration enables several key advantages:
@@ -80,7 +80,7 @@ The protocol consists of three main phases:
 2. **Capability Execution/Read**: Requesting tool execution, reading resources, or prompts, and receiving results
 3. **Capability Feedback**: Status updates, notifications, and payment handling
 
-## Protocol Consistency and Security
+## Protocol Consistency
 
 ### Message Structure Consistency
 
@@ -89,6 +89,7 @@ DVMCP maintains consistent message structures across all operations:
 1. **JSON-RPC in Content**: All MCP JSON-RPC messages are placed in the Nostr event `content` field as stringified JSON, since Nostr event content is always text. The JSON-RPC messages must be properly stringified when added to the content field and parsed when retrieved.
 
 2. **Nostr Tags for Metadata**: All Nostr-specific metadata uses event tags:
+   - `d`: Unique identifier for the event, used by servers to define their server identifier
    - `s`: Server identifier for targeting specific servers
    - `p`: Public key for addressing providers or clients
    - `e`: Event id, references for correlating requests and responses
@@ -154,7 +155,7 @@ Providers announce their servers and capabilities by publishing events with kind
   },
   "tags": [
     ["d", "<server-identifier>"],                    // Required: Unique identifier for the server
-    ["name", "ExampleServer"],                      // Required: Human-readable server name
+    ["name", "Example Server"],                      // Required: Human-readable server name
     ["about", "Server description"],                // Optional: Server description
     ["picture", "https://example.com/server.png"],  // Optional: Server icon/avatar URL
     ["website", "https://example.com"],            // Optional: Server website
@@ -165,7 +166,6 @@ Providers announce their servers and capabilities by publishing events with kind
 ```
 
 #### Tools List Event
-
 ```json
 {
   "kind": 31317,
@@ -193,7 +193,7 @@ Providers announce their servers and capabilities by publishing events with kind
     }
   },
   "tags": [
-    ["d", "<server-identifier>/tools/list"],      // Required: Unique identifier for the tools list
+    ["d", "<unique-identifier>"],                              // Required: Unique identifier for the tools list
     ["s", "<server-identifier>"],                 // Required: Reference to the server
     ["t", "get_weather"]                         // Required: One t tag per tool name for enhanced discoverability
   ]
@@ -221,7 +221,7 @@ Providers announce their servers and capabilities by publishing events with kind
     }
   },
   "tags": [
-    ["d", "<server-identifier>/resources/list"],  // Required: Unique identifier for the resources list
+    ["d", "<unique-identifier>"],                          // Required: Unique identifier for the resources list
     ["s", "<server-identifier>"],                 // Required: Reference to the server
     ["t", "main.rs"]                             // Optional: One t tag per resource name for enhanced discoverability
   ]
@@ -254,7 +254,7 @@ Providers announce their servers and capabilities by publishing events with kind
     }
   },
   "tags": [
-    ["d", "<server-identifier>/prompts/list"],   // Required: Unique identifier for the prompts list
+    ["d", "<unique-identifier>"],                           // Required: Unique identifier for the prompts list
     ["s", "<server-identifier>"],                // Required: Reference to the server
     ["t", "code_review"]                        // Optional: One t tag per prompt name for enhanced discoverability
   ]
@@ -341,7 +341,7 @@ For servers that are not publicly announced, clients can use the MCP initializat
 
 ## Capability Operations
 
-After initialization, clients can interact with server capabilities, event if the server is public you can still requesting list tools, resources, prompts, in order to use pagination if necessary:
+After initialization, clients can interact with server capabilities, even if the server is public, and its exposing capabilities publicly, you can still requesting list tools, resources, prompts, in order to use pagination if necessary:
 
 ### List Operations
 
@@ -607,9 +607,11 @@ Notifications in DVMCP are divided into two categories: MCP-compliant notificati
 
 For notifications, we use an ephemeral event type (20123), meaning they are not expected to be stored by relays.
 
-### MCP Notifications
+### MCP-compliant Notifications
 
-MCP notifications are sent using kind 20123 events with MCP-compliant notification methods. The direction of the notifications is determined by the `p` tag used. Client to server notifications are signed by the client pubkey and use the server pubkey as `p` tag, server to client notifications are signed by the server's provider pubkey and use the client pubkey as `p` tag.
+For MCP-compliant notifications, the content field follows the same pattern as other MCP messages, containing a stringified JSON RPC object that adheres to the MCP specification.
+
+The direction of the notifications is determined by the `p` tag used. Client to server notifications are signed by the client pubkey and use the server pubkey as `p` tag, server to client notifications are signed by the server's provider pubkey and use the client pubkey as `p` tag.
 
 #### Notification Template
 
@@ -726,7 +728,7 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 
 1. Use consistent server identifiers in the `d` tags
 2. Include proper reference tags (`s` tags) for backward discovery
-3. Structure event content as valid JSON-RPC objects according to MCP specification
+3. Structure event content as valid JSON-RPC stringified objects according to MCP specification
 4. Respond to initialization requests with proper capability information
 5. Include appropriate error information for failed requests
 6. Process notifications according to the MCP specification
@@ -734,11 +736,10 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 
 ### Clients MUST:
 
-1. Initialize connections properly before making other requests
-2. Include the proper server reference in the `s` tag for all requests
-3. Parse JSON-RPC responses from the event content
-4. Handle error conditions appropriately
-5. Track event IDs for request-response correlation
+1. Include the proper server reference in the `s` tag for all requests
+2. Parse JSON-RPC responses from the event content
+3. Handle error conditions appropriately
+4. Track event IDs for request-response correlation
 
 ## Complete Protocol Flow
 
@@ -809,16 +810,14 @@ sequenceDiagram
 
 Unlike direct MCP connections, Nostr's pub/sub model requires special handling for long-lived subscriptions:
 
-1. **Connection Persistence**: Clients SHOULD maintain relay connections to receive notifications for subscribed resources.
+1. **Connection Persistence**: Clients and servers SHOULD maintain relay connections to receive notifications for subscribed resources.
 
-2. **Subscription Renewal**: Due to the potential ephemeral nature of Nostr connections, clients MAY periodically renew subscriptions by sending a new subscription request.
-
-3. **Progress Notifications**: For long-running operations, servers SHOULD send progress notifications as defined in the protocol to:
+2. **Progress Notifications**: For long-running operations, servers SHOULD send progress notifications as defined in the protocol to:
    - Indicate processing status
    - Prevent client timeouts
    - Maintain subscription activity
 
-4. **Subscription Termination**: Subscriptions can be terminated in several ways:
+3. **Subscription Termination**: Subscriptions can be terminated in several ways:
    - When the client receives a successful result
    - When an error occurs during processing
    - When the client explicitly sends a cancellation request

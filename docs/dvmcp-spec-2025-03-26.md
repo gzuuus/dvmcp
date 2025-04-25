@@ -12,7 +12,7 @@ This document defines how Nostr and Data Vending Machines can be used to expose 
 - [Introduction](#introduction)
 - [Motivation](#motivation)
 - [Protocol Overview](#protocol-overview)
-- [Protocol Consistency and Security](#protocol-consistency-and-security)
+- [Protocol Consistency](#protocol-consistency)
   - [Message Structure Consistency](#message-structure-consistency)
 - [Event Kinds](#event-kinds)
 - [Server Discovery](#server-discovery)
@@ -47,7 +47,8 @@ By integrating these protocols, DVMCP combines the standardized capability frame
 - **Discoverability**: MCP servers can be discovered through the Nostr network without centralized registries
 - **Verifiability**: All messages are cryptographically signed using Nostr's public keys
 - **Decentralization**: No single point of failure for service discovery or communication
-- **Interoperability**: Existing MCP and Nostr clients can interact with minimal adaptation
+- **Protocol Interoperability**: Both MCP and DVMCP utilize JSON-RPC patterns, enabling seamless communication between the protocols
+- **Client Compatibility**: Existing MCP and Nostr clients can interact with minimal adaptation
 
 The integration preserves the security model of both protocols while enabling new patterns of interaction between humans, AI systems and computational services.
 
@@ -68,29 +69,18 @@ DVMCP leverages Nostr's public key cryptography to ensure message authenticity a
 3. **Authorization Flow**: The cryptographic properties enable secure authorization flows for paid services and private capabilities without requiring centralized authentication services.
 
 ## Protocol Overview
-In order to provide a consistent and compatible experience between the two protocols, this specification has the convention of using the `content` field of the events for the stringified JSON RPC messages defined in the model context protocol, avoiding transformations between protocols, and placing all nostr related stuff in the tags of the events. Because Nostr's content field is always text, the JSON RPC messages must be properly stringified before placement in the content field. This ensures a smooth transition between the two protocols while preserving their unique features.
-There are four main actors in this workflow:
-- **Providers**: Entities running MCP server(s), operating behind a Nostr public key
-- **Servers**: MCP servers exposing capabilities, operated by a provider
-- **DVMs**: Bridge protocol that translates between Nostr and MCP protocols
-- **Clients**: MCP or Nostr clients that discover and consume capabilities from servers
 
-The protocol consists of three main phases:
-1. **Discovery**: Finding available MCP servers in Nostr and retrieving available capabilities
-2. **Capability Execution/Read**: Requesting tool execution, reading resources, or prompts, and receiving results
-3. **Capability Feedback**: Status updates, notifications, and payment handling
+DVMCP bridges MCP and Nostr protocols through a consistent message structure and well-defined workflow.
 
-## Protocol Consistency
+### Message Structure
 
-### Message Structure Consistency
+The protocol uses these key design principles for message handling:
 
-DVMCP maintains consistent message structures across all operations:
+1. **Content Field Structure**: The `content` field of Nostr events contains stringified MCP messages following the JSON-RPC pattern. This approach maintains protocol integrity while enabling translation between the two systems.
 
-1. **JSON-RPC in Content**: All MCP JSON-RPC messages are placed in the Nostr event `content` field as stringified JSON, since Nostr event content is always text. The JSON-RPC messages must be properly stringified when added to the content field and parsed when retrieved.
-
-2. **Nostr Tags for Metadata**: All Nostr-specific metadata uses event tags:
+2. **Nostr Metadata in Tags**: All Nostr-specific metadata uses event tags:
    - `d`: Unique identifier for the event, used by servers to define their server identifier
-   - `s`: Server identifier for targeting specific servers
+   - `s`: Server identifier for targeting specific servers, should be the `d` tags of the server being targeted
    - `p`: Public key for addressing providers or clients
    - `e`: Event id, references for correlating requests and responses
    - `method`: Method name for easy filtering and routing
@@ -100,6 +90,22 @@ DVMCP maintains consistent message structures across all operations:
    - `5910`: Client requests
    - `6910`: Server responses
    - `20123`: Notifications and feedback (ephemeral)
+
+### Main Actors
+
+There are four main actors in this workflow:
+
+- **Providers**: Entities running MCP server(s), operating behind a Nostr public key
+- **Servers**: MCP servers exposing capabilities, operated by a provider
+- **DVMs**: Bridge protocol that translates between Nostr and MCP protocols
+- **Clients**: MCP or Nostr clients that discover and consume capabilities from servers
+
+### Protocol Flow
+
+The protocol consists of three main phases:
+1. **Discovery**: Finding available MCP servers in Nostr and retrieving available capabilities
+2. **Capability Execution/Read**: Requesting tool execution, reading resources, or prompts, and receiving results
+3. **Capability Feedback**: Status updates, notifications, and payment handling
 
 ## Event Kinds
 
@@ -154,13 +160,13 @@ Providers announce their servers and capabilities by publishing events with kind
     }
   },
   "tags": [
-    ["d", "<server-identifier>"],                    // Required: Unique identifier for the server
-    ["name", "Example Server"],                      // Required: Human-readable server name
-    ["about", "Server description"],                // Optional: Server description
+    ["d", "<server-identifier>"],          // Required: Unique identifier for the server
+    ["name", "Example Server"],            // Optional: Human-readable server name
+    ["about", "Server description"],       // Optional: Server description
     ["picture", "https://example.com/server.png"],  // Optional: Server icon/avatar URL
-    ["website", "https://example.com"],            // Optional: Server website
-    ["k", "5910"],                                 // Required: Accepted event kinds (for requests)
-    ["support_encryption", "true"]                 // Optional: Whether server supports encrypted messages
+    ["website", "https://example.com"],    // Optional: Server website
+    ["k", "5910"],                         // Required: Accepted event kinds (for requests)
+    ["support_encryption", "true"]         // Optional: Whether server supports encrypted messages
   ]
 }
 ```
@@ -193,9 +199,9 @@ Providers announce their servers and capabilities by publishing events with kind
     }
   },
   "tags": [
-    ["d", "<unique-identifier>"],                              // Required: Unique identifier for the tools list
-    ["s", "<server-identifier>"],                 // Required: Reference to the server
-    ["t", "get_weather"]                         // Required: One t tag per tool name for enhanced discoverability
+    ["d", "<unique-identifier>"],        // Required: Unique identifier for the tools list
+    ["s", "<server-identifier>"],        // Required: Reference to the server
+    ["t", "get_weather"]                // Required: One t tag per tool name for enhanced discoverability
   ]
 }
 ```
@@ -221,9 +227,9 @@ Providers announce their servers and capabilities by publishing events with kind
     }
   },
   "tags": [
-    ["d", "<unique-identifier>"],                          // Required: Unique identifier for the resources list
-    ["s", "<server-identifier>"],                 // Required: Reference to the server
-    ["t", "main.rs"]                             // Optional: One t tag per resource name for enhanced discoverability
+    ["d", "<unique-identifier>"],        // Required: Unique identifier for the resources list
+    ["s", "<server-identifier>"],        // Required: Reference to the server
+    ["t", "main.rs"]                    // Optional: One t tag per resource name for enhanced discoverability
   ]
 }
 ```
@@ -254,9 +260,9 @@ Providers announce their servers and capabilities by publishing events with kind
     }
   },
   "tags": [
-    ["d", "<unique-identifier>"],                           // Required: Unique identifier for the prompts list
-    ["s", "<server-identifier>"],                // Required: Reference to the server
-    ["t", "code_review"]                        // Optional: One t tag per prompt name for enhanced discoverability
+    ["d", "<unique-identifier>"],        // Required: Unique identifier for the prompts list
+    ["s", "<server-identifier>"],        // Required: Reference to the server
+    ["t", "code_review"]                // Optional: One t tag per prompt name for enhanced discoverability
   ]
 }
 ```
@@ -387,10 +393,12 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
     }
   },
   "tags": [
-    ["e", "<request-event-id>"]                  // Required: Reference to the request event
+    ["e", "<request-event-id>"]        // Required: Reference to the request event
   ]
 }
 ```
+
+### Tools
 
 #### Capability-Specific Item Examples
 
@@ -412,7 +420,6 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 }
 ```
 
-### Tools
 
 #### Call Tool Request
 
@@ -478,8 +485,6 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 }
 ```
 
-To list resources, use the list operation template with `method: "resources/list"` and the response will contain a `resources` array with resource items.
-
 #### Read Resource Request
 
 ```json
@@ -523,7 +528,7 @@ To list resources, use the list operation template with `method: "resources/list
     }
   },
   "tags": [
-    ["e", "<request-event-id>"]                  // Required: Reference to the request event
+    ["e", "<request-event-id>"]        // Required: Reference to the request event
   ]
 }
 ```
@@ -544,8 +549,6 @@ To list resources, use the list operation template with `method: "resources/list
   ]
 }
 ```
-
-To list prompts, use the list operation template with `method: "prompts/list"` and the response will contain a `prompts` array with prompt items.
 
 #### Get Prompt Request
 
@@ -596,7 +599,7 @@ To list prompts, use the list operation template with `method: "prompts/list"` a
     }
   },
   "tags": [
-    ["e", "<request-event-id>"]                  // Required: Reference to the request event
+    ["e", "<request-event-id>"]        // Required: Reference to the request event
   ]
 }
 ```
@@ -740,7 +743,6 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 2. Parse JSON-RPC responses from the event content
 3. Handle error conditions appropriately
 4. Track event IDs for request-response correlation
-
 ## Complete Protocol Flow
 
 ```mermaid
@@ -782,9 +784,14 @@ sequenceDiagram
 
     Note over Client,Server: Tool Execution (Same for both paths)
     Client->>DVM: kind:5910, method:tools/call
-    DVM-->>Client: kind:7000, status:payment-required
-    Client->>DVM: Payment
-    DVM-->>Client: kind:7000, status:processing
+    
+    rect rgb(230, 240, 255)
+        Note over Client,DVM: Optional Payment Flow
+        DVM-->>Client: kind:7000, status:payment-required
+        Client->>DVM: Payment
+        DVM-->>Client: kind:7000, status:processing
+    end
+    
     DVM->>Server: Execute Tool
     Server-->>DVM: Results
     DVM-->>Client: kind:6910, Tool results
@@ -803,7 +810,7 @@ sequenceDiagram
 
     Note over Client,Server: MCP Notifications
     Server->>DVM: Resource updated
-    DVM-->>Client: kind:7000, notifications/resources/updated
+    DVM-->>Client: kind:20123, notifications/resources/updated
 ```
 
 ## Subscription Management

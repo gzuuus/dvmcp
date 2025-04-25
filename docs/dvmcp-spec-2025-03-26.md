@@ -47,7 +47,7 @@ By integrating these protocols, DVMCP combines the standardized capability frame
 - **Discoverability**: MCP servers can be discovered through the Nostr network without centralized registries
 - **Verifiability**: All messages are cryptographically signed using Nostr's public keys
 - **Decentralization**: No single point of failure for service discovery or communication
-- **Protocol Interoperability**: Both MCP and DVMCP utilize JSON-RPC patterns, enabling seamless communication between the protocols
+- **Protocol Interoperability**: Both MCP and DVMs utilize JSON-RPC patterns, enabling seamless communication between the protocols
 - **Client Compatibility**: Existing MCP and Nostr clients can interact with minimal adaptation
 
 The integration preserves the security model of both protocols while enabling new patterns of interaction between humans, AI systems and computational services.
@@ -89,7 +89,7 @@ The protocol uses these key design principles for message handling:
    - `31316`-`31319`: Server announcements and capability listings
    - `5910`: Client requests
    - `6910`: Server responses
-   - `20123`: Notifications and feedback (ephemeral)
+   - `21316`: Notifications and feedback (ephemeral)
 
 ### Main Actors
 
@@ -119,7 +119,7 @@ This specification defines these event kinds:
 | 31319 | Prompts List                                     |
 | 5910  | Requests                                         |
 | 6910  | Responses                                        |
-| 20123 | Feedback/Notifications (Ephemeral)               |
+| 21316 | Feedback/Notifications (Ephemeral)               |
 
 ## Server Discovery
 DVMCP provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability when providing a "public" or accessible service. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key or server identifier.
@@ -345,6 +345,11 @@ For servers that are not publicly announced, clients can use the MCP initializat
 }
 ```
 
+When a server responds to an initialization request, it includes a `d` tag in the response that serves as the server identifier. Clients should use this identifier in the `s` tag of subsequent requests to target this specific server. This approach allows clients to discover and interact with servers without prior knowledge of their identifiers.
+
+- Tags:
+  - `d`: Server identifier, uniquely identifies this server for future requests
+  - `e`: Reference to the client's initialization request event
 ## Capability Operations
 
 After initialization, clients can interact with server capabilities, even if the server is public, and its exposing capabilities publicly, you can still requesting list tools, resources, prompts, in order to use pagination if necessary:
@@ -468,7 +473,6 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
   },
   "tags": [
     ["e", "<request-event-id>"],
-    ["status", "success"]
   ]
 }
 ```
@@ -608,7 +612,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 
 Notifications in DVMCP are divided into two categories: MCP-compliant notifications that follow the Model Context Protocol specification, and Nostr-specific notifications that leverage Nostr's event-based architecture for features like payment handling.
 
-For notifications, we use an ephemeral event type (20123), meaning they are not expected to be stored by relays.
+For notifications, we use an ephemeral event type (21316), meaning they are not expected to be stored by relays.
 
 ### MCP-compliant Notifications
 
@@ -620,7 +624,7 @@ The direction of the notifications is determined by the `p` tag used. Client to 
 
 ```json
 {
-  "kind": 20123,
+  "kind": 21316,
   "pubkey": "<provider-pubkey>",
   "content": {
     "jsonrpc": "2.0",
@@ -662,7 +666,7 @@ For Nostr-specific features like payment handling, we use the event tags while k
 
 ```json
 {
-  "kind": 20123,
+  "kind": 21316,
   "pubkey": "<provider-pubkey>",
   "content": "",
   "tags": [
@@ -712,7 +716,6 @@ DVMCP handles two types of errors: protocol errors and execution errors.
   },
   "tags": [
     ["e", "<request-event-id>"],                  // Required: Reference to the request event
-    ["status", "error"]                          // Required: Indicates error status
   ]
 }
 ```
@@ -753,7 +756,7 @@ sequenceDiagram
     participant Server as MCP Server
 
     rect rgb(240, 240, 240)
-        Note over Client,Server: Discovery Path A: Public Server (Event-based)
+        Note over Client,Server: Discovery Path A: Public Server
         Note over Relay: Server events already published to relay
         
         Client->>Relay: Subscribe to kind:31316 events (Server Announcements)
@@ -767,7 +770,7 @@ sequenceDiagram
     end
 
     rect rgb(240, 240, 240)
-        Note over Client,Server: Discovery Path B: Direct Request (RPC-based)
+        Note over Client,Server: Discovery Path B: Direct Request
         Client->>DVM: kind:5910, method:initialize
         DVM->>Server: Initialize connection
         Server-->>DVM: Capability response
@@ -787,9 +790,8 @@ sequenceDiagram
     
     rect rgb(230, 240, 255)
         Note over Client,DVM: Optional Payment Flow
-        DVM-->>Client: kind:7000, status:payment-required
+        DVM-->>Client: kind:21316, status:payment-required
         Client->>DVM: Payment
-        DVM-->>Client: kind:7000, status:processing
     end
     
     DVM->>Server: Execute Tool
@@ -810,7 +812,7 @@ sequenceDiagram
 
     Note over Client,Server: MCP Notifications
     Server->>DVM: Resource updated
-    DVM-->>Client: kind:20123, notifications/resources/updated
+    DVM-->>Client: kind:21316, notifications/resources/updated
 ```
 
 ## Subscription Management

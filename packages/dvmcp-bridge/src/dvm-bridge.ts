@@ -132,6 +132,7 @@ export class DVMBridge {
                 ['status', 'processing'],
                 ['e', event.id],
                 ['p', event.pubkey],
+                ['tool', jobRequest.name],
               ],
             });
             await this.relayHandler.publishEvent(processingStatus);
@@ -163,6 +164,7 @@ export class DVMBridge {
                       ['invoice', zapRequest.paymentRequest],
                       ['e', event.id],
                       ['p', event.pubkey],
+                      ['tool', jobRequest.name],
                     ],
                   });
                   await this.relayHandler.publishEvent(paymentRequiredStatus);
@@ -187,6 +189,7 @@ export class DVMBridge {
                         ],
                         ['e', event.id],
                         ['p', event.pubkey],
+                        ['tool', jobRequest.name],
                       ],
                     });
                     await this.relayHandler.publishEvent(paymentFailedStatus);
@@ -200,6 +203,7 @@ export class DVMBridge {
                       ['status', 'payment-accepted'],
                       ['e', event.id],
                       ['p', event.pubkey],
+                      ['tool', jobRequest.name],
                     ],
                   });
                   await this.relayHandler.publishEvent(paymentAcceptedStatus);
@@ -219,6 +223,7 @@ export class DVMBridge {
                     ['status', 'success'],
                     ['e', event.id],
                     ['p', event.pubkey],
+                    ['tool', jobRequest.name],
                   ],
                 });
                 await this.relayHandler.publishEvent(successStatus);
@@ -229,6 +234,7 @@ export class DVMBridge {
                     ['c', 'execute-tool-response'],
                     ['e', event.id],
                     ['p', event.pubkey],
+                    ['tool', jobRequest.name],
                   ],
                 });
                 await this.relayHandler.publishEvent(response);
@@ -244,6 +250,7 @@ export class DVMBridge {
                   ],
                   ['e', event.id],
                   ['p', event.pubkey],
+                  ['tool', jobRequest.name],
                 ],
               });
               await this.relayHandler.publishEvent(errorStatus);
@@ -251,6 +258,7 @@ export class DVMBridge {
           }
         }
       } else {
+        const jobRequest = JSON.parse(event.content);
         const errorStatus = keyManager.signEvent({
           ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
           content: 'Unauthorized: Pubkey not in whitelist',
@@ -258,6 +266,7 @@ export class DVMBridge {
             ['status', 'error'],
             ['e', event.id],
             ['p', event.pubkey],
+            ['tool', jobRequest.name],
           ],
         });
         await this.relayHandler.publishEvent(errorStatus);

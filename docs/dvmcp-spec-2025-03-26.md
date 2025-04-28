@@ -201,7 +201,8 @@ Providers announce their servers and capabilities by publishing events with kind
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the tools list
     ["s", "<server-identifier>"],        // Required: Reference to the server
-    ["t", "get_weather"]                // Required: One t tag per tool name for enhanced discoverability
+    ["t", "get_weather"],                // Required: One t tag per tool name for enhanced discoverability
+    ["t", "get_weather_future"] 
   ]
 }
 ```

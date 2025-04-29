@@ -5,7 +5,7 @@
 
 `draft` `mcp:2025-03-26` `rev1`
 
-This document defines how Nostr and Data Vending Machines can be used to expose Model Context Protocol (MCP) server capabilities, enabling standardized usage of these resources for both machines and humans.
+This document defines how Nostr and Data Vending Machines can be used to expose Model Context Protocol (MCP) server capabilities, enabling standardized usage of these resources.
 
 ## Table of Contents
 
@@ -76,20 +76,25 @@ DVMCP bridges MCP and Nostr protocols through a consistent message structure and
 
 The protocol uses these key design principles for message handling:
 
-1. **Content Field Structure**: The `content` field of Nostr events contains stringified MCP messages following the JSON-RPC pattern. This approach maintains protocol integrity while enabling translation between the two systems.
+1. **Content Field Structure**: The `content` field of Nostr events contains stringified MCP messages. This approach maintains protocol integrity while enabling translation between the two systems.
 
 2. **Nostr Metadata in Tags**: All Nostr-specific metadata uses event tags:
-   - `d`: Unique identifier for the event, used by servers to define their server identifier
-   - `s`: Server identifier for targeting specific servers, should be the `d` tags of the server being targeted
+   - `d`: Unique server identifier
+   - `s`: Server identifier for targeting specific servers, should be the `d` tag of the server being targeted
    - `p`: Public key for addressing providers or clients
    - `e`: Event id, references for correlating requests and responses
-   - `method`: Method name for easy filtering and routing
+   - `method`: MCP method for easy filtering and routing, it's duplicated from the MCP message of the content
+   - `cap`: Capability name tag for tools, resources, and prompts to enhance discoverability and filtering
 
-3. **Event Kind Separation**: Different event kinds are used for different message categories:
-   - `31316`-`31319`: Server announcements and capability listings
-   - `5910`: Client requests
-   - `6910`: Server responses
-   - `21316`: Notifications and feedback (ephemeral)
+3. **Event Kind Separation**: Different event kinds are used for different message categories with specific storage characteristics:
+   - `31316`-`31319`: Server announcements and capability listings (addressable events)
+   - `25910`: Client requests (ephemeral events)
+   - `26910`: Server responses (ephemeral events)
+   - `21316`: Notifications and feedback (ephemeral events)
+   
+   These event kinds follow Nostr's conventions in [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md#kinds):
+   - For kind n such that 20000 <= n < 30000, events are ephemeral, which means they are not expected to be stored by relays for a long period, but rather just transmitted.
+   - For kind n such that 30000 <= n < 40000, events are addressable by their kind, pubkey and d tag value -- which means that, for each combination of kind, pubkey and the d tag value, only the latest event MUST be stored by relays, older versions MAY be discarded.
 
 ### Main Actors
 
@@ -117,9 +122,9 @@ This specification defines these event kinds:
 | 31317 | Tools List                                       |
 | 31318 | Resources List                                   |
 | 31319 | Prompts List                                     |
-| 5910  | Requests                                         |
-| 6910  | Responses                                        |
-| 21316 | Feedback/Notifications (Ephemeral)               |
+| 25910  | Requests                                         |
+| 26910  | Responses                                        |
+| 21316 | Feedback/Notifications                           |
 
 ## Server Discovery
 DVMCP provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability when providing a "public" or accessible service. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key or server identifier.
@@ -161,11 +166,11 @@ Providers announce their servers and capabilities by publishing events with kind
   },
   "tags": [
     ["d", "<server-identifier>"],          // Required: Unique identifier for the server
+    ["k", "25910"],                         // Required: Accepted event kinds (for requests)
     ["name", "Example Server"],            // Optional: Human-readable server name
     ["about", "Server description"],       // Optional: Server description
     ["picture", "https://example.com/server.png"],  // Optional: Server icon/avatar URL
     ["website", "https://example.com"],    // Optional: Server website
-    ["k", "5910"],                         // Required: Accepted event kinds (for requests)
     ["support_encryption", "true"]         // Optional: Whether server supports encrypted messages
   ]
 }
@@ -200,9 +205,8 @@ Providers announce their servers and capabilities by publishing events with kind
   },
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the tools list
-    ["s", "<server-identifier>"],        // Required: Reference to the server
-    ["t", "get_weather"],                // Required: One t tag per tool name for enhanced discoverability
-    ["t", "get_weather_future"] 
+    ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
+    ["cap", "get_weather"]                // Required: One cap tag per tool name
   ]
 }
 ```
@@ -229,8 +233,8 @@ Providers announce their servers and capabilities by publishing events with kind
   },
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the resources list
-    ["s", "<server-identifier>"],        // Required: Reference to the server
-    ["t", "main.rs"]                    // Optional: One t tag per resource name for enhanced discoverability
+    ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
+    ["cap", "main.rs"]                    // Optional: One cap tag per resource name
   ]
 }
 ```
@@ -262,8 +266,8 @@ Providers announce their servers and capabilities by publishing events with kind
   },
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the prompts list
-    ["s", "<server-identifier>"],        // Required: Reference to the server
-    ["t", "code_review"]                // Optional: One t tag per prompt name for enhanced discoverability
+    ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
+    ["cap", "code_review"]                // Optional: One cap tag per prompt name
   ]
 }
 ```
@@ -276,7 +280,7 @@ For servers that are not publicly announced, clients can use the MCP initializat
 
 ```json
 {
-  "kind": 5910,
+  "kind": 25910,
   "content": {
     "jsonrpc": "2.0",
     "id": 1,
@@ -296,9 +300,9 @@ For servers that are not publicly announced, clients can use the MCP initializat
     }
   },
   "tags": [
-    ["method", "initialize"],
-    ["p", "<provider-pubkey>"]
-    ["s", "<server-identifier>"]
+    ["p", "<provider-pubkey>"],
+    ["s", "<server-identifier>"],
+    ["method", "initialize"]
   ]
 }
 ```
@@ -312,7 +316,7 @@ For servers that are not publicly announced, clients can use the MCP initializat
 
 ```json
 {
-  "kind": 6910,
+  "kind": 26910,
   "pubkey": "<provider-pubkey>",
   "content": {
     "jsonrpc": "2.0",
@@ -351,9 +355,10 @@ When a server responds to an initialization request, it includes a `d` tag in th
 - Tags:
   - `d`: Server identifier, uniquely identifies this server for future requests
   - `e`: Reference to the client's initialization request event
+
 ## Capability Operations
 
-After initialization, clients can interact with server capabilities, even if the server is public, and its exposing capabilities publicly, you can still requesting list tools, resources, prompts, in order to use pagination if necessary:
+After initialization, clients can interact with server capabilities, even if the server is public, and its exposing capabilities publicly, you can still requesting list tools, resources, prompts, in order to use pagination if necessary
 
 ### List Operations
 
@@ -363,7 +368,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 
 ```json
 {
-  "kind": 5910,
+  "kind": 25910,
   "pubkey": "<client-pubkey>",
   "id": "<request-event-id>",
   "content": {
@@ -386,7 +391,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 
 ```json
 {
-  "kind": 6910,
+  "kind": 26910,
   "pubkey": "<provider-pubkey>",
   "content": {
     "jsonrpc": "2.0",
@@ -431,7 +436,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 
 ```json
 {
-  "kind": 5910,
+  "kind": 25910,
   "pubkey": "<client-pubkey>",
   "id": "<request-event-id>",
   "content": {
@@ -457,7 +462,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 
 ```json
 {
-  "kind": 6910,
+  "kind": 26910,
   "pubkey": "<provider-pubkey>",
   "content": {
     "jsonrpc": "2.0",
@@ -494,7 +499,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 
 ```json
 {
-  "kind": 5910,
+  "kind": 25910,
   "pubkey": "<client-pubkey>",
   "id": "<request-event-id>",
   "content": {
@@ -517,7 +522,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 
 ```json
 {
-  "kind": 6910,
+  "kind": 26910,
   "pubkey": "<provider-pubkey>",
   "content": {
     "jsonrpc": "2.0",
@@ -559,7 +564,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 
 ```json
 {
-  "kind": 5910,
+  "kind": 25910,
   "pubkey": "<client-pubkey>",
   "id": "<request-event-id>",
   "content": {
@@ -585,7 +590,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 
 ```json
 {
-  "kind": 6910,
+  "kind": 26910,
   "pubkey": "<provider-pubkey>",
   "content": {
     "jsonrpc": "2.0",
@@ -634,8 +639,8 @@ The direction of the notifications is determined by the `p` tag used. Client to 
   },
   "tags": [
     ["p", "<client-pubkey>"],                    // Required: Target public key (recipient)
-    ["s", "<server-identifier>"],                // Required: Server identifier
     ["method", "notifications/<type>"],          // Required: Same as method in content
+    ["s", "<server-identifier>"],                // Optional: Server identifier (for Client to Server notifications)
     ["e", "<request-event-id>"]                  // Optional: Reference to the request (for progress/cancel)
   ]
 }
@@ -672,9 +677,8 @@ For Nostr-specific features like payment handling, we use the event tags while k
   "content": "",
   "tags": [
     ["status", "payment-required"],              // Required: Indicates payment is needed
-    ["amount", "1000", "lnbc..."],             // Required: Amount in sats and Lightning invoice
+    ["amount", "1000", "lnbc..."],               // Required: Amount in sats and Lightning invoice
     ["e", "<job-request-id>"],                   // Required: Reference to the original request
-    ["expiration", "<unix-timestamp>"]           // Optional: When the payment request expires
   ]
 }
 ```
@@ -694,7 +698,7 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 
 ```json
 {
-  "kind": 6910,
+  "kind": 26910,
   "pubkey": "<provider-pubkey>",
   "content": {
     "jsonrpc": "2.0",
@@ -734,12 +738,11 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 ### Providers and Servers MUST:
 
 1. Use consistent server identifiers in the `d` tags
-2. Include proper reference tags (`s` tags) for backward discovery
-3. Structure event content as valid JSON-RPC stringified objects according to MCP specification
-4. Respond to initialization requests with proper capability information
-5. Include appropriate error information for failed requests
-6. Process notifications according to the MCP specification
-7. Use standard Nostr tags for Nostr-specific features (like payments)
+2. Structure event content as valid JSON-RPC stringified objects according to MCP specification
+3. Respond to initialization requests with proper capability information
+4. Include appropriate error information for failed requests
+5. Process notifications according to the MCP specification
+6. Use standard Nostr tags for Nostr-specific features (like payments)
 
 ### Clients MUST:
 
@@ -747,6 +750,8 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 2. Parse JSON-RPC responses from the event content
 3. Handle error conditions appropriately
 4. Track event IDs for request-response correlation
+5. Subscribe to notifications from the server is interacting with
+
 ## Complete Protocol Flow
 
 ```mermaid
@@ -772,22 +777,22 @@ sequenceDiagram
 
     rect rgb(240, 240, 240)
         Note over Client,Server: Discovery Path B: Direct Request
-        Client->>DVM: kind:5910, method:initialize
+        Client->>DVM: kind:25910, method:initialize
         DVM->>Server: Initialize connection
         Server-->>DVM: Capability response
-        DVM-->>Client: kind:6910, Server capabilities
+        DVM-->>Client: kind:26910, Server capabilities
         
         Note over Client,DVM: Direct capability requests
-        Client->>DVM: kind:5910, method:tools/list
+        Client->>DVM: kind:25910, method:tools/list
         DVM->>Server: Request tools list
         Server-->>DVM: Tools list
-        DVM-->>Client: kind:6910, Tools list
+        DVM-->>Client: kind:26910, Tools list
         
         Note over Client,DVM: (Similar flows for resources/list and prompts/list)
     end
 
     Note over Client,Server: Tool Execution (Same for both paths)
-    Client->>DVM: kind:5910, method:tools/call
+    Client->>DVM: kind:25910, method:tools/call
     
     rect rgb(230, 240, 255)
         Note over Client,DVM: Optional Payment Flow
@@ -797,19 +802,19 @@ sequenceDiagram
     
     DVM->>Server: Execute Tool
     Server-->>DVM: Results
-    DVM-->>Client: kind:6910, Tool results
+    DVM-->>Client: kind:26910, Tool results
 
     Note over Client,Server: Resource Access
-    Client->>DVM: kind:5910, method:resources/read
+    Client->>DVM: kind:25910, method:resources/read
     DVM->>Server: Read Resource
     Server-->>DVM: Resource contents
-    DVM-->>Client: kind:6910, Resource content
+    DVM-->>Client: kind:26910, Resource content
 
     Note over Client,Server: Prompt Access
-    Client->>DVM: kind:5910, method:prompts/get
+    Client->>DVM: kind:25910, method:prompts/get
     DVM->>Server: Get Prompt
     Server-->>DVM: Prompt content
-    DVM-->>Client: kind:6910, Prompt content
+    DVM-->>Client: kind:26910, Prompt content
 
     Note over Client,Server: MCP Notifications
     Server->>DVM: Resource updated

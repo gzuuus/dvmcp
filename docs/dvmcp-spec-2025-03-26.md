@@ -48,9 +48,8 @@ By integrating these protocols, DVMCP combines the standardized capability frame
 - **Verifiability**: All messages are cryptographically signed using Nostr's public keys
 - **Decentralization**: No single point of failure for service discovery or communication
 - **Protocol Interoperability**: Both MCP and DVMs utilize JSON-RPC patterns, enabling seamless communication between the protocols
-- **Client Compatibility**: Existing MCP and Nostr clients can interact with minimal adaptation
 
-The integration preserves the security model of both protocols while enabling new patterns of interaction between humans, AI systems and computational services.
+The integration preserves the security model of both protocols while enabling new patterns of interaction.
 
 ### Public Key Cryptography
 
@@ -62,7 +61,7 @@ DVMCP leverages Nostr's public key cryptography to ensure message authenticity a
    - Responses are from the expected servers
 
 2. **Identity Management**: Public keys serve as persistent identifiers for all actors in the system:
-   - Providers maintain consistent identities across relays
+   - Providers can maintain consistent identities across relays
    - Clients can be uniquely identified for authorization purposes
    - Server identifiers are associated with provider public keys
 
@@ -79,12 +78,12 @@ The protocol uses these key design principles for message handling:
 1. **Content Field Structure**: The `content` field of Nostr events contains stringified MCP messages. This approach maintains protocol integrity while enabling translation between the two systems.
 
 2. **Nostr Metadata in Tags**: All Nostr-specific metadata uses event tags:
-   - `d`: Unique server identifier
+   - `d`: Unique server identifier, defined by the provider
    - `s`: Server identifier for targeting specific servers, should be the `d` tag of the server being targeted
    - `p`: Public key for addressing providers or clients
    - `e`: Event id, references for correlating requests and responses
    - `method`: MCP method for easy filtering and routing, it's duplicated from the MCP message of the content
-   - `cap`: Capability name tag for tools, resources, and prompts to enhance discoverability and filtering
+   - `cap`: Capability name tag for tools, resources, and prompts to enhance discoverability, filtering, and provide nostr related metadata
 
 3. **Event Kind Separation**: Different event kinds are used for different message categories with specific storage characteristics:
    - `31316`-`31319`: Server announcements and capability listings (addressable events)
@@ -118,12 +117,12 @@ This specification defines these event kinds:
 
 | Kind  | Description                                      |
 | ----- | ------------------------------------------------ |
-| 31316 | Server Announcement (MCP server initialization)  |
+| 31316 | Server Announcement                              |
 | 31317 | Tools List                                       |
 | 31318 | Resources List                                   |
 | 31319 | Prompts List                                     |
-| 25910  | Requests                                         |
-| 26910  | Responses                                        |
+| 25910 | Requests                                         |
+| 26910 | Responses                                        |
 | 21316 | Feedback/Notifications                           |
 
 ## Server Discovery
@@ -132,6 +131,8 @@ DVMCP provides two methods of server discovery, the main differences between the
 ### Discovery via Server Announcements (Public Servers)
 
 Providers announce their servers and capabilities by publishing events with kinds 31316 (server), 31317 (tools/list), 31318 (resources/list), and 31319 (prompts/list).
+
+After a client discovers a server through these announcements, it can immediately begin making requests to the server without requiring an explicit initialization step. This stateless approach aligns with the "hands-off" nature of public servers, which are designed to receive arbitrary requests without maintaining client connection state.
 
 #### Server Announcement Event
 
@@ -145,7 +146,6 @@ Providers announce their servers and capabilities by publishing events with kind
     "result": {
       "protocolVersion": "2025-03-26",
       "capabilities": {
-        "logging": {},
         "prompts": {
           "listChanged": true
         },
@@ -166,7 +166,7 @@ Providers announce their servers and capabilities by publishing events with kind
   },
   "tags": [
     ["d", "<server-identifier>"],          // Required: Unique identifier for the server
-    ["k", "25910"],                         // Required: Accepted event kinds (for requests)
+    ["k", "25910"],                        // Required: Accepted event kinds (for requests)
     ["name", "Example Server"],            // Optional: Human-readable server name
     ["about", "Server description"],       // Optional: Server description
     ["picture", "https://example.com/server.png"],  // Optional: Server icon/avatar URL
@@ -206,7 +206,7 @@ Providers announce their servers and capabilities by publishing events with kind
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the tools list
     ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
-    ["cap", "get_weather"]                // Required: One cap tag per tool name
+    ["cap", "get_weather"]               // Required: One cap tag per tool name
   ]
 }
 ```
@@ -274,7 +274,7 @@ Providers announce their servers and capabilities by publishing events with kind
 
 ### Direct Discovery (Private Servers)
 
-For servers that are not publicly announced, clients can use the MCP initialization process:
+For servers that are not publicly announced, clients MUST use the MCP initialization process. The flow involves a client initialization request, a server initialization response, and a client initialized notification:
 
 #### Client Initialization Request
 
@@ -650,6 +650,7 @@ The direction of the notifications is determined by the `p` tag used. Client to 
 
 | Notification Type | Method | Direction | Parameters | Description |
 |------------------|--------|-----------|------------|-------------|
+| Initialized | `notifications/initialized` | Client → Server | None | Sent after initialization to indicate client is ready (required for Direct Discovery) |
 | Tools List Changed | `notifications/tools/list_changed` | Server → Client | None | Sent when the list of available tools changes |
 | Resources List Changed | `notifications/resources/list_changed` | Server → Client | None | Sent when the list of available resources changes |
 | Resource Updated | `notifications/resources/updated` | Server → Client | `uri`: Resource URI | Sent when a specific resource is updated |
@@ -740,9 +741,10 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 1. Use consistent server identifiers in the `d` tags
 2. Structure event content as valid JSON-RPC stringified objects according to MCP specification
 3. Respond to initialization requests with proper capability information
-4. Include appropriate error information for failed requests
-5. Process notifications according to the MCP specification
-6. Use standard Nostr tags for Nostr-specific features (like payments)
+4. Process the initialized notification for Direct Discovery connections
+5. Include appropriate error information for failed requests
+6. Process notifications according to the MCP specification
+7. Use standard Nostr tags for Nostr-specific features (like payments)
 
 ### Clients MUST:
 
@@ -751,6 +753,7 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 3. Handle error conditions appropriately
 4. Track event IDs for request-response correlation
 5. Subscribe to notifications from the server is interacting with
+6. Send the initialized notification when using Direct Discovery (private servers)
 
 ## Complete Protocol Flow
 
@@ -781,6 +784,7 @@ sequenceDiagram
         DVM->>Server: Initialize connection
         Server-->>DVM: Capability response
         DVM-->>Client: kind:26910, Server capabilities
+        Client->>DVM: kind:21316, method:notifications/initialized
         
         Note over Client,DVM: Direct capability requests
         Client->>DVM: kind:25910, method:tools/list

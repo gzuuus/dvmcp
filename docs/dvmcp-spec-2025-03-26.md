@@ -132,7 +132,7 @@ DVMCP provides two methods of server discovery, the main differences between the
 
 Providers announce their servers and capabilities by publishing events with kinds 31316 (server), 31317 (tools/list), 31318 (resources/list), and 31319 (prompts/list).
 
-After a client discovers a server through these announcements, it can immediately begin making requests to the server without requiring an explicit initialization step. This stateless approach aligns with the "hands-off" nature of public servers, which are designed to receive arbitrary requests without maintaining client connection state.
+After a client discovers a server through these announcements, it can immediately begin making requests to the server without requiring an explicit initialization step.
 
 #### Server Announcement Event
 
@@ -355,6 +355,28 @@ When a server responds to an initialization request, it includes a `d` tag in th
 - Tags:
   - `d`: Server identifier, uniquely identifies this server for future requests
   - `e`: Reference to the client's initialization request event
+
+#### Client Initialized Notification
+
+After receiving the server initialization response, the client MUST send an initialized notification to indicate it is ready to begin normal operations:
+
+```json
+{
+  "kind": 21316,
+  "pubkey": "<client-pubkey>",
+  "content": {
+    "jsonrpc": "2.0",
+    "method": "notifications/initialized"
+  },
+  "tags": [
+    ["p", "<provider-pubkey>"],                   // Required: Target provider public key
+    ["s", "<server-identifier>"],                  // Required: Server identifier
+    ["method", "notifications/initialized"]        // Required: Same as method in content
+  ]
+}
+```
+
+This notification completes the initialization process and signals to the server that the client has processed the server's capabilities and is ready to begin normal operations.
 
 ## Capability Operations
 

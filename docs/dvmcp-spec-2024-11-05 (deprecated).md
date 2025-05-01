@@ -4,7 +4,7 @@
 
 #### MCP Integration for Data Vending Machines
 
-`draft` `mcp:2024-11-05` `rev1`
+`deprecated` `mcp:2024-11-05` `rev1`
 
 This document defines how Data Vending Machines can expose Model Context Protocol (MCP) server capabilities through the Nostr network, enabling standardized access to computational tools for machines and humans.
 

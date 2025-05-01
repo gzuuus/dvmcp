@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/commons",
-  "version": "0.1.10",
+  "version": "0.1.12",
   "description": "Shared utilities for DVMCP packages",
   "type": "module",
   "exports": {

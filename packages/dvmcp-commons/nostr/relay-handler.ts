@@ -1,7 +1,6 @@
 import { SimplePool } from 'nostr-tools/pool';
 import type { Event } from 'nostr-tools/pure';
 import type { SubCloser } from 'nostr-tools/pool';
-import WebSocket from 'ws';
 import { useWebSocketImplementation } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
 import {

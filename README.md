@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/gzuuus-dvmcp-badge.png)](https://mseep.ai/app/gzuuus-dvmcp)
+
 # DVMCP: Data Vending Machine Context Protocol
 A monorepo containing packages that bridge Model Context Protocol (MCP) servers with Nostr's Data Vending Machine (DVM) ecosystem, enabling AI and computational tools to be discovered and utilized via Nostr's decentralized network.
 ## Packages

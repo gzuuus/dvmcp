@@ -3,6 +3,10 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { CONFIG } from './config';
 import type { MCPServerConfig } from './types';
 import { loggerBridge } from '@dvmcp/commons/logger';
+import type {
+  Implementation,
+  ServerCapabilities,
+} from '@modelcontextprotocol/sdk/types.js';
 
 export class MCPClientHandler {
   private client: Client;
@@ -16,28 +20,74 @@ export class MCPClientHandler {
       args: config.args,
       env: mergedEnv,
     });
-    this.client = new Client(
-      {
-        name: CONFIG.mcp.clientName,
-        version: CONFIG.mcp.clientVersion,
-      },
-      {
-        capabilities: {
-          tools: {},
-          prompts: {},
-          resources: {},
-        },
-      }
-    );
+
+    this.client = new Client({
+      name: CONFIG.mcp.clientName,
+      version: CONFIG.mcp.clientVersion,
+    });
+  }
+
+  getServerCapabilities() {
+    return this.client.getServerCapabilities() as ServerCapabilities;
+  }
+
+  getServerVersion() {
+    return this.client.getServerVersion() as Implementation;
+  }
+
+  getServerInstructions() {
+    return this.client.getInstructions();
   }
 
   async connect() {
     await this.client.connect(this.transport);
-    loggerBridge('Connected to MCP server');
+    loggerBridge(
+      'Connected to MCP server',
+      this.client.getServerCapabilities(),
+      this.client.getServerVersion()
+    );
   }
 
   async listTools() {
     return (await this.client.listTools()).tools;
+  }
+
+  /**
+   * List resources exposed by the connected MCP server.
+   * Returns the full protocol object: { resources: ResourceType[] }
+   */
+  async listResources() {
+    // Protocol: returns { resources: [ ... ] }
+    return await this.client.listResources();
+  }
+
+  /**
+   * Read the content of a specific resource by its URI or ID.
+   * @param resourceUriOrId Resource URI or unique identifier
+   * @returns Resource data per protocol/SDK
+   */
+  async readResource(resourceUriOrId: string) {
+    // Pass the parameter as { uri: string }
+    return await this.client.readResource({ uri: resourceUriOrId });
+  }
+
+  /**
+   * List prompts exposed by the connected MCP server.
+   * Returns the full protocol object: { prompts: PromptType[] }
+   */
+  async listPrompts() {
+    // Protocol: returns { prompts: [ ... ] }
+    return await this.client.listPrompts();
+  }
+
+  /**
+   * Get details for a specific prompt by ID or name.
+   * @param promptIdOrName Prompt id (string) or name
+   * @returns Prompt data per protocol/SDK
+   */
+  async getPrompt(promptIdOrName: string) {
+    // Pass the parameter as { name: string }
+    return await this.client.getPrompt({ name: promptIdOrName });
   }
 
   async callTool(name: string, args: Record<string, any>) {
@@ -73,3 +123,16 @@ export class MCPClientHandler {
     return { ...processEnv, ...customEnv };
   }
 }
+
+// Explicitly export resource and prompt methods per refactor protocol
+/**
+ * Explicitly exported resource and prompt methods for MCP pool.
+ * Each function takes an MCPClientHandler instance (handler) as first argument.
+ */
+export const listResources = (handler: MCPClientHandler) =>
+  handler.listResources();
+export const readResource = (handler: MCPClientHandler, uriOrId: string) =>
+  handler.readResource(uriOrId);
+export const listPrompts = (handler: MCPClientHandler) => handler.listPrompts();
+export const getPrompt = (handler: MCPClientHandler, idOrName: string) =>
+  handler.getPrompt(idOrName);

@@ -4,6 +4,10 @@ import type { SubCloser } from 'nostr-tools/pool';
 import { useWebSocketImplementation } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
 import {
+  REQUEST_KIND,
+  RESPONSE_KIND,
+  NOTIFICATION_KIND,
+  // Legacy constants for backward compatibility
   DVM_NOTICE_KIND,
   TOOL_REQUEST_KIND,
   TOOL_RESPONSE_KIND,
@@ -66,7 +70,16 @@ export class RelayHandler {
     filter?: Filter
   ): SubCloser {
     const defaultFilter: Filter = {
-      kinds: [TOOL_REQUEST_KIND, TOOL_RESPONSE_KIND, DVM_NOTICE_KIND],
+      // Use new kinds by default, but accept legacy types
+      kinds: [
+        REQUEST_KIND,
+        RESPONSE_KIND,
+        NOTIFICATION_KIND,
+        // Legacy support
+        TOOL_REQUEST_KIND,
+        TOOL_RESPONSE_KIND,
+        DVM_NOTICE_KIND,
+      ],
       since: Math.floor(Date.now() / 1000),
     };
 

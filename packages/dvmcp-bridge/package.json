@@ -31,7 +31,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@dvmcp/commons": "latest",
+    "@dvmcp/commons": "^0.1.12",
     "@getalby/lightning-tools": "^5.1.2",
     "@modelcontextprotocol/sdk": "^1.10.2",
     "dotenv": "^16.5.0",

@@ -48,7 +48,6 @@ export class NostrAnnouncer {
   async announceRelayList() {
     const event = keyManager.signEvent({
       ...keyManager.createEventTemplate(10002),
-      content: '',
       tags: CONFIG.nostr.relayUrls.map((url) => ['r', url]),
     });
 
@@ -60,6 +59,7 @@ export class NostrAnnouncer {
    * Publishes the primary server announcement (Kind 31316)
    */
   async announceServer() {
+    // There is a mismatch between the serverInfo name (Some Tools Server) and the name tag (Coolest shit ever).
     const mainClient = this.mcpPool.getDefaultClient();
     if (!mainClient) {
       loggerBridge('No MCP server client available for server announcement.');
@@ -72,6 +72,7 @@ export class NostrAnnouncer {
       serverInfo: mainClient.getServerVersion(),
       instructions: mainClient.getServerInstructions(),
     };
+
     const announcementContent = JSON.stringify(announcementObject);
     const serverId = computeServerId(announcementContent);
 
@@ -89,7 +90,7 @@ export class NostrAnnouncer {
     });
 
     await this.relayHandler.publishEvent(event);
-    loggerBridge('Announced server with protocol-compliant Kind 31316 event');
+    loggerBridge('Announced server with Kind 31316 event');
     return { event, serverId, announcementObject };
   }
 
@@ -103,7 +104,7 @@ export class NostrAnnouncer {
       [TAG_SERVER_IDENTIFIER, serverId],
     ];
 
-    // Announce as a JSON-stringified array (not wrapped in object)
+    // Announce as a JSON-stringified array
     const event = keyManager.signEvent({
       ...keyManager.createEventTemplate(TOOLS_LIST_KIND),
       content: JSON.stringify(tools),
@@ -142,7 +143,7 @@ export class NostrAnnouncer {
    */
   async announcePromptsList(serverId: string) {
     // Get prompts as plain array:
-    const prompts = await this.mcpPool.listPrompts(); // TODO: Actual prompts listing if available
+    const prompts = await this.mcpPool.listPrompts();
     const tags: string[][] = [
       [TAG_UNIQUE_IDENTIFIER, `${serverId}/prompts/list`],
       [TAG_SERVER_IDENTIFIER, serverId],
@@ -165,7 +166,7 @@ export class NostrAnnouncer {
   async updateAnnouncement() {
     const serverInfo = await this.announceServer();
     if (!serverInfo) return;
-    const { serverId, announcementObject } = serverInfo;
+    const { serverId } = serverInfo;
 
     // Get main capabilities and only announce capability lists that actually exist and are non-empty
     const mainClient = this.mcpPool.getDefaultClient();

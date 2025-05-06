@@ -6,7 +6,7 @@ import { generateSecretKey } from 'nostr-tools/pure';
 import { bytesToHex } from '@noble/hashes/utils';
 import { CLI_FLAGS, DEFAULT_VALUES, ENV_VARS } from './constants';
 import type { Config, MCPServerConfig } from './types';
-
+// TODO: Make id of the server configurable
 /**
  * Configuration source types
  */

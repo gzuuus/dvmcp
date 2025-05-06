@@ -17,6 +17,11 @@ import {
 import { loggerBridge } from '@dvmcp/commons/logger';
 import { generateZapRequest, verifyZapPayment } from './payment-handler';
 import type { NostrEvent } from 'nostr-tools';
+import type {
+  CallToolRequest,
+  GetPromptRequest,
+  ReadResourceRequest,
+} from '@modelcontextprotocol/sdk/types.js';
 
 export class DVMBridge {
   private mcpPool: MCPPool;
@@ -67,6 +72,7 @@ export class DVMBridge {
           since: Math.floor(Date.now() / 1000),
         });
       };
+
       subscribe();
 
       this.relayHandler.onRelayReconnected((url) => {
@@ -121,6 +127,7 @@ export class DVMBridge {
     try {
       // --- DVMCP V2 Routing: unified handler for all request/notification kinds ---
       // Extract required fields using spec tag names.
+
       const tags = event.tags;
       const kind = event.kind;
       const pubkey = event.pubkey;
@@ -145,7 +152,7 @@ export class DVMBridge {
       if (kind === REQUEST_KIND) {
         switch (method) {
           case 'initialize':
-            // TODO: handle initialize (call MCP pool, validate content/params)
+            // TODO: Implement initialization for private servers
             break;
           case 'tools/list':
             {
@@ -165,7 +172,7 @@ export class DVMBridge {
             break;
           case 'tools/call':
             {
-              let jobRequest;
+              let jobRequest: CallToolRequest;
               try {
                 jobRequest = JSON.parse(event.content);
               } catch (err) {
@@ -204,12 +211,14 @@ export class DVMBridge {
 
               try {
                 // Pricing/payment logic
-                const pricing = this.mcpPool.getToolPricing(jobRequest.name);
+                const pricing = this.mcpPool.getToolPricing(
+                  jobRequest.params.name
+                );
 
                 if (pricing?.price) {
                   const zapRequest = await generateZapRequest(
                     pricing.price,
-                    jobRequest.name,
+                    jobRequest.params.name,
                     id,
                     pubkey
                   );
@@ -259,8 +268,8 @@ export class DVMBridge {
 
                 // Call the tool
                 const result = await this.mcpPool.callTool(
-                  jobRequest.name,
-                  jobRequest.parameters
+                  jobRequest.params.name,
+                  jobRequest.params.arguments!
                 );
 
                 // Send success notification
@@ -320,16 +329,166 @@ export class DVMBridge {
             }
             break;
           case 'resources/list':
-            // TODO: list resources (MCP pool)
+            {
+              try {
+                const resources = await this.mcpPool.listResources();
+                const response = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(RESPONSE_KIND),
+                  content: JSON.stringify({
+                    result: { resources },
+                  }),
+                  tags: [
+                    [TAG_EVENT_ID, id],
+                    [TAG_PUBKEY, pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(response);
+              } catch (err) {
+                const errorResp = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(RESPONSE_KIND),
+                  content: JSON.stringify({
+                    error: {
+                      code: -32000,
+                      message: 'Failed to list resources',
+                      data: err instanceof Error ? err.message : String(err),
+                    },
+                  }),
+                  tags: [
+                    [TAG_EVENT_ID, id],
+                    [TAG_PUBKEY, pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(errorResp);
+              }
+            }
             break;
           case 'resources/read':
-            // TODO: read resource (MCP pool)
+            {
+              try {
+                // Parse the content to get resource URI
+                const readParams: ReadResourceRequest = JSON.parse(
+                  event.content
+                );
+                if (!readParams.params.uri) {
+                  throw new Error('Resource URI is required');
+                }
+
+                const resourceUri = readParams.params.uri;
+                const resource = await this.mcpPool.readResource(resourceUri);
+
+                if (!resource) {
+                  throw new Error(`Resource not found: ${resourceUri}`);
+                }
+
+                const response = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(RESPONSE_KIND),
+                  content: JSON.stringify({
+                    result: { resource },
+                  }),
+                  tags: [
+                    [TAG_EVENT_ID, id],
+                    [TAG_PUBKEY, pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(response);
+              } catch (err) {
+                const errorResp = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(RESPONSE_KIND),
+                  content: JSON.stringify({
+                    error: {
+                      code: -32000,
+                      message: 'Failed to read resource',
+                      data: err instanceof Error ? err.message : String(err),
+                    },
+                  }),
+                  tags: [
+                    [TAG_EVENT_ID, id],
+                    [TAG_PUBKEY, pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(errorResp);
+              }
+            }
             break;
           case 'prompts/list':
-            // TODO: list prompts (MCP pool)
+            {
+              try {
+                const prompts = await this.mcpPool.listPrompts();
+                const response = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(RESPONSE_KIND),
+                  content: JSON.stringify({
+                    result: { prompts },
+                  }),
+                  tags: [
+                    [TAG_EVENT_ID, id],
+                    [TAG_PUBKEY, pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(response);
+              } catch (err) {
+                const errorResp = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(RESPONSE_KIND),
+                  content: JSON.stringify({
+                    error: {
+                      code: -32000,
+                      message: 'Failed to list prompts',
+                      data: err instanceof Error ? err.message : String(err),
+                    },
+                  }),
+                  tags: [
+                    [TAG_EVENT_ID, id],
+                    [TAG_PUBKEY, pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(errorResp);
+              }
+            }
             break;
           case 'prompts/get':
-            // TODO: get prompt (MCP pool)
+            {
+              try {
+                // Parse the content to get prompt name
+                const getParams: GetPromptRequest = JSON.parse(event.content);
+                if (!getParams.params.name) {
+                  throw new Error('Prompt name is required');
+                }
+
+                const promptName = getParams.params.name;
+                const prompt = await this.mcpPool.getPrompt(promptName);
+
+                if (!prompt) {
+                  throw new Error(`Prompt not found: ${promptName}`);
+                }
+
+                const response = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(RESPONSE_KIND),
+                  content: JSON.stringify({
+                    result: { prompt },
+                  }),
+                  tags: [
+                    [TAG_EVENT_ID, id],
+                    [TAG_PUBKEY, pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(response);
+              } catch (err) {
+                const errorResp = keyManager.signEvent({
+                  ...keyManager.createEventTemplate(RESPONSE_KIND),
+                  content: JSON.stringify({
+                    error: {
+                      code: -32000,
+                      message: 'Failed to get prompt',
+                      data: err instanceof Error ? err.message : String(err),
+                    },
+                  }),
+                  tags: [
+                    [TAG_EVENT_ID, id],
+                    [TAG_PUBKEY, pubkey],
+                  ],
+                });
+                await this.relayHandler.publishEvent(errorResp);
+              }
+            }
             break;
           default:
             // Unknown/unimplemented method
@@ -352,13 +511,43 @@ export class DVMBridge {
       } else if (kind === NOTIFICATION_KIND) {
         // Notification (could be progress/cancel/payment etc.)
         if (method === 'notifications/cancel') {
-          // TODO: handle cancel notification
+          // Handle cancel notification by finding the associated job and canceling it
+          const eventIdToCancel = tags.find(
+            (tag) => tag[0] === TAG_EVENT_ID
+          )?.[1];
+          if (eventIdToCancel) {
+            loggerBridge(`Received cancel request for job: ${eventIdToCancel}`);
+
+            // Send cancellation acknowledgment
+            const cancelAckStatus = keyManager.signEvent({
+              ...keyManager.createEventTemplate(NOTIFICATION_KIND),
+              content: JSON.stringify({
+                method: 'notifications/progress',
+                params: { message: 'cancellation-acknowledged' },
+              }),
+              tags: [
+                [TAG_STATUS, 'cancelled'],
+                [TAG_EVENT_ID, eventIdToCancel],
+                [TAG_PUBKEY, pubkey],
+              ],
+            });
+            await this.relayHandler.publishEvent(cancelAckStatus);
+
+            // TODO: Actual cancellation would require tracking active jobs and their IDs
+            // This would be implemented in a more complete job management system
+          }
+        } else if (method === 'notifications/progress') {
+          // Handle progress notifications
+          loggerBridge(`Received progress notification: ${event.content}`);
+          // Forward or process progress notifications as needed
         } else {
-          // TODO: handle/report all other DVMCP progress/notification events as needed
+          // Handle any other notification types
+          loggerBridge(`Received unhandled notification type: ${method}`);
         }
       } else {
         // Unknown event kind
         // Optionally log or reply with protocol error here
+        loggerBridge(`Received unhandled event kind: ${kind}`);
       }
     } catch (error) {
       console.error('Error handling request:', error);

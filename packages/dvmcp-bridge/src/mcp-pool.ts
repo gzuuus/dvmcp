@@ -81,9 +81,7 @@ export class MCPPool {
           const resObj = await client.listResources();
           if (resObj && Array.isArray(resObj.resources)) {
             for (const resource of resObj.resources) {
-              // Register by id, uri, and name if available and type is string
-              if (typeof resource.id === 'string')
-                this.resourceRegistry.set(resource.id, client);
+              // Register by uri and name if available and type is string
               if (typeof resource.uri === 'string')
                 this.resourceRegistry.set(resource.uri, client);
               if (typeof resource.name === 'string')
@@ -118,9 +116,7 @@ export class MCPPool {
           const promptObj = await client.listPrompts();
           if (promptObj && Array.isArray(promptObj.prompts)) {
             for (const prompt of promptObj.prompts) {
-              // Register by id and name if available and type is string
-              if (typeof prompt.id === 'string')
-                this.promptRegistry.set(prompt.id, client);
+              // Register by name if available and type is string
               if (typeof prompt.name === 'string')
                 this.promptRegistry.set(prompt.name, client);
               allPrompts.push(prompt);
@@ -140,16 +136,11 @@ export class MCPPool {
   }
 
   /**
-   * Find and return a resource matching the given URI/ID, routing to the correct client.
-   * @param resourceUriOrId
+   * Find and return a resource matching the given URI, using the resource registry.
+   * @param resourceUri
    * @returns Resource or throws if not found
    */
-  /**
-   * Find and return a resource matching the given URI/ID, using the resource registry.
-   * @param resourceUriOrId
-   * @returns Resource or throws if not found
-   */
-  async readResource(resourceUriOrId: string): Promise<Resource | undefined> {
+  async readResource(resourceUri: string): Promise<Resource | undefined> {
     // Helper type guard
     function isResource(obj: unknown): obj is Resource {
       return (
@@ -160,22 +151,22 @@ export class MCPPool {
       );
     }
 
-    let handler = this.resourceRegistry.get(resourceUriOrId);
+    let handler = this.resourceRegistry.get(resourceUri);
     // If registry is not populated, refresh it
     if (!handler) {
       await this.listResources();
-      handler = this.resourceRegistry.get(resourceUriOrId);
+      handler = this.resourceRegistry.get(resourceUri);
     }
     if (!handler) {
       // Not found, but do not throw; return undefined for robustness
       console.warn(
-        `[readResource] Resource handler not found for: ${resourceUriOrId}`
+        `[readResource] Resource handler not found for: ${resourceUri}`
       );
       return undefined;
     }
     try {
       // Catch backend errors (including missing capability) and log
-      const result = await handler.readResource(resourceUriOrId);
+      const result = await handler.readResource(resourceUri);
       const out =
         result && typeof result === 'object' && 'resource' in result
           ? (result as unknown as { resource: unknown }).resource
@@ -185,13 +176,13 @@ export class MCPPool {
       }
       // Not a valid resource, return undefined
       console.warn(
-        `[readResource] Invalid resource structure for: ${resourceUriOrId}`
+        `[readResource] Invalid resource structure for: ${resourceUri}`
       );
       return undefined;
     } catch (err: any) {
       // Handle capability missing or -32601
       console.warn(
-        `[readResource] Failed to read '${resourceUriOrId}' from backend:`,
+        `[readResource] Failed to read '${resourceUri}' from backend:`,
         err && (err.message || err)
       );
       // Log but return undefined, preserving function signature/type.
@@ -200,16 +191,11 @@ export class MCPPool {
   }
 
   /**
-   * Find and return a prompt matching the given id or name, routing to correct client.
-   * @param promptIdOrName
+   * Find and return a prompt matching the given name, using the prompt registry.
+   * @param promptName
    * @returns Prompt or throws if not found
    */
-  /**
-   * Find and return a prompt matching the given id or name, using the prompt registry.
-   * @param promptIdOrName
-   * @returns Prompt or throws if not found
-   */
-  async getPrompt(promptIdOrName: string): Promise<Prompt | undefined> {
+  async getPrompt(promptName: string): Promise<Prompt | undefined> {
     // Helper type guard
     function isPrompt(obj: unknown): obj is Prompt {
       return (
@@ -219,22 +205,20 @@ export class MCPPool {
       );
     }
 
-    let handler = this.promptRegistry.get(promptIdOrName);
+    let handler = this.promptRegistry.get(promptName);
     // If registry is not populated, refresh it
     if (!handler) {
       await this.listPrompts();
-      handler = this.promptRegistry.get(promptIdOrName);
+      handler = this.promptRegistry.get(promptName);
     }
     if (!handler) {
       // Not found, log and return undefined
-      console.warn(
-        `[getPrompt] Prompt handler not found for: ${promptIdOrName}`
-      );
+      console.warn(`[getPrompt] Prompt handler not found for: ${promptName}`);
       return undefined;
     }
     try {
       // Catch errors due to missing backend capability
-      const result = await handler.getPrompt(promptIdOrName);
+      const result = await handler.getPrompt(promptName);
       const out =
         result && typeof result === 'object' && 'prompt' in result
           ? (result as unknown as { prompt: unknown }).prompt
@@ -242,28 +226,30 @@ export class MCPPool {
       if (isPrompt(out)) {
         return out;
       }
-      console.warn(
-        `[getPrompt] Invalid prompt structure for: ${promptIdOrName}`
-      );
+      console.warn(`[getPrompt] Invalid prompt structure for: ${promptName}`);
       return undefined;
     } catch (err: any) {
       console.warn(
-        `[getPrompt] Failed to get prompt '${promptIdOrName}' from backend:`,
+        `[getPrompt] Failed to get prompt '${promptName}' from backend:`,
         err && (err.message || err)
       );
       // Log but return undefined, preserving function signature/type.
       return undefined;
     }
   }
+  /**
+   * Call a tool by name with the given arguments
+   * @param name - Name of the tool to call
+   * @param args - Arguments to pass to the tool
+   * @returns Result of the tool call or error
+   */
   async callTool(name: string, args: Record<string, any>) {
+    // First check if we have a specific client registered for this tool
     const client = this.toolRegistry.get(name);
-    if (!client) {
-      console.warn(`[callTool] No MCP server found for tool: ${name}`);
-      return { error: `No MCP server found for tool: ${name}`, code: -32601 };
-    }
+
     try {
-      // Wrap backend call in try/catch to intercept capability/other errors.
-      return await client.callTool(name, args);
+      // Wrap backend call in try/catch to intercept capability/other errors
+      return await client?.callTool(name, args);
     } catch (err: any) {
       console.warn(
         `[callTool] Failed to call tool '${name}':`,
@@ -282,9 +268,41 @@ export class MCPPool {
     return this.toolPricing.get(toolName);
   }
 
+  /**
+   * Get all available clients
+   * @returns Array of all MCPClientHandler instances
+   */
+  getAllClients(): MCPClientHandler[] {
+    return Array.from(this.clients.values());
+  }
+
+  /**
+   * Get the default client for general operations
+   * This method prioritizes clients with more capabilities
+   * @returns The most capable client, or undefined if no clients are available
+   */
   getDefaultClient(): MCPClientHandler | undefined {
-    // Returns the first client in the Map, or undefined if empty
-    return this.clients.values().next().value;
+    // If there's only one client, return it
+    if (this.clients.size === 1) {
+      return this.clients.values().next().value;
+    }
+
+    // Otherwise, find the client with the most capabilities
+    const allClients = this.getAllClients();
+    if (allClients.length === 0) return undefined;
+
+    return allClients.reduce((bestClient, currentClient) => {
+      const bestCaps = bestClient.getServerCapabilities();
+      const currentCaps = currentClient.getServerCapabilities();
+
+      // Count the number of capabilities for each client
+      const bestCapCount = Object.values(bestCaps || {}).filter(Boolean).length;
+      const currentCapCount = Object.values(currentCaps || {}).filter(
+        Boolean
+      ).length;
+
+      return currentCapCount > bestCapCount ? currentClient : bestClient;
+    }, allClients[0]);
   }
 
   /**

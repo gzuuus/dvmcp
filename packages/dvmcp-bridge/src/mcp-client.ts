@@ -4,6 +4,7 @@ import { CONFIG } from './config';
 import type { MCPServerConfig } from './types';
 import { loggerBridge } from '@dvmcp/commons/logger';
 import type {
+  CallToolResult,
   Implementation,
   ServerCapabilities,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -90,7 +91,7 @@ export class MCPClientHandler {
     return await this.client.getPrompt({ name: promptIdOrName });
   }
 
-  async callTool(name: string, args: Record<string, any>) {
+  async callTool(name: string, args: Record<string, CallToolResult>) {
     return await this.client.callTool({
       name,
       arguments: args,

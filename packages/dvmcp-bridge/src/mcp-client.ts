@@ -1,7 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { CONFIG } from './config';
-import type { MCPServerConfig } from './types';
+import type { DvmcpBridgeConfig } from './config-schema';
 import { loggerBridge } from '@dvmcp/commons/logger';
 import type {
   CallToolResult,
@@ -13,18 +12,28 @@ export class MCPClientHandler {
   private client: Client;
   private transport: StdioClientTransport;
 
-  constructor(config: MCPServerConfig) {
-    const mergedEnv = this.prepareEnvironmentVariables(config.env);
+  /**
+   * @param config - Server configuration from DvmcpBridgeConfig (per-server process launch/config)
+   * @param clientName - Unified client name from schema config (config.mcp.clientName)
+   * @param clientVersion - Unified client version from schema config (config.mcp.clientVersion)
+   */
+  constructor(
+    config: DvmcpBridgeConfig['mcp']['servers'][0],
+    clientName: string,
+    clientVersion: string
+  ) {
+    // Only use the explicit env provided in config (do not merge with process.env)
+    const envVars = config.env ? { ...config.env } : undefined;
 
     this.transport = new StdioClientTransport({
       command: config.command,
       args: config.args,
-      env: mergedEnv,
+      env: envVars,
     });
 
     this.client = new Client({
-      name: CONFIG.mcp.clientName,
-      version: CONFIG.mcp.clientVersion,
+      name: clientName,
+      version: clientVersion,
     });
   }
 
@@ -107,22 +116,18 @@ export class MCPClientHandler {
    * @param customEnv - Custom environment variables to merge
    * @returns Merged environment variables or undefined if no custom env
    */
-  private prepareEnvironmentVariables(
-    customEnv?: Record<string, string>
-  ): Record<string, string> | undefined {
-    if (!customEnv) return undefined;
-
-    // Convert process.env to Record<string, string> by filtering out undefined values
-    const processEnv: Record<string, string> = {};
-    Object.entries(process.env).forEach(([key, value]) => {
-      if (value !== undefined) {
-        processEnv[key] = value;
-      }
-    });
-
-    // Merge with custom environment variables
-    return { ...processEnv, ...customEnv };
-  }
+  /**
+   * (Legacy) prepareEnvironmentVariables is deprecated with schema-driven config.
+   * All env needed must now be explicitly provided in config.env per schema.
+   */
+  // private prepareEnvironmentVariables(
+  //   customEnv?: Record<string, string>
+  // ): Record<string, string> | undefined {
+  //   if (!customEnv) return undefined;
+  //   // Old: merged process.env+customEnv.
+  //   // New: not used.
+  //   return { ...customEnv };
+  // }
 }
 
 // Explicitly export resource and prompt methods per refactor protocol

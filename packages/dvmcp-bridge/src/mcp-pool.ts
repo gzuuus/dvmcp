@@ -4,7 +4,7 @@ import type {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import { MCPClientHandler } from './mcp-client';
-import type { MCPServerConfig } from './types';
+import type { DvmcpBridgeConfig } from './config-schema';
 
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();
@@ -13,18 +13,25 @@ export class MCPPool {
   private promptRegistry: Map<string, MCPClientHandler> = new Map();
   private toolPricing: Map<string, { price?: string; unit?: string }> =
     new Map();
-  private serverConfigs: Map<string, MCPServerConfig> = new Map();
+  private serverConfigs: Map<string, DvmcpBridgeConfig['mcp']['servers'][0]> =
+    new Map();
 
-  constructor(serverConfigs: MCPServerConfig[]) {
-    serverConfigs.forEach((config) => {
-      const client = new MCPClientHandler(config);
-      this.clients.set(config.name, client);
+  constructor(private config: DvmcpBridgeConfig) {
+    const { servers, clientName, clientVersion } = config.mcp;
+
+    servers.forEach((serverConfig) => {
+      const client = new MCPClientHandler(
+        serverConfig,
+        clientName,
+        clientVersion
+      );
+      this.clients.set(serverConfig.name, client);
       // Store the server config for later reference
-      this.serverConfigs.set(config.name, config);
+      this.serverConfigs.set(serverConfig.name, serverConfig);
 
       // Register tool pricing if available
-      if (config.tools && config.tools.length > 0) {
-        config.tools.forEach((tool) => {
+      if (serverConfig.tools && serverConfig.tools.length > 0) {
+        serverConfig.tools.forEach((tool) => {
           if (tool.price || tool.unit) {
             this.toolPricing.set(tool.name, {
               price: tool.price,
@@ -319,7 +326,7 @@ export class MCPPool {
    * Get all server configurations
    * @returns Array of server configurations
    */
-  getServerConfigs(): MCPServerConfig[] {
+  getServerConfigs(): DvmcpBridgeConfig['mcp']['servers'][0][] {
     return Array.from(this.serverConfigs.values());
   }
 

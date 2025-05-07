@@ -4,7 +4,10 @@ import type {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import { MCPClientHandler } from './mcp-client';
-import type { DvmcpBridgeConfig } from './config-schema';
+import {
+  dvmcpBridgeConfigSchema,
+  type DvmcpBridgeConfig,
+} from './config-schema';
 
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();
@@ -16,8 +19,29 @@ export class MCPPool {
   private serverConfigs: Map<string, DvmcpBridgeConfig['mcp']['servers'][0]> =
     new Map();
 
-  constructor(private config: DvmcpBridgeConfig) {
-    const { servers, clientName, clientVersion } = config.mcp;
+  constructor(
+    private config: DvmcpBridgeConfig | DvmcpBridgeConfig['mcp']['servers']
+  ) {
+    // Handle both full config objects and direct server config arrays (for testing)
+    let servers: DvmcpBridgeConfig['mcp']['servers'];
+
+    // Get default values from the config schema
+    const defaultName = dvmcpBridgeConfigSchema.mcp.fields.name
+      .default as string;
+
+    // Initialize with defaults
+    let clientName = defaultName;
+    let clientVersion = '1.0.0'; // No default in schema, using fallback
+
+    if (Array.isArray(this.config)) {
+      // For tests: direct array of server configs
+      servers = this.config;
+    } else {
+      // Normal case: full config object
+      servers = this.config.mcp.servers;
+      clientName = this.config.mcp.clientName;
+      clientVersion = this.config.mcp.clientVersion;
+    }
 
     servers.forEach((serverConfig) => {
       const client = new MCPClientHandler(
@@ -313,21 +337,21 @@ export class MCPPool {
   }
 
   /**
+   * Get all server configurations
+   * @returns Array of server configurations
+   */
+  getServerConfigs(): DvmcpBridgeConfig['mcp']['servers'] {
+    return Array.from(this.serverConfigs.values());
+  }
+
+  /**
    * Get the environment variables for a specific server
    * @param serverName - Name of the server
    * @returns Environment variables for the server or undefined if not found
    */
   getServerEnvironment(serverName: string): Record<string, string> | undefined {
-    const config = this.serverConfigs.get(serverName);
-    return config?.env;
-  }
-
-  /**
-   * Get all server configurations
-   * @returns Array of server configurations
-   */
-  getServerConfigs(): DvmcpBridgeConfig['mcp']['servers'][0][] {
-    return Array.from(this.serverConfigs.values());
+    const serverConfig = this.serverConfigs.get(serverName);
+    return serverConfig?.env;
   }
 
   async disconnect() {

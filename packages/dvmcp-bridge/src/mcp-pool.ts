@@ -9,7 +9,6 @@ import {
   type DvmcpBridgeConfig,
 } from './config-schema';
 import { slugify } from './utils';
-// TODO: route tool calls to specific servers using the `s` tag of the request
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();
   private toolRegistry: Map<string, MCPClientHandler> = new Map();

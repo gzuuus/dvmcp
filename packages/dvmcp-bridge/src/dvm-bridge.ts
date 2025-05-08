@@ -1,18 +1,17 @@
 import { NostrAnnouncer } from './announcer';
 import { MCPPool } from './mcp-pool';
 import type { DvmcpBridgeConfig } from './config-schema.js';
-import { loadDvmcpConfig } from './config-loader';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import {
   REQUEST_KIND,
   RESPONSE_KIND,
   NOTIFICATION_KIND,
   TAG_METHOD,
-  TAG_SERVER_IDENTIFIER,
   TAG_PUBKEY,
   TAG_EVENT_ID,
   TAG_STATUS,
   TAG_AMOUNT,
+  TAG_SERVER_IDENTIFIER,
 } from '@dvmcp/commons/constants';
 import { loggerBridge } from '@dvmcp/commons/logger';
 import { generateZapRequest, verifyZapPayment } from './payment-handler';
@@ -22,6 +21,7 @@ import type {
   GetPromptRequest,
   ReadResourceRequest,
 } from '@modelcontextprotocol/sdk/types.js';
+import { getServerId } from './utils.js';
 
 export class DVMBridge {
   private mcpPool: MCPPool;
@@ -146,14 +146,35 @@ export class DVMBridge {
 
   private async handleRequest(event: NostrEvent): Promise<void> {
     try {
-      // --- DVMCP V2 Routing: unified handler for all request/notification kinds ---
-      // Extract required fields using spec tag names.
-
       const tags = event.tags;
       const kind = event.kind;
       const pubkey = event.pubkey;
       const id = event.id;
       const method = tags.find((tag) => tag[0] === TAG_METHOD)?.[1] || '';
+      const serverIdentifier =
+        tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
+
+      const serverId = getServerId(
+        this.config.mcp.name,
+        this.nostrAnnouncer.keyManager.getPublicKey(),
+        this.config.mcp.serverId
+      );
+
+      if (serverIdentifier != serverId) {
+        const errorStatus = this.nostrAnnouncer.keyManager.signEvent({
+          ...this.nostrAnnouncer.keyManager.createEventTemplate(
+            NOTIFICATION_KIND
+          ),
+          content: 'Unauthorized: Server identifier does not match',
+          tags: [
+            [TAG_STATUS, 'error'],
+            [TAG_EVENT_ID, id],
+            [TAG_PUBKEY, pubkey],
+          ],
+        });
+        await this.relayHandler.publishEvent(errorStatus);
+        return;
+      }
 
       if (!this.isWhitelisted(pubkey)) {
         const errorStatus = this.nostrAnnouncer.keyManager.signEvent({

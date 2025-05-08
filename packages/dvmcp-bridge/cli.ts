@@ -25,10 +25,8 @@ function buildYargsOptions(
   path: string[] = []
 ): {
   opts: Record<string, any>;
-  normalizers: Record<string, (srcVal: any) => any>;
 } {
   const opts: Record<string, any> = {};
-  const normalizers: Record<string, (srcVal: any) => any> = {};
 
   const fields = ('fields' in schema ? schema.fields : schema) as Record<
     string,
@@ -39,12 +37,8 @@ function buildYargsOptions(
     const optionKey = [...path, key].join('.');
     if (meta?.type === 'object') {
       // Recurse for nested objects
-      const { opts: childOpts, normalizers: childNorms } = buildYargsOptions(
-        meta,
-        [...path, key]
-      );
+      const { opts: childOpts } = buildYargsOptions(meta, [...path, key]);
       Object.assign(opts, childOpts);
-      Object.assign(normalizers, childNorms);
     } else if (meta?.type === 'array') {
       opts[optionKey] = {
         describe: meta.doc,
@@ -63,7 +57,6 @@ function buildYargsOptions(
         // Don't demand options upfront, we'll validate after loading config
         demandOption: false,
       };
-      normalizers[optionKey] = (srcVal: any) => srcVal;
     } else {
       // Scalar
       const typemap: Record<string, string> = {
@@ -77,16 +70,13 @@ function buildYargsOptions(
         // Don't demand options upfront, we'll validate after loading config
         demandOption: false,
       };
-      normalizers[optionKey] = (srcVal: any) => srcVal;
     }
   }
-  return { opts, normalizers };
+  return { opts };
 }
 
 // Build CLI schema-driven options
-const { opts: yargsOptions, normalizers } = buildYargsOptions(
-  dvmcpBridgeConfigSchema
-);
+const { opts: yargsOptions } = buildYargsOptions(dvmcpBridgeConfigSchema);
 
 // These options are “reserved” controls (not config fields):
 const reservedFlags = [

@@ -15,7 +15,7 @@ import {
 import type { Event } from 'nostr-tools/pure';
 import { loggerBridge } from '@dvmcp/commons/logger';
 import {
-  Implementation,
+  type Implementation,
   LATEST_PROTOCOL_VERSION,
   type InitializeResult,
 } from '@modelcontextprotocol/sdk/types.js';

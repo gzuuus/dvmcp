@@ -2,6 +2,7 @@ import { NostrAnnouncer } from './announcer';
 import { MCPPool } from './mcp-pool';
 import type { DvmcpBridgeConfig } from './config-schema.js';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
+import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
 import {
   REQUEST_KIND,
   RESPONSE_KIND,
@@ -21,13 +22,15 @@ import type {
   GetPromptRequest,
   ReadResourceRequest,
 } from '@modelcontextprotocol/sdk/types.js';
-import { getServerId } from './utils.js';
+import { getServerId } from './utils';
 
 export class DVMBridge {
   private mcpPool: MCPPool;
   private nostrAnnouncer: NostrAnnouncer;
   private relayHandler: RelayHandler;
   private isRunning: boolean = false;
+  public readonly serverId: string;
+  public readonly keyManager: ReturnType<typeof createKeyManager>;
 
   constructor(
     private config: DvmcpBridgeConfig,
@@ -36,15 +39,31 @@ export class DVMBridge {
     this.relayHandler = relayHandler;
     loggerBridge('Initializing DVM Bridge...');
     this.mcpPool = new MCPPool(config);
+
+    // Create key manager once during initialization
+    this.keyManager = createKeyManager(config.nostr.privateKey);
+    const publicKey = this.keyManager.getPublicKey();
+
+    // Compute serverId
+    this.serverId = getServerId(
+      this.config.mcp.name,
+      publicKey,
+      this.config.mcp.serverId
+    );
+
+    if (this.config.mcp.serverId) {
+      loggerBridge(`Using custom server ID from config: ${this.serverId}`);
+    }
+
     this.nostrAnnouncer = new NostrAnnouncer(
       this.mcpPool,
       config,
-      relayHandler
+      relayHandler,
+      this.serverId,
+      this.keyManager
     );
-    loggerBridge(
-      'public key:',
-      this.nostrAnnouncer['keyManager'].getPublicKey()
-    );
+
+    loggerBridge('public key:', publicKey);
   }
 
   private isWhitelisted(pubkey: string): boolean {
@@ -78,7 +97,7 @@ export class DVMBridge {
       }
 
       loggerBridge('Setting up request handlers...');
-      const publicKey = this.nostrAnnouncer.keyManager.getPublicKey();
+      const publicKey = this.keyManager.getPublicKey();
       const subscribe = () => {
         this.relayHandler.subscribeToRequests(this.handleRequest.bind(this), {
           kinds: [REQUEST_KIND, NOTIFICATION_KIND],
@@ -154,17 +173,9 @@ export class DVMBridge {
       const serverIdentifier =
         tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
 
-      const serverId = getServerId(
-        this.config.mcp.name,
-        this.nostrAnnouncer.keyManager.getPublicKey(),
-        this.config.mcp.serverId
-      );
-
-      if (serverIdentifier != serverId) {
-        const errorStatus = this.nostrAnnouncer.keyManager.signEvent({
-          ...this.nostrAnnouncer.keyManager.createEventTemplate(
-            NOTIFICATION_KIND
-          ),
+      if (serverIdentifier != this.serverId) {
+        const errorStatus = this.keyManager.signEvent({
+          ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
           content: 'Unauthorized: Server identifier does not match',
           tags: [
             [TAG_STATUS, 'error'],
@@ -177,10 +188,8 @@ export class DVMBridge {
       }
 
       if (!this.isWhitelisted(pubkey)) {
-        const errorStatus = this.nostrAnnouncer.keyManager.signEvent({
-          ...this.nostrAnnouncer.keyManager.createEventTemplate(
-            NOTIFICATION_KIND
-          ),
+        const errorStatus = this.keyManager.signEvent({
+          ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
           content: 'Unauthorized: Pubkey not in whitelist',
           tags: [
             [TAG_STATUS, 'error'],
@@ -201,10 +210,8 @@ export class DVMBridge {
           case 'tools/list':
             {
               const tools = await this.mcpPool.listTools();
-              const response = this.nostrAnnouncer.keyManager.signEvent({
-                ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                  RESPONSE_KIND
-                ),
+              const response = this.keyManager.signEvent({
+                ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                 content: JSON.stringify({
                   result: { tools },
                 }),
@@ -222,10 +229,8 @@ export class DVMBridge {
               try {
                 jobRequest = JSON.parse(event.content);
               } catch (err) {
-                const errorResp = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const errorResp = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     error: {
                       code: -32600,
@@ -243,22 +248,18 @@ export class DVMBridge {
               }
 
               // Send processing notification
-              const processingStatus = this.nostrAnnouncer.keyManager.signEvent(
-                {
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    NOTIFICATION_KIND
-                  ),
-                  content: JSON.stringify({
-                    method: 'notifications/progress',
-                    params: { message: 'processing' },
-                  }),
-                  tags: [
-                    [TAG_PUBKEY, pubkey],
-                    [TAG_EVENT_ID, id],
-                    [TAG_METHOD, 'notifications/progress'],
-                  ],
-                }
-              );
+              const processingStatus = this.keyManager.signEvent({
+                ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
+                content: JSON.stringify({
+                  method: 'notifications/progress',
+                  params: { message: 'processing' },
+                }),
+                tags: [
+                  [TAG_PUBKEY, pubkey],
+                  [TAG_EVENT_ID, id],
+                  [TAG_METHOD, 'notifications/progress'],
+                ],
+              });
               await this.relayHandler.publishEvent(processingStatus);
 
               try {
@@ -277,19 +278,16 @@ export class DVMBridge {
                   );
                   if (zapRequest) {
                     // Send payment required notification
-                    const paymentRequiredStatus =
-                      this.nostrAnnouncer.keyManager.signEvent({
-                        ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                          NOTIFICATION_KIND
-                        ),
-                        tags: [
-                          [TAG_STATUS, 'payment-required'],
-                          [TAG_AMOUNT, pricing.price, pricing.unit || 'sats'],
-                          ['invoice', zapRequest.paymentRequest],
-                          [TAG_EVENT_ID, id],
-                          [TAG_PUBKEY, pubkey],
-                        ],
-                      });
+                    const paymentRequiredStatus = this.keyManager.signEvent({
+                      ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
+                      tags: [
+                        [TAG_STATUS, 'payment-required'],
+                        [TAG_AMOUNT, pricing.price, pricing.unit || 'sats'],
+                        ['invoice', zapRequest.paymentRequest],
+                        [TAG_EVENT_ID, id],
+                        [TAG_PUBKEY, pubkey],
+                      ],
+                    });
                     await this.relayHandler.publishEvent(paymentRequiredStatus);
 
                     // Wait for payment verification
@@ -299,32 +297,28 @@ export class DVMBridge {
                       this.config
                     );
                     if (!paymentVerified) {
-                      const paymentFailedStatus =
-                        this.nostrAnnouncer.keyManager.signEvent({
-                          ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                            NOTIFICATION_KIND
-                          ),
-                          tags: [
-                            [TAG_STATUS, 'error'],
-                            [TAG_EVENT_ID, id],
-                            [TAG_PUBKEY, pubkey],
-                          ],
-                        });
-                      await this.relayHandler.publishEvent(paymentFailedStatus);
-                      break;
-                    }
-                    // Inform payment accepted
-                    const paymentAcceptedStatus =
-                      this.nostrAnnouncer.keyManager.signEvent({
-                        ...this.nostrAnnouncer.keyManager.createEventTemplate(
+                      const paymentFailedStatus = this.keyManager.signEvent({
+                        ...this.keyManager.createEventTemplate(
                           NOTIFICATION_KIND
                         ),
                         tags: [
-                          [TAG_STATUS, 'payment-accepted'],
+                          [TAG_STATUS, 'error'],
                           [TAG_EVENT_ID, id],
                           [TAG_PUBKEY, pubkey],
                         ],
                       });
+                      await this.relayHandler.publishEvent(paymentFailedStatus);
+                      break;
+                    }
+                    // Inform payment accepted
+                    const paymentAcceptedStatus = this.keyManager.signEvent({
+                      ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
+                      tags: [
+                        [TAG_STATUS, 'payment-accepted'],
+                        [TAG_EVENT_ID, id],
+                        [TAG_PUBKEY, pubkey],
+                      ],
+                    });
                     await this.relayHandler.publishEvent(paymentAcceptedStatus);
                   }
                 }
@@ -336,10 +330,8 @@ export class DVMBridge {
                 );
 
                 // Send success notification
-                const successStatus = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    NOTIFICATION_KIND
-                  ),
+                const successStatus = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
                   tags: [
                     [TAG_STATUS, 'success'],
                     [TAG_EVENT_ID, id],
@@ -349,10 +341,8 @@ export class DVMBridge {
                 await this.relayHandler.publishEvent(successStatus);
 
                 // Response (Kind 26910) with result
-                const response = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const response = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     result,
                   }),
@@ -363,10 +353,8 @@ export class DVMBridge {
                 });
                 await this.relayHandler.publishEvent(response);
               } catch (error) {
-                const errorStatus = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    NOTIFICATION_KIND
-                  ),
+                const errorStatus = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
                   tags: [
                     [TAG_STATUS, 'error'],
                     [TAG_EVENT_ID, id],
@@ -375,10 +363,8 @@ export class DVMBridge {
                 });
                 await this.relayHandler.publishEvent(errorStatus);
 
-                const errorResp = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const errorResp = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     jsonrpc: '2.0',
                     id,
@@ -403,10 +389,8 @@ export class DVMBridge {
             {
               try {
                 const resources = await this.mcpPool.listResources();
-                const response = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const response = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     result: { resources },
                   }),
@@ -417,10 +401,8 @@ export class DVMBridge {
                 });
                 await this.relayHandler.publishEvent(response);
               } catch (err) {
-                const errorResp = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const errorResp = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     error: {
                       code: -32000,
@@ -455,10 +437,8 @@ export class DVMBridge {
                   throw new Error(`Resource not found: ${resourceUri}`);
                 }
 
-                const response = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const response = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     result: { resource },
                   }),
@@ -469,10 +449,8 @@ export class DVMBridge {
                 });
                 await this.relayHandler.publishEvent(response);
               } catch (err) {
-                const errorResp = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const errorResp = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     error: {
                       code: -32000,
@@ -493,10 +471,8 @@ export class DVMBridge {
             {
               try {
                 const prompts = await this.mcpPool.listPrompts();
-                const response = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const response = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     result: { prompts },
                   }),
@@ -507,10 +483,8 @@ export class DVMBridge {
                 });
                 await this.relayHandler.publishEvent(response);
               } catch (err) {
-                const errorResp = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const errorResp = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     error: {
                       code: -32000,
@@ -543,10 +517,8 @@ export class DVMBridge {
                   throw new Error(`Prompt not found: ${promptName}`);
                 }
 
-                const response = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const response = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     result: { prompt },
                   }),
@@ -557,10 +529,8 @@ export class DVMBridge {
                 });
                 await this.relayHandler.publishEvent(response);
               } catch (err) {
-                const errorResp = this.nostrAnnouncer.keyManager.signEvent({
-                  ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                    RESPONSE_KIND
-                  ),
+                const errorResp = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     error: {
                       code: -32000,
@@ -579,10 +549,8 @@ export class DVMBridge {
             break;
           default:
             // Unknown/unimplemented method
-            const notImpl = this.nostrAnnouncer.keyManager.signEvent({
-              ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                RESPONSE_KIND
-              ),
+            const notImpl = this.keyManager.signEvent({
+              ...this.keyManager.createEventTemplate(RESPONSE_KIND),
               content: JSON.stringify({
                 error: {
                   code: -32601,
@@ -608,10 +576,8 @@ export class DVMBridge {
             loggerBridge(`Received cancel request for job: ${eventIdToCancel}`);
 
             // Send cancellation acknowledgment
-            const cancelAckStatus = this.nostrAnnouncer.keyManager.signEvent({
-              ...this.nostrAnnouncer.keyManager.createEventTemplate(
-                NOTIFICATION_KIND
-              ),
+            const cancelAckStatus = this.keyManager.signEvent({
+              ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
               content: JSON.stringify({
                 method: 'notifications/progress',
                 params: { message: 'cancellation-acknowledged' },

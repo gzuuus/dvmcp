@@ -38,11 +38,8 @@ export async function startBridge(options: BridgeStartOptions = {}) {
     // Use preloaded config or load from sources
     const config = options.preloadedConfig || (await loadDvmcpConfig(options));
 
-    // Create relay handler with the loaded configuration
-    const relayHandler = createRelayHandler(config);
-
-    // Initialize bridge with configuration and relay handler
-    const bridge = new DVMBridge(config, relayHandler);
+    // Initialize bridge with configuration (relay handler is created internally)
+    const bridge = new DVMBridge(config);
 
     const shutdown = async () => {
       loggerBridge('Shutting down...');

@@ -34,17 +34,16 @@ export class DVMBridge {
 
   constructor(
     private config: DvmcpBridgeConfig,
-    relayHandler: RelayHandler
+    relayHandler?: RelayHandler
   ) {
-    this.relayHandler = relayHandler;
+    this.relayHandler =
+      relayHandler ?? new RelayHandler(config.nostr.relayUrls);
     loggerBridge('Initializing DVM Bridge...');
     this.mcpPool = new MCPPool(config);
 
-    // Create key manager once during initialization
     this.keyManager = createKeyManager(config.nostr.privateKey);
     const publicKey = this.keyManager.getPublicKey();
 
-    // Compute serverId
     this.serverId = getServerId(
       this.config.mcp.name,
       publicKey,
@@ -58,7 +57,7 @@ export class DVMBridge {
     this.nostrAnnouncer = new NostrAnnouncer(
       this.mcpPool,
       config,
-      relayHandler,
+      this.relayHandler,
       this.serverId,
       this.keyManager
     );

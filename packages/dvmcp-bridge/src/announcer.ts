@@ -14,22 +14,18 @@ import {
 } from '@dvmcp/commons/constants';
 import type { Event } from 'nostr-tools/pure';
 import { loggerBridge } from '@dvmcp/commons/logger';
-import { sha256 } from '@noble/hashes/sha256';
-import { utf8ToBytes, bytesToHex } from '@noble/hashes/utils';
 import {
+  Implementation,
   LATEST_PROTOCOL_VERSION,
   type InitializeResult,
 } from '@modelcontextprotocol/sdk/types.js';
+import { slugify, getServerId } from './utils.js';
 
 function getNip89Tags(cfg: DvmcpBridgeConfig['mcp']): string[][] {
   const keys = ['name', 'about', 'picture', 'website', 'banner'] as const;
   return keys
     .filter((k) => cfg[k])
     .map((k) => [k, String(cfg[k as keyof typeof cfg])]);
-}
-
-function computeServerId(announcement: string): string {
-  return bytesToHex(sha256(utf8ToBytes(announcement)));
 }
 
 // Helper to generate NIP-89 tags from config
@@ -70,23 +66,37 @@ export class NostrAnnouncer {
       loggerBridge('No MCP server client available for server announcement.');
       return;
     }
+
+    const serverInfo: Implementation = {
+      name: slugify(this.config.mcp.name),
+      version: this.config.mcp.clientVersion || '1.0.0',
+    };
+
     const announcementObject: InitializeResult = {
       protocolVersion: LATEST_PROTOCOL_VERSION,
       capabilities: mainClient.getServerCapabilities(),
-      serverInfo: mainClient.getServerVersion(),
-      instructions: mainClient.getServerInstructions(),
+      serverInfo: serverInfo,
+      instructions: this.config.mcp.instructions,
     };
 
     const announcementContent = JSON.stringify(announcementObject);
-    const serverId = computeServerId(announcementContent);
+    const serverId = getServerId(
+      this.config.mcp.name,
+      this.keyManager.getPublicKey(),
+      this.config.mcp.serverId
+    );
 
-    // Primary tags: unique id, kind, NIP-89 tags
+    if (this.config.mcp.serverId) {
+      loggerBridge(`Using custom server ID from config: ${serverId}`);
+    } else {
+      loggerBridge(`Generated stable server ID: ${serverId}`);
+    }
+
     const tags: string[][] = [
       [TAG_UNIQUE_IDENTIFIER, serverId],
       [TAG_KIND, `${REQUEST_KIND}`],
       ...getNip89Tags(this.config.mcp),
     ];
-
     const event = this.keyManager.signEvent({
       ...this.keyManager.createEventTemplate(SERVER_ANNOUNCEMENT_KIND),
       content: announcementContent,
@@ -108,7 +118,6 @@ export class NostrAnnouncer {
       [TAG_SERVER_IDENTIFIER, serverId],
     ];
 
-    // Announce as a JSON-stringified array
     const event = this.keyManager.signEvent({
       ...this.keyManager.createEventTemplate(TOOLS_LIST_KIND),
       content: JSON.stringify(tools),
@@ -229,15 +238,12 @@ export class NostrAnnouncer {
       loggerBridge('No MCP server client available for deletion.');
       return [];
     }
-    const announcementObject: InitializeResult = {
-      protocolVersion: LATEST_PROTOCOL_VERSION,
-      capabilities: mainClient.getServerCapabilities(),
-      serverInfo: mainClient.getServerVersion(),
-      instructions: mainClient.getServerInstructions(),
-    };
 
-    const announcementContent = JSON.stringify(announcementObject);
-    const serverId = computeServerId(announcementContent);
+    const serverId = getServerId(
+      this.config.mcp.name,
+      this.keyManager.getPublicKey(),
+      this.config.mcp.serverId
+    );
 
     const kinds = [
       SERVER_ANNOUNCEMENT_KIND,

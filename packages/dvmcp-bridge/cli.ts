@@ -62,7 +62,6 @@ function buildYargsOptions(
         },
         // Don't demand options upfront, we'll validate after loading config
         demandOption: false,
-        default: meta.default,
       };
       normalizers[optionKey] = (srcVal: any) => srcVal;
     } else {
@@ -77,7 +76,6 @@ function buildYargsOptions(
         type: typemap[meta.type] || 'string',
         // Don't demand options upfront, we'll validate after loading config
         demandOption: false,
-        default: meta.default,
       };
       normalizers[optionKey] = (srcVal: any) => srcVal;
     }

@@ -53,10 +53,6 @@ export interface MCPToolConfig {
  */
 export interface MCPServerConfig {
   /**
-   * Human-readable unique server name.
-   */
-  name: string;
-  /**
    * Command line to launch the MCP server process (e.g., "node", "python").
    */
   command: string;
@@ -79,19 +75,24 @@ export interface MCPServerConfig {
  */
 export interface MCPConfig {
   /**
-   * Name to display as service name.
+   * Name for the service (used in announcements and UI).
    * @default "DVM MCP Bridge"
    */
-  name?: string;
+  name: string;
   /**
    * Info/about text for this bridge.
    */
   about?: string;
   /**
-   * Client software name (used in protocol/versioning).
-   * @example "DVM MCP Bridge Client"
+   * Instructions for using this MCP server.
+   * This will be included in the server announcement.
    */
-  clientName: string;
+  instructions?: string;
+  /**
+   * Optional custom server ID to use for announcements.
+   * If not provided, an ID will be auto-generated from server name and public key.
+   */
+  serverId?: string;
   /**
    * Client software version.
    * @example "1.0.0"
@@ -197,19 +198,24 @@ export const dvmcpBridgeConfigSchema = {
     fields: {
       name: {
         type: 'string',
-        required: false,
+        required: true,
         default: 'DVM MCP Bridge',
-        doc: 'Displayed name of the MCP bridge service.',
+        doc: 'Name for the service (used in announcements).',
       },
       about: {
         type: 'string',
         required: false,
-        doc: 'About/help text for this bridge.',
+        doc: 'Info/about text for this bridge.',
       },
-      clientName: {
+      instructions: {
         type: 'string',
-        required: true,
-        doc: 'Name of the MCP bridge client implementation.',
+        required: false,
+        doc: 'Instructions for using this MCP server. This will be included in the server announcement.',
+      },
+      serverId: {
+        type: 'string',
+        required: false,
+        doc: 'Optional custom server ID to use for announcements. If not provided, an ID will be auto-generated.',
       },
       clientVersion: {
         type: 'string',
@@ -238,11 +244,6 @@ export const dvmcpBridgeConfigSchema = {
         itemType: 'object',
         doc: 'List of MCP server process configurations.',
         fields: {
-          name: {
-            type: 'string',
-            required: true,
-            doc: 'Unique human-readable name for the MCP server.',
-          },
           command: {
             type: 'string',
             required: true,

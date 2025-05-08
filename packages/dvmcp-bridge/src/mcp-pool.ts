@@ -8,7 +8,8 @@ import {
   dvmcpBridgeConfigSchema,
   type DvmcpBridgeConfig,
 } from './config-schema';
-
+import { slugify } from './utils';
+// TODO: route tool calls to specific servers using the `s` tag of the request
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();
   private toolRegistry: Map<string, MCPClientHandler> = new Map();
@@ -30,7 +31,7 @@ export class MCPPool {
       .default as string;
 
     // Initialize with defaults
-    let clientName = defaultName;
+    let name = defaultName;
     let clientVersion = '1.0.0'; // No default in schema, using fallback
 
     if (Array.isArray(this.config)) {
@@ -39,19 +40,27 @@ export class MCPPool {
     } else {
       // Normal case: full config object
       servers = this.config.mcp.servers;
-      clientName = this.config.mcp.clientName;
-      clientVersion = this.config.mcp.clientVersion;
+      name = this.config.mcp.name || defaultName;
+      clientVersion = this.config.mcp.clientVersion || '1.0.0';
     }
 
-    servers.forEach((serverConfig) => {
+    servers.forEach((serverConfig, index) => {
+      // Generate a server ID based on index
+      const serverId = `server-${index}`;
+
+      // Create a copy of the server config with the generated ID
+      const serverConfigWithId = { ...serverConfig, _serverId: serverId };
+
       const client = new MCPClientHandler(
-        serverConfig,
-        clientName,
+        serverConfigWithId,
+        slugify(name),
         clientVersion
       );
-      this.clients.set(serverConfig.name, client);
+
+      // Use the generated server ID as the key
+      this.clients.set(serverId, client);
       // Store the server config for later reference
-      this.serverConfigs.set(serverConfig.name, serverConfig);
+      this.serverConfigs.set(serverId, serverConfigWithId);
 
       // Register tool pricing if available
       if (serverConfig.tools && serverConfig.tools.length > 0) {

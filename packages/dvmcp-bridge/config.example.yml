@@ -1,8 +1,8 @@
 # Nostr Configuration
 nostr:
-  # Your private key in hex format (32-byte hex string)
+  # [Required] Your private key in hex format (32-byte hex string)
   privateKey: "your_private_key_here"
-  # List of relay URLs (must start with ws:// or wss://)
+  # [Required] List of relay URLs (must start with ws:// or wss://)
   relayUrls:
     - "wss://relay1.com"
     - "wss://relay2.net"
@@ -12,25 +12,27 @@ mcp:
   # Service information
   name: "DVM MCP Bridge"
   about: "MCP-enabled DVM providing AI and computational tools"
-  # Required client information
-  clientName: "DVM MCP Bridge Client"
+  # [Optional] instructions for using this MCP server (included in the server announcement)
+  # instructions: "This server provides AI and computational tools. Use the available tools to perform various tasks."
+  # [Optional] custom server ID (if not provided, will be derived from name and public key)
+  # serverId: "custom-server-id"
+  # [Required] client version information
   clientVersion: "1.0.0"
-  # optional metadata
+  # [Optional] optional metadata
   picture: "https://image.nostr.build/5bf2e2eb3b858bf72c23e53ed1f41ed0f65b2c8a805eaa48dd506b7cfec4ab88.png"
   website: "https://github.com/gzuuus/dvmcp"
-  # MCP Servers Configuration accepts multiple servers
+  # [Required] MCP Servers Configuration accepts multiple servers
   servers:
-    - name: "server1"
-      command: "node"
+    - command: "node"
       args: 
         - "run"
         - "src/external-mcp-server1.ts"
-      # Environment variables to pass to the server process
+      # [Optional] Environment variables to pass to the server process
       env:
         API_KEY: "your_api_key_here"
         DEBUG: "true"
         NODE_ENV: "production"
-      # Tool pricing configuration
+      # [Optional] Tool pricing configuration
       tools:
         - name: "tool-from-server1"
           price: "1000"
@@ -39,22 +41,21 @@ mcp:
           price: "2000"
           unit: "sats"
     
-    - name: "server2"
-      command: "python"
+    - command: "python"
       args:
         - "src/external-mcp-server2.py"
-      # Tool pricing configuration
+      # [Optional] Tool pricing configuration
       tools:
         - name: "tool-from-server2"
           price: "500"
           unit: "sats"
 
-# Optional: Whitelist Configuration
+# [Optional] Whitelist Configuration
 # whitelist:
   # List of allowed public keys (leave empty for no restrictions)
   # allowedPubkeys: []
 
-# Optional: Lightning Payment Configuration (required if pricing is configured)
+# [Optional] Lightning Payment Configuration (required if pricing is configured)
 lightning:
   # Lightning Address for generating invoices
   address: "your_lightning_address@getalby.com"

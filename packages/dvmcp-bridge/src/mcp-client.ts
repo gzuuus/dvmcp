@@ -110,24 +110,6 @@ export class MCPClientHandler {
   async disconnect() {
     await this.transport.close();
   }
-
-  /**
-   * Prepare environment variables by merging custom env with process.env
-   * @param customEnv - Custom environment variables to merge
-   * @returns Merged environment variables or undefined if no custom env
-   */
-  /**
-   * (Legacy) prepareEnvironmentVariables is deprecated with schema-driven config.
-   * All env needed must now be explicitly provided in config.env per schema.
-   */
-  // private prepareEnvironmentVariables(
-  //   customEnv?: Record<string, string>
-  // ): Record<string, string> | undefined {
-  //   if (!customEnv) return undefined;
-  //   // Old: merged process.env+customEnv.
-  //   // New: not used.
-  //   return { ...customEnv };
-  // }
 }
 
 // Explicitly export resource and prompt methods per refactor protocol

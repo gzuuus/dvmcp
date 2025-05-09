@@ -195,7 +195,7 @@ export class ToolRegistry {
       );
       loggerDiscovery('Tool registered successfully:', toolId);
     } catch (error) {
-      // TODO: Handle collisions more intelligently, by keeping the newest
+      // TODO: Handle collisions more intelligently
       console.error('Error registering tool:', toolId, error);
     }
   }

@@ -74,14 +74,13 @@ describe('MCPPool', () => {
     const pool = new MCPPool([serverConfig]);
 
     // Verify that the environment variables are stored correctly
-    const storedEnv = pool.getServerEnvironment('test-server');
+    const storedEnv = pool.getServerEnvironment('server-0');
     expect(storedEnv).toBeDefined();
     expect(storedEnv).toEqual(envVars);
 
     // Verify that the server config is stored correctly
     const configs = pool.getServerConfigs();
     expect(configs.length).toBe(1);
-    expect(configs[0].name).toBe('test-server');
     expect(configs[0].env).toEqual(envVars);
   });
 

@@ -1,4 +1,11 @@
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { CONFIG } from './config';
+import type { DvmcpBridgeConfig } from './config-schema';
 
-export const relayHandler = new RelayHandler(CONFIG.nostr.relayUrls);
+/**
+ * Create a relay handler instance with the provided configuration.
+ * @param config The DVMCP Bridge configuration
+ * @returns A new RelayHandler instance
+ */
+export function createRelayHandler(config: DvmcpBridgeConfig): RelayHandler {
+  return new RelayHandler(config.nostr.relayUrls);
+}

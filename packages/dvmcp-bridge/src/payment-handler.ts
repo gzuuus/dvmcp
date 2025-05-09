@@ -1,11 +1,12 @@
 import { LightningAddress } from '@getalby/lightning-tools';
-import { CONFIG } from './config';
 import { loggerBridge } from '@dvmcp/commons/logger';
 import type { Event } from 'nostr-tools/pure';
 import type { SubCloser } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
-import { createNostrProvider } from '@dvmcp/commons/nostr/key-manager';
-import { keyManager } from './announcer';
+import {
+  createNostrProvider,
+  createKeyManager,
+} from '@dvmcp/commons/nostr/key-manager';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 
 interface ZapInvoiceResponse {
@@ -21,12 +22,21 @@ interface ZapInvoiceResponse {
  * @param filter Filter for the subscription
  * @returns A subscription closer function
  */
+/**
+ * Creates a subscription to events on specific relays.
+ * @param config - Unified DvmcpBridgeConfig (schema-based)
+ * @param relays - Array of relay URLs to subscribe to; if empty, defaults from config.nostr.relayUrls
+ * @param onEvent - Callback function to handle received events
+ * @param filter - Filter for the subscription
+ * @returns A subscription closer function
+ */
 function subscribeToRelays(
+  config: import('./config-schema').DvmcpBridgeConfig,
   relays: string[],
   onEvent: (event: Event) => void,
   filter: Filter
 ): SubCloser {
-  const relayUrls = relays.length > 0 ? relays : CONFIG.nostr.relayUrls;
+  const relayUrls = relays.length > 0 ? relays : config.nostr.relayUrls;
   const relayHandler = new RelayHandler(relayUrls);
 
   loggerBridge(`Setting up subscription on relays: ${relayUrls.join(', ')}`);
@@ -54,11 +64,21 @@ function subscribeToRelays(
  * @param recipientPubkey Pubkey of the recipient
  * @returns The zap request information including payment request and relays
  */
+/**
+ * Generates a zap request and BOLT11 invoice using the configured Lightning Address
+ * @param config Unified DvmcpBridgeConfig (schema-based)
+ * @param amount Amount in satoshis
+ * @param toolName Name of the tool being paid for
+ * @param eventId Optional event ID to associate with the zap
+ * @param recipientPubkey Pubkey of the recipient
+ * @returns The zap request information including payment request and relays
+ */
 export async function generateZapRequest(
   amount: string,
   toolName: string,
   eventId: string,
-  recipientPubkey: string
+  recipientPubkey: string,
+  config: import('./config-schema').DvmcpBridgeConfig
 ): Promise<
   | {
       paymentRequest: string;
@@ -69,14 +89,14 @@ export async function generateZapRequest(
   | undefined
 > {
   try {
-    if (!CONFIG.lightning?.address) {
+    if (!config.lightning?.address) {
       loggerBridge(
         'No Lightning Address configured. Cannot generate zap request.'
       );
       return undefined;
     }
 
-    const ln = new LightningAddress(CONFIG.lightning.address);
+    const ln = new LightningAddress(config.lightning.address);
     await ln.fetch();
 
     if (!ln.nostrPubkey) {
@@ -86,9 +106,9 @@ export async function generateZapRequest(
       return undefined;
     }
     loggerBridge(`Lightning Address found: ${ln.nostrPubkey}`);
-    const relays = CONFIG.lightning?.zapRelays?.length
-      ? CONFIG.lightning.zapRelays
-      : CONFIG.nostr.relayUrls;
+    const relays = config.lightning?.zapRelays?.length
+      ? config.lightning.zapRelays
+      : config.nostr.relayUrls;
 
     const zapArgs = {
       satoshi: parseInt(amount, 10),
@@ -98,6 +118,8 @@ export async function generateZapRequest(
       p: recipientPubkey,
     };
 
+    // Create keyManager instance for this config
+    const keyManager = createKeyManager(config.nostr.privateKey);
     const zapOptions = {
       nostr: createNostrProvider(keyManager),
     };
@@ -130,9 +152,17 @@ export async function generateZapRequest(
  * @param paymentRequest The bolt11 payment request to match in the receipt
  * @returns Promise that resolves to true when payment is verified
  */
+/**
+ * Verifies payment by listening for a zap receipt
+ * @param config Unified DvmcpBridgeConfig (schema-based)
+ * @param relays The relays to listen for the zap receipt
+ * @param paymentRequest The bolt11 payment request to match in the receipt
+ * @returns Promise that resolves to true when payment is verified
+ */
 export async function verifyZapPayment(
   relays: string[],
-  paymentRequest: string
+  paymentRequest: string,
+  config: import('./config-schema').DvmcpBridgeConfig
 ): Promise<boolean> {
   return new Promise((resolve) => {
     const filter: Filter = {
@@ -142,15 +172,16 @@ export async function verifyZapPayment(
     const zapRelays =
       relays.length > 0
         ? relays
-        : CONFIG.lightning?.zapRelays?.length
-          ? CONFIG.lightning.zapRelays
-          : CONFIG.nostr.relayUrls;
+        : config.lightning?.zapRelays?.length
+          ? config.lightning.zapRelays
+          : config.nostr.relayUrls;
 
     loggerBridge(
       `Subscribing to zap receipts on relays: ${zapRelays.join(', ')}`
     );
 
     const subscription = subscribeToRelays(
+      config,
       zapRelays,
       (event: Event) => {
         try {
@@ -185,7 +216,15 @@ export async function verifyZapPayment(
  * @param description Optional description for the invoice
  * @returns The payment request (BOLT11 invoice) and payment hash
  */
+/**
+ * Generates a simple invoice without zap functionality (legacy compat)
+ * @param config Unified DvmcpBridgeConfig (schema-based)
+ * @param amount Amount in satoshis
+ * @param description Optional description for the invoice
+ * @returns The payment request (BOLT11 invoice) and payment hash
+ */
 export async function generateInvoice(
+  config: import('./config-schema').DvmcpBridgeConfig,
   amount: string,
   description?: string
 ): Promise<
@@ -196,12 +235,12 @@ export async function generateInvoice(
   | undefined
 > {
   try {
-    if (!CONFIG.lightning?.address) {
+    if (!config.lightning?.address) {
       loggerBridge('No Lightning Address configured. Cannot generate invoice.');
       return undefined;
     }
 
-    const ln = new LightningAddress(CONFIG.lightning.address);
+    const ln = new LightningAddress(config.lightning.address);
     await ln.fetch();
 
     const invoice = await ln.requestInvoice({

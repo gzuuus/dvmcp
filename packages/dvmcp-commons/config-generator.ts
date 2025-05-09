@@ -3,7 +3,7 @@ import { parse, stringify } from 'yaml';
 import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { HEX_KEYS_REGEX } from './constants';
-
+// TODO: Review this is not working good, currently it overrides the config file
 export const CONFIG_EMOJIS = {
   NOSTR: '🔑',
   RELAY: '🔄',

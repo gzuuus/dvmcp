@@ -33,7 +33,7 @@
   "dependencies": {
     "@dvmcp/commons": "^0.2.0",
     "@getalby/lightning-tools": "^5.1.2",
-    "@modelcontextprotocol/sdk": "^1.11.0",
+    "@modelcontextprotocol/sdk": "^1.11.1",
     "@types/yargs": "^17.0.33",
     "dotenv": "^16.5.0",
     "nostr-tools": "^2.12.0",

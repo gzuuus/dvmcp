@@ -568,7 +568,6 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
   "kind": 26910,
   "pubkey": "<provider-pubkey>",
   "content": "{
-    "description": "Code review prompt",
     "messages": [
         {
           "role": "user",

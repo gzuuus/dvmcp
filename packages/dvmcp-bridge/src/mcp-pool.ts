@@ -1,5 +1,11 @@
 import type {
+  CallToolResult,
+  GetPromptResult,
+  ListPromptsResult,
+  ListResourcesResult,
+  ListToolsResult,
   Prompt,
+  ReadResourceResult,
   Resource,
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -9,6 +15,7 @@ import {
   type DvmcpBridgeConfig,
 } from './config-schema';
 import { slugify } from './utils';
+import { loggerBridge } from '@dvmcp/commons/logger';
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();
   private toolRegistry: Map<string, MCPClientHandler> = new Map();
@@ -81,20 +88,27 @@ export class MCPPool {
     );
   }
 
-  async listTools(): Promise<Tool[]> {
+  /**
+   * Aggregate tools from all connected clients and update registry.
+   * @returns ListToolsResult containing tools array
+   */
+  async listTools(): Promise<ListToolsResult> {
     const allTools: Tool[] = [];
+    this.toolRegistry.clear();
     for (const [clientName, client] of this.clients.entries()) {
       const caps = client.getServerCapabilities();
       if (caps && caps.tools) {
         try {
           // Only attempt if client supports tools capability
-          const tools = await client.listTools();
-          tools.forEach((tool) => {
-            this.toolRegistry.set(tool.name, client);
-            allTools.push(tool);
-          });
+          const toolsResult = await client.listTools();
+          if (toolsResult && Array.isArray(toolsResult.tools)) {
+            for (const tool of toolsResult.tools) {
+              this.toolRegistry.set(tool.name, client);
+              allTools.push(tool);
+            }
+          }
         } catch (err) {
-          console.warn(
+          loggerBridge(
             `[listTools] Failed for client '${clientName}':`,
             (err as any)?.message || err
           );
@@ -102,14 +116,16 @@ export class MCPPool {
       }
       // If client does not advertise capability, skip.
     }
-    return allTools;
+
+    // Return a properly structured ListToolsResult object
+    return { tools: allTools };
   }
 
   /**
    * Aggregate resources from all connected clients, protocol-compliant, and update registry.
-   * @returns { resources: Resource[] }
+   * @returns ListResourcesResult containing resources array
    */
-  async listResources(): Promise<Resource[]> {
+  async listResources(): Promise<ListResourcesResult> {
     const allResources: Resource[] = [];
     this.resourceRegistry.clear();
     for (const [clientName, client] of this.clients.entries()) {
@@ -129,7 +145,7 @@ export class MCPPool {
             }
           }
         } catch (err) {
-          console.warn(
+          loggerBridge(
             `[listResources] Failed for client '${clientName}':`,
             (err as any)?.message || err
           );
@@ -137,14 +153,16 @@ export class MCPPool {
       }
       // If client does not advertise capability, skip.
     }
-    return allResources;
+
+    // Return a properly structured ListResourcesResult object
+    return { resources: allResources };
   }
 
   /**
    * Aggregate prompts from all connected clients, protocol-compliant, and update registry.
-   * @returns { prompts: Prompt[] }
+   * @returns ListPromptsResult containing the prompts array
    */
-  async listPrompts(): Promise<Prompt[]> {
+  async listPrompts(): Promise<ListPromptsResult> {
     const allPrompts: Prompt[] = [];
     this.promptRegistry.clear();
     for (const [clientName, client] of this.clients.entries()) {
@@ -152,44 +170,38 @@ export class MCPPool {
       if (caps && caps.prompts) {
         try {
           // Catch per-client errors and continue processing others
-          const promptObj = await client.listPrompts();
-          if (promptObj && Array.isArray(promptObj.prompts)) {
-            for (const prompt of promptObj.prompts) {
+          const promptResult = await client.listPrompts();
+          if (promptResult && Array.isArray(promptResult.prompts)) {
+            for (const prompt of promptResult.prompts) {
               // Register by name if available and type is string
-              if (typeof prompt.name === 'string')
+              if (typeof prompt.name === 'string') {
                 this.promptRegistry.set(prompt.name, client);
+              }
               allPrompts.push(prompt);
             }
           }
         } catch (err) {
           // Log but continue aggregating other clients
-          // Use 'as any' to avoid TS error about 'message'
-          console.warn(
+          loggerBridge(
             `[listPrompts] Failed for client '${clientName}':`,
             (err as any)?.message || err
           );
         }
       }
     }
-    return allPrompts;
+
+    // Return a properly structured ListPromptsResult object
+    return { prompts: allPrompts };
   }
 
   /**
    * Find and return a resource matching the given URI, using the resource registry.
-   * @param resourceUri
-   * @returns Resource or throws if not found
+   * @param resourceUri - URI of the resource to retrieve
+   * @returns ReadResourceResult containing the resource data
    */
-  async readResource(resourceUri: string): Promise<Resource | undefined> {
-    // Helper type guard
-    function isResource(obj: unknown): obj is Resource {
-      return (
-        obj !== null &&
-        typeof obj === 'object' &&
-        typeof (obj as Resource).name === 'string' &&
-        typeof (obj as Resource).uri === 'string'
-      );
-    }
-
+  async readResource(
+    resourceUri: string
+  ): Promise<ReadResourceResult | undefined> {
     let handler = this.resourceRegistry.get(resourceUri);
     // If registry is not populated, refresh it
     if (!handler) {
@@ -198,52 +210,40 @@ export class MCPPool {
     }
     if (!handler) {
       // Not found, but do not throw; return undefined for robustness
-      console.warn(
+      loggerBridge(
         `[readResource] Resource handler not found for: ${resourceUri}`
       );
       return undefined;
     }
+
     try {
       // Catch backend errors (including missing capability) and log
-      const result = await handler.readResource(resourceUri);
-      const out =
-        result && typeof result === 'object' && 'resource' in result
-          ? (result as unknown as { resource: unknown }).resource
-          : result;
-      if (isResource(out)) {
-        return out;
+      const result: ReadResourceResult | undefined =
+        await handler.readResource(resourceUri);
+      if (!result) {
+        loggerBridge(
+          `[readResource] Empty result for resource: ${resourceUri}`
+        );
+        return undefined;
       }
-      // Not a valid resource, return undefined
-      console.warn(
-        `[readResource] Invalid resource structure for: ${resourceUri}`
-      );
-      return undefined;
+
+      return result;
     } catch (err: any) {
       // Handle capability missing or -32601
-      console.warn(
+      loggerBridge(
         `[readResource] Failed to read '${resourceUri}' from backend:`,
         err && (err.message || err)
       );
-      // Log but return undefined, preserving function signature/type.
       return undefined;
     }
   }
 
   /**
    * Find and return a prompt matching the given name, using the prompt registry.
-   * @param promptName
-   * @returns Prompt or throws if not found
+   * @param promptName - Name of the prompt to retrieve
+   * @returns Prompt or undefined if not found
    */
-  async getPrompt(promptName: string): Promise<Prompt | undefined> {
-    // Helper type guard
-    function isPrompt(obj: unknown): obj is Prompt {
-      return (
-        obj !== null &&
-        typeof obj === 'object' &&
-        typeof (obj as Prompt).name === 'string'
-      );
-    }
-
+  async getPrompt(promptName: string): Promise<GetPromptResult | undefined> {
     let handler = this.promptRegistry.get(promptName);
     // If registry is not populated, refresh it
     if (!handler) {
@@ -252,27 +252,28 @@ export class MCPPool {
     }
     if (!handler) {
       // Not found, log and return undefined
-      console.warn(`[getPrompt] Prompt handler not found for: ${promptName}`);
+      loggerBridge(`[getPrompt] Prompt handler not found for: ${promptName}`);
       return undefined;
     }
+
     try {
       // Catch errors due to missing backend capability
-      const result = await handler.getPrompt(promptName);
-      const out =
-        result && typeof result === 'object' && 'prompt' in result
-          ? (result as unknown as { prompt: unknown }).prompt
-          : result;
-      if (isPrompt(out)) {
-        return out;
+      const result: GetPromptResult | undefined =
+        await handler.getPrompt(promptName);
+      loggerBridge('prompt get result', result);
+
+      if (!result) {
+        loggerBridge(`[getPrompt] Empty result for prompt: ${promptName}`);
+        return undefined;
       }
-      console.warn(`[getPrompt] Invalid prompt structure for: ${promptName}`);
-      return undefined;
+
+      loggerBridge('created prompt from SDK result', result);
+      return result;
     } catch (err: any) {
-      console.warn(
+      loggerBridge(
         `[getPrompt] Failed to get prompt '${promptName}' from backend:`,
         err && (err.message || err)
       );
-      // Log but return undefined, preserving function signature/type.
       return undefined;
     }
   }
@@ -280,23 +281,79 @@ export class MCPPool {
    * Call a tool by name with the given arguments
    * @param name - Name of the tool to call
    * @param args - Arguments to pass to the tool
-   * @returns Result of the tool call or error
+   * @returns CallToolResult containing the result or error information
    */
-  async callTool(name: string, args: Record<string, any>) {
+  async callTool(
+    name: string,
+    args: Record<string, any>
+  ): Promise<CallToolResult> {
     // First check if we have a specific client registered for this tool
     const client = this.toolRegistry.get(name);
 
+    if (!client) {
+      loggerBridge(`[callTool] No client found for tool: ${name}`);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Tool not found: ${name}`,
+          },
+        ],
+        isError: true,
+        _meta: {
+          error: {
+            code: -32601,
+            message: `Tool not found: ${name}`,
+          },
+        },
+      };
+    }
+
     try {
       // Wrap backend call in try/catch to intercept capability/other errors
-      return await client?.callTool(name, args);
+      const result: CallToolResult | undefined = await client.callTool(
+        name,
+        args
+      );
+      loggerBridge(`[callTool] Result for tool '${name}':`, result);
+      if (!result) {
+        loggerBridge(`[callTool] Empty result for tool: ${name}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Empty result for tool: ${name}`,
+            },
+          ],
+          isError: true,
+          _meta: {
+            error: {
+              code: -32601,
+              message: `Empty result for tool: ${name}`,
+            },
+          },
+        };
+      }
+      return result;
     } catch (err: any) {
-      console.warn(
+      loggerBridge(
         `[callTool] Failed to call tool '${name}':`,
         err && (err.message || err)
       );
       return {
-        error: `Failed to call tool: ${err?.message || err}`,
-        code: err?.code || -32601,
+        content: [
+          {
+            type: 'text',
+            text: `Failed to call tool: ${err?.message || err}`,
+          },
+        ],
+        isError: true,
+        _meta: {
+          error: {
+            code: err?.code || -32000,
+            message: `Failed to call tool: ${err?.message || err}`,
+          },
+        },
       };
     }
   }

@@ -19,8 +19,13 @@ import { generateZapRequest, verifyZapPayment } from './payment-handler';
 import type { NostrEvent } from 'nostr-tools';
 import type {
   CallToolRequest,
+  CallToolResult,
   GetPromptRequest,
+  GetPromptResult,
+  ListPromptsResult,
+  ListResourcesResult,
   ReadResourceRequest,
+  ReadResourceResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { getServerId } from './utils';
 
@@ -199,7 +204,6 @@ export class DVMBridge {
         await this.relayHandler.publishEvent(errorStatus);
         return;
       }
-
       // Route by kind/method per DVMCP spec
       if (kind === REQUEST_KIND) {
         switch (method) {
@@ -208,32 +212,25 @@ export class DVMBridge {
             break;
           case 'tools/list':
             {
-              const tools = await this.mcpPool.listTools();
-              const response = this.keyManager.signEvent({
-                ...this.keyManager.createEventTemplate(RESPONSE_KIND),
-                content: JSON.stringify({
-                  result: { tools },
-                }),
-                tags: [
-                  [TAG_EVENT_ID, id],
-                  [TAG_PUBKEY, pubkey],
-                ],
-              });
-              await this.relayHandler.publishEvent(response);
-            }
-            break;
-          case 'tools/call':
-            {
-              let jobRequest: CallToolRequest;
               try {
-                jobRequest = JSON.parse(event.content);
+                const toolsResult = await this.mcpPool.listTools();
+                const response = this.keyManager.signEvent({
+                  ...this.keyManager.createEventTemplate(RESPONSE_KIND),
+                  content: JSON.stringify(toolsResult),
+                  tags: [
+                    [TAG_EVENT_ID, id],
+                    [TAG_PUBKEY, pubkey],
+                  ],
+                });
+                loggerBridge('tools list response', response);
+                await this.relayHandler.publishEvent(response);
               } catch (err) {
                 const errorResp = this.keyManager.signEvent({
                   ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify({
                     error: {
-                      code: -32600,
-                      message: 'Invalid request content/json',
+                      code: -32000,
+                      message: 'Failed to list tools',
                       data: err instanceof Error ? err.message : String(err),
                     },
                   }),
@@ -243,8 +240,12 @@ export class DVMBridge {
                   ],
                 });
                 await this.relayHandler.publishEvent(errorResp);
-                break;
               }
+            }
+            break;
+          case 'tools/call':
+            {
+              const jobRequest: CallToolRequest = JSON.parse(event.content);
 
               // Send processing notification
               const processingStatus = this.keyManager.signEvent({
@@ -323,10 +324,11 @@ export class DVMBridge {
                 }
 
                 // Call the tool
-                const result = await this.mcpPool.callTool(
-                  jobRequest.params.name,
-                  jobRequest.params.arguments!
-                );
+                const result: CallToolResult | undefined =
+                  await this.mcpPool.callTool(
+                    jobRequest.params.name,
+                    jobRequest.params.arguments!
+                  );
 
                 // Send success notification
                 const successStatus = this.keyManager.signEvent({
@@ -342,9 +344,7 @@ export class DVMBridge {
                 // Response (Kind 26910) with result
                 const response = this.keyManager.signEvent({
                   ...this.keyManager.createEventTemplate(RESPONSE_KIND),
-                  content: JSON.stringify({
-                    result,
-                  }),
+                  content: JSON.stringify(result),
                   tags: [
                     [TAG_EVENT_ID, id],
                     [TAG_PUBKEY, pubkey],
@@ -387,12 +387,11 @@ export class DVMBridge {
           case 'resources/list':
             {
               try {
-                const resources = await this.mcpPool.listResources();
+                const resourcesResult: ListResourcesResult =
+                  await this.mcpPool.listResources();
                 const response = this.keyManager.signEvent({
                   ...this.keyManager.createEventTemplate(RESPONSE_KIND),
-                  content: JSON.stringify({
-                    result: { resources },
-                  }),
+                  content: JSON.stringify(resourcesResult),
                   tags: [
                     [TAG_EVENT_ID, id],
                     [TAG_PUBKEY, pubkey],
@@ -430,17 +429,18 @@ export class DVMBridge {
                 }
 
                 const resourceUri = readParams.params.uri;
-                const resource = await this.mcpPool.readResource(resourceUri);
+                const resourceResult: ReadResourceResult | undefined =
+                  await this.mcpPool.readResource(resourceUri);
 
-                if (!resource) {
+                if (!resourceResult) {
                   throw new Error(`Resource not found: ${resourceUri}`);
                 }
 
+                // At this point resourceResult is guaranteed to be defined
+
                 const response = this.keyManager.signEvent({
                   ...this.keyManager.createEventTemplate(RESPONSE_KIND),
-                  content: JSON.stringify({
-                    result: { resource },
-                  }),
+                  content: JSON.stringify(resourceResult),
                   tags: [
                     [TAG_EVENT_ID, id],
                     [TAG_PUBKEY, pubkey],
@@ -469,12 +469,11 @@ export class DVMBridge {
           case 'prompts/list':
             {
               try {
-                const prompts = await this.mcpPool.listPrompts();
+                const promptsResult: ListPromptsResult =
+                  await this.mcpPool.listPrompts();
                 const response = this.keyManager.signEvent({
                   ...this.keyManager.createEventTemplate(RESPONSE_KIND),
-                  content: JSON.stringify({
-                    result: { prompts },
-                  }),
+                  content: JSON.stringify(promptsResult),
                   tags: [
                     [TAG_EVENT_ID, id],
                     [TAG_PUBKEY, pubkey],
@@ -510,17 +509,15 @@ export class DVMBridge {
                 }
 
                 const promptName = getParams.params.name;
-                const prompt = await this.mcpPool.getPrompt(promptName);
-
+                const prompt: GetPromptResult | undefined =
+                  await this.mcpPool.getPrompt(promptName);
                 if (!prompt) {
                   throw new Error(`Prompt not found: ${promptName}`);
                 }
 
                 const response = this.keyManager.signEvent({
                   ...this.keyManager.createEventTemplate(RESPONSE_KIND),
-                  content: JSON.stringify({
-                    result: { prompt },
-                  }),
+                  content: JSON.stringify(prompt),
                   tags: [
                     [TAG_EVENT_ID, id],
                     [TAG_PUBKEY, pubkey],

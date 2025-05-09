@@ -4,6 +4,11 @@ import type { DvmcpBridgeConfig } from './config-schema';
 import { loggerBridge } from '@dvmcp/commons/logger';
 import type {
   CallToolResult,
+  GetPromptResult,
+  ListPromptsResult,
+  ListResourcesResult,
+  ListToolsResult,
+  ReadResourceResult,
   Implementation,
   ServerCapabilities,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -58,53 +63,63 @@ export class MCPClientHandler {
     );
   }
 
-  async listTools() {
-    return (await this.client.listTools()).tools;
+  async listTools(): Promise<ListToolsResult> {
+    return await this.client.listTools();
   }
 
   /**
    * List resources exposed by the connected MCP server.
-   * Returns the full protocol object: { resources: ResourceType[] }
+   * @returns ListResourcesResult containing resources array
    */
-  async listResources() {
-    // Protocol: returns { resources: [ ... ] }
+  async listResources(): Promise<ListResourcesResult> {
     return await this.client.listResources();
   }
 
   /**
    * Read the content of a specific resource by its URI or ID.
    * @param resourceUriOrId Resource URI or unique identifier
-   * @returns Resource data per protocol/SDK
+   * @returns ReadResourceResult containing the resource data
    */
-  async readResource(resourceUriOrId: string) {
-    // Pass the parameter as { uri: string }
+  async readResource(
+    resourceUriOrId: string
+  ): Promise<ReadResourceResult | undefined> {
     return await this.client.readResource({ uri: resourceUriOrId });
   }
 
   /**
    * List prompts exposed by the connected MCP server.
-   * Returns the full protocol object: { prompts: PromptType[] }
+   * @returns ListPromptsResult containing prompts array
    */
-  async listPrompts() {
-    // Protocol: returns { prompts: [ ... ] }
+  async listPrompts(): Promise<ListPromptsResult> {
     return await this.client.listPrompts();
   }
 
   /**
-   * Get details for a specific prompt by ID or name.
-   * @param promptIdOrName Prompt id (string) or name
+   * Get details for a specific prompt by name.
+   * @param promptName Prompt name
    * @returns Prompt data per protocol/SDK
    */
-  async getPrompt(promptIdOrName: string) {
+  async getPrompt(promptName: string): Promise<GetPromptResult | undefined> {
     // Pass the parameter as { name: string }
-    return await this.client.getPrompt({ name: promptIdOrName });
+    return await this.client.getPrompt({ name: promptName });
   }
 
-  async callTool(name: string, args: Record<string, CallToolResult>) {
-    return await this.client.callTool({
+  /**
+   * Call a tool by name with the given arguments
+   * @param name Name of the tool to call
+   * @param args Arguments to pass to the tool
+   * @returns CallToolResult containing the result from the tool execution
+   */
+  async callTool(
+    name: string,
+    args: Record<string, any>
+  ): Promise<CallToolResult | undefined> {
+    // Use type assertion to handle the SDK's return type
+    const result = (await this.client.callTool({
       name,
       arguments: args,
-    });
+    })) as CallToolResult | undefined;
+    return result;
   }
 
   async disconnect() {
@@ -117,10 +132,30 @@ export class MCPClientHandler {
  * Explicitly exported resource and prompt methods for MCP pool.
  * Each function takes an MCPClientHandler instance (handler) as first argument.
  */
-export const listResources = (handler: MCPClientHandler) =>
-  handler.listResources();
-export const readResource = (handler: MCPClientHandler, uriOrId: string) =>
-  handler.readResource(uriOrId);
-export const listPrompts = (handler: MCPClientHandler) => handler.listPrompts();
-export const getPrompt = (handler: MCPClientHandler, idOrName: string) =>
-  handler.getPrompt(idOrName);
+export const listResources = (
+  handler: MCPClientHandler
+): Promise<ListResourcesResult> => handler.listResources();
+
+export const readResource = (
+  handler: MCPClientHandler,
+  uriOrId: string
+): Promise<ReadResourceResult | undefined> => handler.readResource(uriOrId);
+
+export const listPrompts = (
+  handler: MCPClientHandler
+): Promise<ListPromptsResult> => handler.listPrompts();
+
+export const listTools = (
+  handler: MCPClientHandler
+): Promise<ListToolsResult> => handler.listTools();
+
+export const getPrompt = (
+  handler: MCPClientHandler,
+  name: string
+): Promise<GetPromptResult | undefined> => handler.getPrompt(name);
+
+export const callTool = (
+  handler: MCPClientHandler,
+  name: string,
+  args: Record<string, any>
+): Promise<CallToolResult | undefined> => handler.callTool(name, args);

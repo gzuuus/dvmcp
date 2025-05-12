@@ -89,7 +89,6 @@ export class DVMBridge {
       const tools = await this.mcpPool.listTools();
       loggerBridge(`Available MCP tools across all servers: ${tools.length}`);
 
-      // Announce to Nostr network, but continue if it fails
       loggerBridge('Announcing service to Nostr network...');
       try {
         await this.nostrAnnouncer.updateAnnouncement();
@@ -110,7 +109,6 @@ export class DVMBridge {
         });
       };
 
-      // Subscribe to requests
       try {
         subscribe();
       } catch (error) {
@@ -149,11 +147,6 @@ export class DVMBridge {
     }
   }
 
-  /**
-   * Deletes the service announcement from relays
-   * @param reason Optional reason for deletion
-   * @returns The deletion event that was published
-   */
   async deleteAnnouncement(reason?: string) {
     loggerBridge('Deleting service announcement from relays...');
     try {
@@ -166,7 +159,8 @@ export class DVMBridge {
       throw error;
     }
   }
-
+  // TODO: maybe split the request handler into multiple files per methods or capabilities, eg. tools, prompts, resources, etc.
+  // TODO: create a reusable function to handle payments to use with different capabilities methods
   private async handleRequest(event: NostrEvent): Promise<void> {
     try {
       const tags = event.tags;
@@ -204,11 +198,9 @@ export class DVMBridge {
         await this.relayHandler.publishEvent(errorStatus);
         return;
       }
-      // Route by kind/method per DVMCP spec
       if (kind === REQUEST_KIND) {
         switch (method) {
           case 'initialize':
-            // TODO: Implement initialization for private servers
             break;
           case 'tools/list':
             {
@@ -247,7 +239,6 @@ export class DVMBridge {
             {
               const jobRequest: CallToolRequest = JSON.parse(event.content);
 
-              // Send processing notification
               const processingStatus = this.keyManager.signEvent({
                 ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
                 content: JSON.stringify({
@@ -263,7 +254,6 @@ export class DVMBridge {
               await this.relayHandler.publishEvent(processingStatus);
 
               try {
-                // Pricing/payment logic
                 const pricing = this.mcpPool.getToolPricing(
                   jobRequest.params.name
                 );
@@ -274,10 +264,10 @@ export class DVMBridge {
                     jobRequest.params.name,
                     id,
                     pubkey,
-                    this.config
+                    this.config,
+                    this.keyManager
                   );
                   if (zapRequest) {
-                    // Send payment required notification
                     const paymentRequiredStatus = this.keyManager.signEvent({
                       ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
                       tags: [
@@ -290,7 +280,6 @@ export class DVMBridge {
                     });
                     await this.relayHandler.publishEvent(paymentRequiredStatus);
 
-                    // Wait for payment verification
                     const paymentVerified = await verifyZapPayment(
                       zapRequest.relays,
                       zapRequest.paymentRequest,
@@ -310,7 +299,6 @@ export class DVMBridge {
                       await this.relayHandler.publishEvent(paymentFailedStatus);
                       break;
                     }
-                    // Inform payment accepted
                     const paymentAcceptedStatus = this.keyManager.signEvent({
                       ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
                       tags: [
@@ -323,14 +311,12 @@ export class DVMBridge {
                   }
                 }
 
-                // Call the tool
                 const result: CallToolResult | undefined =
                   await this.mcpPool.callTool(
                     jobRequest.params.name,
                     jobRequest.params.arguments!
                   );
 
-                // Send success notification
                 const successStatus = this.keyManager.signEvent({
                   ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
                   tags: [
@@ -341,7 +327,6 @@ export class DVMBridge {
                 });
                 await this.relayHandler.publishEvent(successStatus);
 
-                // Response (Kind 26910) with result
                 const response = this.keyManager.signEvent({
                   ...this.keyManager.createEventTemplate(RESPONSE_KIND),
                   content: JSON.stringify(result),
@@ -420,7 +405,6 @@ export class DVMBridge {
           case 'resources/read':
             {
               try {
-                // Parse the content to get resource URI
                 const readParams: ReadResourceRequest = JSON.parse(
                   event.content
                 );
@@ -435,8 +419,6 @@ export class DVMBridge {
                 if (!resourceResult) {
                   throw new Error(`Resource not found: ${resourceUri}`);
                 }
-
-                // At this point resourceResult is guaranteed to be defined
 
                 const response = this.keyManager.signEvent({
                   ...this.keyManager.createEventTemplate(RESPONSE_KIND),
@@ -502,7 +484,6 @@ export class DVMBridge {
           case 'prompts/get':
             {
               try {
-                // Parse the content to get prompt name
                 const getParams: GetPromptRequest = JSON.parse(event.content);
                 if (!getParams.params.name) {
                   throw new Error('Prompt name is required');
@@ -544,7 +525,6 @@ export class DVMBridge {
             }
             break;
           default:
-            // Unknown/unimplemented method
             const notImpl = this.keyManager.signEvent({
               ...this.keyManager.createEventTemplate(RESPONSE_KIND),
               content: JSON.stringify({
@@ -562,7 +542,6 @@ export class DVMBridge {
             await this.relayHandler.publishEvent(notImpl);
         }
       } else if (kind === NOTIFICATION_KIND) {
-        // Notification (could be progress/cancel/payment etc.)
         if (method === 'notifications/cancel') {
           // Handle cancel notification by finding the associated job and canceling it
           const eventIdToCancel = tags.find(
@@ -571,7 +550,6 @@ export class DVMBridge {
           if (eventIdToCancel) {
             loggerBridge(`Received cancel request for job: ${eventIdToCancel}`);
 
-            // Send cancellation acknowledgment
             const cancelAckStatus = this.keyManager.signEvent({
               ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
               content: JSON.stringify({
@@ -585,21 +563,11 @@ export class DVMBridge {
               ],
             });
             await this.relayHandler.publishEvent(cancelAckStatus);
-
-            // TODO: Actual cancellation would require tracking active jobs and their IDs
-            // This would be implemented in a more complete job management system
           }
-        } else if (method === 'notifications/progress') {
-          // Handle progress notifications
-          loggerBridge(`Received progress notification: ${event.content}`);
-          // Forward or process progress notifications as needed
         } else {
-          // Handle any other notification types
           loggerBridge(`Received unhandled notification type: ${method}`);
         }
       } else {
-        // Unknown event kind
-        // Optionally log or reply with protocol error here
         loggerBridge(`Received unhandled event kind: ${kind}`);
       }
     } catch (error) {

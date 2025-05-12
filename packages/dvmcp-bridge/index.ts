@@ -1,8 +1,3 @@
-/**
- * @file Main library entry point for the DVMCP Bridge package
- * This file exports components for programmatic usage of the bridge
- */
-
 export { DVMBridge } from './src/dvm-bridge';
 export { loadDvmcpConfig } from './src/config-loader';
 export { createRelayHandler } from './src/relay';
@@ -11,19 +6,11 @@ export { dvmcpBridgeConfigSchema } from './src/config-schema';
 import { DVMBridge } from './src/dvm-bridge';
 import { loggerBridge } from '@dvmcp/commons/logger';
 import { loadDvmcpConfig } from './src/config-loader';
-import { createRelayHandler } from './src/relay';
 
-/**
- * Options for starting the DVMCP Bridge
- */
 export interface BridgeStartOptions {
-  /** Path to the configuration file */
   configPath?: string;
-  /** Environment variables to use for configuration */
   env?: Record<string, string>;
-  /** CLI flags to use for configuration */
   cliFlags?: Record<string, any>;
-  /** Provide a pre-loaded configuration object instead of loading from sources */
   preloadedConfig?: any;
 }
 
@@ -35,10 +22,7 @@ export interface BridgeStartOptions {
  */
 export async function startBridge(options: BridgeStartOptions = {}) {
   try {
-    // Use preloaded config or load from sources
     const config = options.preloadedConfig || (await loadDvmcpConfig(options));
-
-    // Initialize bridge with configuration (relay handler is created internally)
     const bridge = new DVMBridge(config);
 
     const shutdown = async () => {
@@ -63,5 +47,4 @@ export async function startBridge(options: BridgeStartOptions = {}) {
   }
 }
 
-// For backward compatibility
 export default startBridge;

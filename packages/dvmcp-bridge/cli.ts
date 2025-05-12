@@ -1,9 +1,4 @@
 #!/usr/bin/env bun
-/**
- * @file Command-line interface for the DVMCP Bridge package
- * This file provides the CLI entry point for the dvmcp-bridge command
- */
-
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'path';
 import process from 'process';
@@ -16,9 +11,6 @@ import {
 } from './index.js';
 import { CONFIG_EMOJIS } from '@dvmcp/commons/config-generator';
 
-/**
- * Recursively transform schema into yargs options, with robust types.
- */
 type AnySchema = { [k: string]: unknown } | { fields?: Record<string, any> };
 function buildYargsOptions(
   schema: AnySchema,
@@ -54,11 +46,9 @@ function buildYargsOptions(
             .map((v: string) => v.trim())
             .filter(Boolean);
         },
-        // Don't demand options upfront, we'll validate after loading config
         demandOption: false,
       };
     } else {
-      // Scalar
       const typemap: Record<string, string> = {
         string: 'string',
         number: 'number',
@@ -67,7 +57,6 @@ function buildYargsOptions(
       opts[optionKey] = {
         describe: meta.doc,
         type: typemap[meta.type] || 'string',
-        // Don't demand options upfront, we'll validate after loading config
         demandOption: false,
       };
     }
@@ -75,10 +64,8 @@ function buildYargsOptions(
   return { opts };
 }
 
-// Build CLI schema-driven options
 const { opts: yargsOptions } = buildYargsOptions(dvmcpBridgeConfigSchema);
 
-// These options are “reserved” controls (not config fields):
 const reservedFlags = [
   'configure',
   'delete-announcement',
@@ -88,7 +75,6 @@ const reservedFlags = [
   'help',
 ];
 
-// Yargs CLI definition
 const cli = yargs(hideBin(process.argv))
   .usage(
     `${CONFIG_EMOJIS.INFO} DVMCP Bridge - MCP-enabled DVM providing AI/computational tools\n\nUsage: dvmcp-bridge [options]`
@@ -124,26 +110,19 @@ const cli = yargs(hideBin(process.argv))
     ['$0 --configure', 'Run config wizard'],
   ])
   .wrap(Math.min(110, process.stdout.columns || 100));
-// Parse CLI args
 const args = cli.parseSync();
 
-// Strip reserved flags from config override set
-/**
- * Extract CLI-defined config overrides, ignoring reserved flags.
- */
 function extractConfigOverrides(
   argsObj: Record<string, unknown>
 ): Record<string, unknown> {
   const configOverrides: Record<string, unknown> = {};
   for (const key of Object.keys(argsObj)) {
-    // Only include options produced by schema, skip reserved/known
     if (reservedFlags.includes(key)) continue;
     setDeepProp(configOverrides, key, argsObj[key]);
   }
   return configOverrides;
 }
 
-// Helper to set .-delimited path in object tree
 function setDeepProp(
   obj: Record<string, unknown>,
   path: string,
@@ -158,14 +137,12 @@ function setDeepProp(
   o[keys[keys.length - 1]] = value;
 }
 
-// Default config path, but prefer --config-path if provided
 const configPath = args['config-path']
   ? resolve(args['config-path'])
   : join(process.cwd(), 'config.dvmcp.yml');
 
-/* No-op: setConfigPath removed – configPath is passed directly to loader */
+// FIXME: fix this, right now its simply overwritting the config file empty
 const configure = async (): Promise<void> => {
-  // Lazy import only if used to minimize deps
   const { ConfigGenerator } = await import('@dvmcp/commons/config-generator');
 
   console.log(
@@ -190,7 +167,6 @@ const deleteAnnouncement = async (config: any) => {
   const reason =
     typeof args['reason'] === 'string' ? args['reason'] : undefined;
   try {
-    // Create a bridge instance using the startBridge function
     const bridge = await startBridge({ preloadedConfig: config });
     console.log(`${CONFIG_EMOJIS.INFO} Deleting service announcement...`);
     await bridge.deleteAnnouncement(reason);
@@ -210,7 +186,6 @@ const deleteAnnouncement = async (config: any) => {
 const cliMain = async () => {
   if (args['help']) {
     cli.showHelp();
-    // Print extra schema/option reference
     console.log('\n---\nConfig schema options:');
     Object.entries(dvmcpBridgeConfigSchema).forEach(([section, meta]) => {
       console.log(`  --${section}.* : ${meta.doc}`);
@@ -230,14 +205,10 @@ const cliMain = async () => {
     return;
   }
 
-  // Load, merge, and validate the final config (now including CLI flag overrides)
-  // (move config loading/validation before relay handler instantiation)
-  // Prepare CLI flag overrides in config schema shape
   const cliFlagsConfig = extractConfigOverrides(args);
 
   let config;
   try {
-    // Check if config file exists before attempting to load
     if (!existsSync(configPath)) {
       console.log(
         `${CONFIG_EMOJIS.INFO} No configuration file found at ${configPath}`
@@ -252,23 +223,19 @@ const cliMain = async () => {
       if (!args['configure']) {
         console.log(`${CONFIG_EMOJIS.INFO} Starting configuration wizard...`);
         await configure();
-        // After configuration is complete, try loading again
         console.log(
           `${CONFIG_EMOJIS.INFO} Configuration created, attempting to load...`
         );
       }
     }
 
-    // Load configuration using the loadDvmcpConfig function
     config = await loadDvmcpConfig({
       configPath,
-      // Only include defined env variables as strings
       env: Object.fromEntries(
         Object.entries(process.env).filter(
           ([_, v]) => typeof v === 'string'
         ) as [string, string][]
       ),
-      // Pass CLI flags directly to the loader for proper merging
       cliFlags: cliFlagsConfig,
     });
   } catch (err) {
@@ -303,7 +270,6 @@ const cliMain = async () => {
   }
 
   if (args['verbose']) {
-    // Print the actively loaded config as YAML (for --verbose users)
     const { default: yaml } = await import('yaml');
     console.log('\n📋 DVMCP Bridge Configuration:');
     console.log(yaml.stringify(config));

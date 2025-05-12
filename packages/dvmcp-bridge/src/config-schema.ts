@@ -1,15 +1,8 @@
 /**
  * Unified dvmcp-bridge configuration schema and interfaces.
  *
- * This file defines the single source of truth for all configuration options:
- * - Used for CLI flags, config file shapes, help output, and type inference.
- * - Each field is described with TypeScript types, JSDoc, required/default/doc metadata.
- * - Schema is exportable for yargs integration, loader, and validation.
+ * This file defines the single source of truth for all configuration options
  */
-
-/* =========================
- * Interface Definitions
- * ========================= */
 
 /**
  * Nostr protocol configuration.
@@ -162,10 +155,6 @@ export interface DvmcpBridgeConfig {
    */
   lightning?: LightningConfig;
 }
-
-/* =========================
- * Schema Metadata
- * ========================= */
 
 /**
  * Unified config schema: includes all fields/types/defaults/docs for use in yargs and validation.

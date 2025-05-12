@@ -31,7 +31,7 @@ describe('MCPPool', () => {
   });
 
   test('should list tools from all servers', async () => {
-    const tools = await mcpPool.listTools();
+    const { tools } = await mcpPool.listTools();
     // Each server now has 2 tools: echo and env
     expect(tools.length).toEqual(serverNames.length * 2);
 

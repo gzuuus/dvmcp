@@ -5,9 +5,10 @@ import type { SubCloser } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
 import {
   createNostrProvider,
-  createKeyManager,
+  type KeyManager,
 } from '@dvmcp/commons/nostr/key-manager';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
+import { DvmcpBridgeConfig } from './config-schema';
 
 interface ZapInvoiceResponse {
   paymentRequest: string;
@@ -15,23 +16,8 @@ interface ZapInvoiceResponse {
   id?: string;
 }
 
-/**
- * Creates a subscription to events on specific relays
- * @param relays Array of relay URLs to subscribe to
- * @param onEvent Callback function to handle received events
- * @param filter Filter for the subscription
- * @returns A subscription closer function
- */
-/**
- * Creates a subscription to events on specific relays.
- * @param config - Unified DvmcpBridgeConfig (schema-based)
- * @param relays - Array of relay URLs to subscribe to; if empty, defaults from config.nostr.relayUrls
- * @param onEvent - Callback function to handle received events
- * @param filter - Filter for the subscription
- * @returns A subscription closer function
- */
 function subscribeToRelays(
-  config: import('./config-schema').DvmcpBridgeConfig,
+  config: DvmcpBridgeConfig,
   relays: string[],
   onEvent: (event: Event) => void,
   filter: Filter
@@ -56,29 +42,13 @@ function subscribeToRelays(
   };
 }
 
-/**
- * Generates a zap request and BOLT11 invoice using the configured Lightning Address
- * @param amount Amount in satoshis
- * @param toolName Name of the tool being paid for
- * @param eventId Optional event ID to associate with the zap
- * @param recipientPubkey Pubkey of the recipient
- * @returns The zap request information including payment request and relays
- */
-/**
- * Generates a zap request and BOLT11 invoice using the configured Lightning Address
- * @param config Unified DvmcpBridgeConfig (schema-based)
- * @param amount Amount in satoshis
- * @param toolName Name of the tool being paid for
- * @param eventId Optional event ID to associate with the zap
- * @param recipientPubkey Pubkey of the recipient
- * @returns The zap request information including payment request and relays
- */
 export async function generateZapRequest(
   amount: string,
   toolName: string,
   eventId: string,
   recipientPubkey: string,
-  config: import('./config-schema').DvmcpBridgeConfig
+  config: DvmcpBridgeConfig,
+  keyManager: KeyManager
 ): Promise<
   | {
       paymentRequest: string;
@@ -118,8 +88,6 @@ export async function generateZapRequest(
       p: recipientPubkey,
     };
 
-    // Create keyManager instance for this config
-    const keyManager = createKeyManager(config.nostr.privateKey);
     const zapOptions = {
       nostr: createNostrProvider(keyManager),
     };
@@ -146,23 +114,10 @@ export async function generateZapRequest(
   }
 }
 
-/**
- * Verifies payment by listening for a zap receipt
- * @param relays The relays to listen for the zap receipt
- * @param paymentRequest The bolt11 payment request to match in the receipt
- * @returns Promise that resolves to true when payment is verified
- */
-/**
- * Verifies payment by listening for a zap receipt
- * @param config Unified DvmcpBridgeConfig (schema-based)
- * @param relays The relays to listen for the zap receipt
- * @param paymentRequest The bolt11 payment request to match in the receipt
- * @returns Promise that resolves to true when payment is verified
- */
 export async function verifyZapPayment(
   relays: string[],
   paymentRequest: string,
-  config: import('./config-schema').DvmcpBridgeConfig
+  config: DvmcpBridgeConfig
 ): Promise<boolean> {
   return new Promise((resolve) => {
     const filter: Filter = {
@@ -210,21 +165,8 @@ export async function verifyZapPayment(
   });
 }
 
-/**
- * For backward compatibility - generates a simple invoice without zap functionality
- * @param amount Amount in satoshis
- * @param description Optional description for the invoice
- * @returns The payment request (BOLT11 invoice) and payment hash
- */
-/**
- * Generates a simple invoice without zap functionality (legacy compat)
- * @param config Unified DvmcpBridgeConfig (schema-based)
- * @param amount Amount in satoshis
- * @param description Optional description for the invoice
- * @returns The payment request (BOLT11 invoice) and payment hash
- */
 export async function generateInvoice(
-  config: import('./config-schema').DvmcpBridgeConfig,
+  config: DvmcpBridgeConfig,
   amount: string,
   description?: string
 ): Promise<
@@ -245,7 +187,7 @@ export async function generateInvoice(
 
     const invoice = await ln.requestInvoice({
       satoshi: parseInt(amount, 10),
-      comment: description || 'Payment for DVMCP tool',
+      comment: description || 'Payment for DVMCP',
     });
 
     return {

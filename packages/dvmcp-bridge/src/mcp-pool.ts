@@ -16,6 +16,12 @@ import {
 } from './config-schema';
 import { slugify } from './utils';
 import { loggerBridge } from '@dvmcp/commons/logger';
+
+/**
+ * MCPPool manages a collection of MCP clients and provides centralized access to their capabilities
+ * It handles tool, resource, and prompt registries with optimized capability checks
+ */
+
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();
   private toolRegistry: Map<string, MCPClientHandler> = new Map();
@@ -88,10 +94,6 @@ export class MCPPool {
     );
   }
 
-  /**
-   * Aggregate tools from all connected clients and update registry.
-   * @returns ListToolsResult containing tools array
-   */
   async listTools(): Promise<ListToolsResult> {
     const allTools: Tool[] = [];
     this.toolRegistry.clear();
@@ -99,7 +101,6 @@ export class MCPPool {
       const caps = client.getServerCapabilities();
       if (caps && caps.tools) {
         try {
-          // Only attempt if client supports tools capability
           const toolsResult = await client.listTools();
           if (toolsResult && Array.isArray(toolsResult.tools)) {
             for (const tool of toolsResult.tools) {
@@ -114,17 +115,10 @@ export class MCPPool {
           );
         }
       }
-      // If client does not advertise capability, skip.
     }
-
-    // Return a properly structured ListToolsResult object
     return { tools: allTools };
   }
 
-  /**
-   * Aggregate resources from all connected clients, protocol-compliant, and update registry.
-   * @returns ListResourcesResult containing resources array
-   */
   async listResources(): Promise<ListResourcesResult> {
     const allResources: Resource[] = [];
     this.resourceRegistry.clear();
@@ -132,15 +126,11 @@ export class MCPPool {
       const caps = client.getServerCapabilities();
       if (caps && caps.resources) {
         try {
-          // Only attempt if client supports resources capability
           const resObj = await client.listResources();
           if (resObj && Array.isArray(resObj.resources)) {
             for (const resource of resObj.resources) {
-              // Register by uri and name if available and type is string
               if (typeof resource.uri === 'string')
                 this.resourceRegistry.set(resource.uri, client);
-              if (typeof resource.name === 'string')
-                this.resourceRegistry.set(resource.name, client);
               allResources.push(resource);
             }
           }
@@ -151,17 +141,10 @@ export class MCPPool {
           );
         }
       }
-      // If client does not advertise capability, skip.
     }
-
-    // Return a properly structured ListResourcesResult object
     return { resources: allResources };
   }
 
-  /**
-   * Aggregate prompts from all connected clients, protocol-compliant, and update registry.
-   * @returns ListPromptsResult containing the prompts array
-   */
   async listPrompts(): Promise<ListPromptsResult> {
     const allPrompts: Prompt[] = [];
     this.promptRegistry.clear();
@@ -169,11 +152,9 @@ export class MCPPool {
       const caps = client.getServerCapabilities();
       if (caps && caps.prompts) {
         try {
-          // Catch per-client errors and continue processing others
           const promptResult = await client.listPrompts();
           if (promptResult && Array.isArray(promptResult.prompts)) {
             for (const prompt of promptResult.prompts) {
-              // Register by name if available and type is string
               if (typeof prompt.name === 'string') {
                 this.promptRegistry.set(prompt.name, client);
               }
@@ -181,7 +162,6 @@ export class MCPPool {
             }
           }
         } catch (err) {
-          // Log but continue aggregating other clients
           loggerBridge(
             `[listPrompts] Failed for client '${clientName}':`,
             (err as any)?.message || err
@@ -189,27 +169,41 @@ export class MCPPool {
         }
       }
     }
-
-    // Return a properly structured ListPromptsResult object
     return { prompts: allPrompts };
   }
 
   /**
-   * Find and return a resource matching the given URI, using the resource registry.
-   * @param resourceUri - URI of the resource to retrieve
-   * @returns ReadResourceResult containing the resource data
+   * Ensures a registry is populated by checking if it's empty and refreshing if needed
+   * @param registry The registry to check
+   * @param refreshMethod The method to call if refresh is needed
+   * @returns The handler if found after potential refresh, undefined otherwise
    */
+  private async ensureHandler<K extends string>(
+    registry: Map<K, MCPClientHandler>,
+    key: K,
+    refreshMethod: () => Promise<any>
+  ): Promise<MCPClientHandler | undefined> {
+    // Check if we already have the handler
+    let handler = registry.get(key);
+    if (handler) return handler;
+
+    // If registry is empty or handler not found, refresh and try again
+    if (registry.size === 0 || !handler) {
+      await refreshMethod();
+      return registry.get(key);
+    }
+  }
+
   async readResource(
     resourceUri: string
   ): Promise<ReadResourceResult | undefined> {
-    let handler = this.resourceRegistry.get(resourceUri);
-    // If registry is not populated, refresh it
+    const handler = await this.ensureHandler(
+      this.resourceRegistry,
+      resourceUri,
+      () => this.listResources()
+    );
+
     if (!handler) {
-      await this.listResources();
-      handler = this.resourceRegistry.get(resourceUri);
-    }
-    if (!handler) {
-      // Not found, but do not throw; return undefined for robustness
       loggerBridge(
         `[readResource] Resource handler not found for: ${resourceUri}`
       );
@@ -217,7 +211,6 @@ export class MCPPool {
     }
 
     try {
-      // Catch backend errors (including missing capability) and log
       const result: ReadResourceResult | undefined =
         await handler.readResource(resourceUri);
       if (!result) {
@@ -229,7 +222,6 @@ export class MCPPool {
 
       return result;
     } catch (err: any) {
-      // Handle capability missing or -32601
       loggerBridge(
         `[readResource] Failed to read '${resourceUri}' from backend:`,
         err && (err.message || err)
@@ -238,26 +230,19 @@ export class MCPPool {
     }
   }
 
-  /**
-   * Find and return a prompt matching the given name, using the prompt registry.
-   * @param promptName - Name of the prompt to retrieve
-   * @returns Prompt or undefined if not found
-   */
   async getPrompt(promptName: string): Promise<GetPromptResult | undefined> {
-    let handler = this.promptRegistry.get(promptName);
-    // If registry is not populated, refresh it
+    const handler = await this.ensureHandler(
+      this.promptRegistry,
+      promptName,
+      () => this.listPrompts()
+    );
+
     if (!handler) {
-      await this.listPrompts();
-      handler = this.promptRegistry.get(promptName);
-    }
-    if (!handler) {
-      // Not found, log and return undefined
       loggerBridge(`[getPrompt] Prompt handler not found for: ${promptName}`);
       return undefined;
     }
 
     try {
-      // Catch errors due to missing backend capability
       const result: GetPromptResult | undefined =
         await handler.getPrompt(promptName);
       loggerBridge('prompt get result', result);
@@ -277,40 +262,25 @@ export class MCPPool {
       return undefined;
     }
   }
-  /**
-   * Call a tool by name with the given arguments
-   * @param name - Name of the tool to call
-   * @param args - Arguments to pass to the tool
-   * @returns CallToolResult containing the result or error information
-   */
+
   async callTool(
     name: string,
     args: Record<string, any>
   ): Promise<CallToolResult> {
-    // First check if we have a specific client registered for this tool
-    const client = this.toolRegistry.get(name);
+    const client = await this.ensureHandler(this.toolRegistry, name, () =>
+      this.listTools()
+    );
 
     if (!client) {
       loggerBridge(`[callTool] No client found for tool: ${name}`);
       return {
-        content: [
-          {
-            type: 'text',
-            text: `Tool not found: ${name}`,
-          },
-        ],
+        content: [{ type: 'text', text: `Tool not found: ${name}` }],
         isError: true,
-        _meta: {
-          error: {
-            code: -32601,
-            message: `Tool not found: ${name}`,
-          },
-        },
+        _meta: { error: { code: -32601, message: `Tool not found: ${name}` } },
       };
     }
 
     try {
-      // Wrap backend call in try/catch to intercept capability/other errors
       const result: CallToolResult | undefined = await client.callTool(
         name,
         args
@@ -364,26 +334,15 @@ export class MCPPool {
     return this.toolPricing.get(toolName);
   }
 
-  /**
-   * Get all available clients
-   * @returns Array of all MCPClientHandler instances
-   */
   getAllClients(): MCPClientHandler[] {
     return Array.from(this.clients.values());
   }
 
-  /**
-   * Get the default client for general operations
-   * This method prioritizes clients with more capabilities
-   * @returns The most capable client, or undefined if no clients are available
-   */
   getDefaultClient(): MCPClientHandler | undefined {
-    // If there's only one client, return it
     if (this.clients.size === 1) {
       return this.clients.values().next().value;
     }
 
-    // Otherwise, find the client with the most capabilities
     const allClients = this.getAllClients();
     if (allClients.length === 0) return undefined;
 
@@ -391,7 +350,6 @@ export class MCPPool {
       const bestCaps = bestClient.getServerCapabilities();
       const currentCaps = currentClient.getServerCapabilities();
 
-      // Count the number of capabilities for each client
       const bestCapCount = Object.values(bestCaps || {}).filter(Boolean).length;
       const currentCapCount = Object.values(currentCaps || {}).filter(
         Boolean
@@ -401,19 +359,10 @@ export class MCPPool {
     }, allClients[0]);
   }
 
-  /**
-   * Get all server configurations
-   * @returns Array of server configurations
-   */
   getServerConfigs(): DvmcpBridgeConfig['mcp']['servers'] {
     return Array.from(this.serverConfigs.values());
   }
 
-  /**
-   * Get the environment variables for a specific server
-   * @param serverName - Name of the server
-   * @returns Environment variables for the server or undefined if not found
-   */
   getServerEnvironment(serverName: string): Record<string, string> | undefined {
     const serverConfig = this.serverConfigs.get(serverName);
     return serverConfig?.env;

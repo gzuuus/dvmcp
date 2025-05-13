@@ -2,10 +2,7 @@ import { loggerBridge } from '@dvmcp/commons/logger';
 import {
   TAG_EVENT_ID,
   TAG_PUBKEY,
-  TAG_STATUS,
-  NOTIFICATION_KIND,
   RESPONSE_KIND,
-  TAG_METHOD,
 } from '@dvmcp/commons/constants';
 import type { MCPPool } from '../mcp-pool';
 import type { DvmcpBridgeConfig } from '../config-schema.js';
@@ -17,7 +14,7 @@ import {
   ListToolsRequestSchema,
   type CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
-import { handlePaymentFlow } from './payment-handler';
+import { PaymentProcessor } from './payment-processor';
 import { createProtocolErrorResponse } from '../utils.js';
 
 /**
@@ -112,42 +109,31 @@ export async function handleToolsCall(
   const id = event.id;
   const pubkey = event.pubkey;
 
-  // Send processing status notification
-  const processingStatus = keyManager.signEvent({
-    ...keyManager.createEventTemplate(NOTIFICATION_KIND),
-    content: JSON.stringify({
-      method: 'notifications/progress',
-      params: { message: 'processing' },
-    }),
-    tags: [
-      [TAG_PUBKEY, pubkey],
-      [TAG_EVENT_ID, id],
-      [TAG_METHOD, 'notifications/progress'],
-    ],
-  });
-  await relayHandler.publishEvent(processingStatus);
+  // Processing notification will be sent by the payment processor
+
+  // Create payment processor
+  const paymentProcessor = new PaymentProcessor(
+    config,
+    keyManager,
+    relayHandler
+  );
 
   try {
     // Check if tool requires payment
     const pricing = mcpPool.getToolPricing(jobRequest.params.name);
 
-    if (pricing?.price) {
-      // Handle payment flow
-      const paymentSuccessful = await handlePaymentFlow(
-        pricing.price,
-        jobRequest.params.name,
-        id,
-        pubkey,
-        config,
-        keyManager,
-        relayHandler,
-        pricing.unit || 'sats'
-      );
+    // Process payment if required
+    const paymentSuccessful = await paymentProcessor.processPaymentIfRequired(
+      pricing,
+      jobRequest.params.name,
+      'tool',
+      id,
+      pubkey
+    );
 
-      if (!paymentSuccessful) {
-        // Payment failed, exit early
-        return;
-      }
+    if (!paymentSuccessful) {
+      // Payment failed, exit early
+      return;
     }
 
     // Call the tool
@@ -157,15 +143,7 @@ export async function handleToolsCall(
     );
 
     // Send success notification
-    const successStatus = keyManager.signEvent({
-      ...keyManager.createEventTemplate(NOTIFICATION_KIND),
-      tags: [
-        [TAG_STATUS, 'success'],
-        [TAG_EVENT_ID, id],
-        [TAG_PUBKEY, pubkey],
-      ],
-    });
-    await relayHandler.publishEvent(successStatus);
+    await paymentProcessor.sendSuccessNotification(id, pubkey);
 
     // Send response
     const response = keyManager.signEvent({
@@ -179,15 +157,7 @@ export async function handleToolsCall(
     await relayHandler.publishEvent(response);
   } catch (error) {
     // Send error notification
-    const errorStatus = keyManager.signEvent({
-      ...keyManager.createEventTemplate(NOTIFICATION_KIND),
-      tags: [
-        [TAG_STATUS, 'error'],
-        [TAG_EVENT_ID, id],
-        [TAG_PUBKEY, pubkey],
-      ],
-    });
-    await relayHandler.publishEvent(errorStatus);
+    await paymentProcessor.sendErrorNotification(id, pubkey);
 
     // Send error response
     const errorResp = keyManager.signEvent({

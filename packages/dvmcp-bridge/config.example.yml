@@ -32,7 +32,8 @@ mcp:
         API_KEY: "your_api_key_here"
         DEBUG: "true"
         NODE_ENV: "production"
-      # [Optional] Tool pricing configuration
+      # [Optional] Capability pricing configuration
+      # Tool pricing
       tools:
         - name: "tool-from-server1"
           price: "1000"
@@ -40,20 +41,36 @@ mcp:
         - name: "another-tool-from-server1"
           price: "2000"
           unit: "sats"
+      # Prompt pricing
+      prompts:
+        - name: "prompt-from-server1"
+          price: "500"
+          unit: "sats"
+      # Resource pricing
+      resources:
+        - uri: "resource-uri-from-server1"
+          price: "750"
+          unit: "sats"
     
     - command: "python"
       args:
         - "src/external-mcp-server2.py"
-      # [Optional] Tool pricing configuration
+      # [Optional] Capability pricing configuration
+      # Tool pricing
       tools:
         - name: "tool-from-server2"
           price: "500"
           unit: "sats"
-
-# [Optional] Whitelist Configuration
-# whitelist:
-  # List of allowed public keys (leave empty for no restrictions)
-  # allowedPubkeys: []
+      # Prompt pricing
+      prompts:
+        - name: "prompt-from-server2"
+          price: "250"
+          unit: "sats"
+      # Resource pricing
+      resources:
+        - uri: "resource-uri-from-server2"
+          price: "300"
+          unit: "sats"
 
 # [Optional] Lightning Payment Configuration (required if pricing is configured)
 lightning:
@@ -63,3 +80,8 @@ lightning:
   zapRelays:
     - "wss://relay.damus.io"
     - "wss://nostr.mutinywallet.com"
+
+    # [Optional] Whitelist Configuration
+# whitelist:
+  # List of allowed public keys (leave empty for no restrictions)
+  # allowedPubkeys: []

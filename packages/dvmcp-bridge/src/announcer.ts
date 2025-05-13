@@ -118,6 +118,16 @@ export class NostrAnnouncer {
       [TAG_SERVER_IDENTIFIER, this.serverId],
     ];
 
+    // Add pricing tags for tools
+    if (toolsResult.tools && toolsResult.tools.length > 0) {
+      for (const tool of toolsResult.tools) {
+        const pricing = this.mcpPool.getToolPricing(tool.name);
+        if (pricing?.price) {
+          tags.push(['t', tool.name, pricing.price, pricing.unit || 'sats']);
+        }
+      }
+    }
+
     const event = this.keyManager.signEvent({
       ...this.keyManager.createEventTemplate(TOOLS_LIST_KIND),
       content: JSON.stringify(toolsResult),
@@ -139,6 +149,23 @@ export class NostrAnnouncer {
       [TAG_SERVER_IDENTIFIER, this.serverId],
     ];
 
+    // Add pricing tags for resources
+    if (resourcesResult.resources && resourcesResult.resources.length > 0) {
+      for (const resource of resourcesResult.resources) {
+        if (resource.uri) {
+          const pricing = this.mcpPool.getResourcePricing(resource.uri);
+          if (pricing?.price) {
+            tags.push([
+              't',
+              resource.uri,
+              pricing.price,
+              pricing.unit || 'sats',
+            ]);
+          }
+        }
+      }
+    }
+
     const event = this.keyManager.signEvent({
       ...this.keyManager.createEventTemplate(RESOURCES_LIST_KIND),
       content: JSON.stringify(resourcesResult),
@@ -159,6 +186,23 @@ export class NostrAnnouncer {
       [TAG_UNIQUE_IDENTIFIER, `${this.serverId}/prompts/list`],
       [TAG_SERVER_IDENTIFIER, this.serverId],
     ];
+
+    // Add pricing tags for prompts
+    if (promptsResult.prompts && promptsResult.prompts.length > 0) {
+      for (const prompt of promptsResult.prompts) {
+        if (prompt.name) {
+          const pricing = this.mcpPool.getPromptPricing(prompt.name);
+          if (pricing?.price) {
+            tags.push([
+              't',
+              prompt.name,
+              pricing.price,
+              pricing.unit || 'sats',
+            ]);
+          }
+        }
+      }
+    }
 
     const event = this.keyManager.signEvent({
       ...this.keyManager.createEventTemplate(PROMPTS_LIST_KIND),

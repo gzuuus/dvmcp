@@ -164,8 +164,7 @@ export class DVMBridge {
    * based on the method type.
    */
 
-  // TODO: add payment support for prompts and resources
-  // TODO: add validation of method tag vs method in content
+  // Payment support is now implemented for all capabilities (tools, prompts, and resources)
   private async handleRequest(event: NostrEvent): Promise<void> {
     try {
       const tags = event.tags;
@@ -241,7 +240,8 @@ export class DVMBridge {
               event,
               this.mcpPool,
               this.keyManager,
-              this.relayHandler
+              this.relayHandler,
+              this.config
             );
             break;
           case 'prompts/list':
@@ -257,7 +257,8 @@ export class DVMBridge {
               event,
               this.mcpPool,
               this.keyManager,
-              this.relayHandler
+              this.relayHandler,
+              this.config
             );
             break;
           default:

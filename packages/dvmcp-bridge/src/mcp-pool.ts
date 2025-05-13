@@ -29,6 +29,10 @@ export class MCPPool {
   private promptRegistry: Map<string, MCPClientHandler> = new Map();
   private toolPricing: Map<string, { price?: string; unit?: string }> =
     new Map();
+  private promptPricing: Map<string, { price?: string; unit?: string }> =
+    new Map();
+  private resourcePricing: Map<string, { price?: string; unit?: string }> =
+    new Map();
   private serverConfigs: Map<string, DvmcpBridgeConfig['mcp']['servers'][0]> =
     new Map();
 
@@ -81,6 +85,30 @@ export class MCPPool {
             this.toolPricing.set(tool.name, {
               price: tool.price,
               unit: tool.unit,
+            });
+          }
+        });
+      }
+
+      // Register prompt pricing if available
+      if (serverConfig.prompts && serverConfig.prompts.length > 0) {
+        serverConfig.prompts.forEach((prompt) => {
+          if (prompt.price || prompt.unit) {
+            this.promptPricing.set(prompt.name, {
+              price: prompt.price,
+              unit: prompt.unit,
+            });
+          }
+        });
+      }
+
+      // Register resource pricing if available
+      if (serverConfig.resources && serverConfig.resources.length > 0) {
+        serverConfig.resources.forEach((resource) => {
+          if (resource.price || resource.unit) {
+            this.resourcePricing.set(resource.uri, {
+              price: resource.price,
+              unit: resource.unit,
             });
           }
         });
@@ -332,6 +360,18 @@ export class MCPPool {
     toolName: string
   ): { price?: string; unit?: string } | undefined {
     return this.toolPricing.get(toolName);
+  }
+
+  getPromptPricing(
+    promptName: string
+  ): { price?: string; unit?: string } | undefined {
+    return this.promptPricing.get(promptName);
+  }
+
+  getResourcePricing(
+    resourceUri: string
+  ): { price?: string; unit?: string } | undefined {
+    return this.resourcePricing.get(resourceUri);
   }
 
   getAllClients(): MCPClientHandler[] {

@@ -4,6 +4,7 @@ import {
   RESPONSE_KIND,
 } from '@dvmcp/commons/constants';
 import type { MCPPool } from '../mcp-pool';
+import type { DvmcpBridgeConfig } from '../config-schema.js';
 import type { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
 import type { NostrEvent } from 'nostr-tools';
@@ -15,6 +16,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { createProtocolErrorResponse } from '../utils';
 import { loggerBridge } from '@dvmcp/commons/logger';
+import { PaymentProcessor } from './payment-processor';
 
 /**
  * Handles the prompts/list method request
@@ -82,7 +84,8 @@ export async function handlePromptsGet(
   event: NostrEvent,
   mcpPool: MCPPool,
   keyManager: KeyManager,
-  relayHandler: RelayHandler
+  relayHandler: RelayHandler,
+  config: DvmcpBridgeConfig
 ): Promise<void> {
   const {
     success,
@@ -106,17 +109,45 @@ export async function handlePromptsGet(
   const id = event.id;
   const pubkey = event.pubkey;
 
+  // Create payment processor
+  const paymentProcessor = new PaymentProcessor(
+    config,
+    keyManager,
+    relayHandler
+  );
+
   try {
     if (!getParams.params.name) {
       throw new Error('Prompt name is required');
     }
 
     const promptName = getParams.params.name;
+
+    // Check if prompt requires payment
+    const pricing = mcpPool.getPromptPricing(promptName);
+
+    // Process payment if required
+    const paymentSuccessful = await paymentProcessor.processPaymentIfRequired(
+      pricing,
+      promptName,
+      'prompt',
+      id,
+      pubkey
+    );
+
+    if (!paymentSuccessful) {
+      // Payment failed, exit early
+      return;
+    }
+
     const prompt: GetPromptResult | undefined =
       await mcpPool.getPrompt(promptName);
     if (!prompt) {
       throw new Error(`Prompt not found: ${promptName}`);
     }
+
+    // Send success notification
+    await paymentProcessor.sendSuccessNotification(id, pubkey);
 
     const response = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -128,6 +159,10 @@ export async function handlePromptsGet(
     });
     await relayHandler.publishEvent(response);
   } catch (err) {
+    // Send error notification
+    await paymentProcessor.sendErrorNotification(id, pubkey);
+
+    // Send error response
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
       content: JSON.stringify({

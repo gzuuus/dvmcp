@@ -34,7 +34,8 @@ export async function handlePaymentFlow(
   config: DvmcpBridgeConfig,
   keyManager: KeyManager,
   relayHandler: RelayHandler,
-  unit: string = 'sats'
+  unit: string = 'sats',
+  timeoutMs?: number
 ): Promise<boolean> {
   try {
     // Generate zap request
@@ -53,51 +54,41 @@ export async function handlePaymentFlow(
     }
 
     // Send payment required notification
-    const paymentRequiredStatus = keyManager.signEvent({
-      ...keyManager.createEventTemplate(NOTIFICATION_KIND),
-      tags: [
-        [TAG_STATUS, 'payment-required'],
-        [TAG_AMOUNT, price, unit],
-        ['invoice', zapRequest.paymentRequest],
-        [TAG_EVENT_ID, eventId],
-        [TAG_PUBKEY, pubkey],
-      ],
-    });
-    await relayHandler.publishEvent(paymentRequiredStatus);
-
-    // Verify payment
-    const paymentVerified = await verifyZapPayment(
-      zapRequest.relays,
-      zapRequest.paymentRequest,
-      config
-    );
-
-    if (!paymentVerified) {
-      // Send payment failed notification
-      const paymentFailedStatus = keyManager.signEvent({
+    await relayHandler.publishEvent(
+      keyManager.signEvent({
         ...keyManager.createEventTemplate(NOTIFICATION_KIND),
         tags: [
-          [TAG_STATUS, 'error'],
+          [TAG_STATUS, 'payment-required'],
+          [TAG_AMOUNT, price, unit],
+          ['invoice', zapRequest.paymentRequest],
           [TAG_EVENT_ID, eventId],
           [TAG_PUBKEY, pubkey],
         ],
-      });
-      await relayHandler.publishEvent(paymentFailedStatus);
-      return false;
-    }
+      })
+    );
 
-    // Send payment accepted notification
-    const paymentAcceptedStatus = keyManager.signEvent({
-      ...keyManager.createEventTemplate(NOTIFICATION_KIND),
-      tags: [
-        [TAG_STATUS, 'payment-accepted'],
-        [TAG_EVENT_ID, eventId],
-        [TAG_PUBKEY, pubkey],
-      ],
-    });
-    await relayHandler.publishEvent(paymentAcceptedStatus);
+    // Verify payment with timeout
+    const paymentVerified = await verifyZapPayment(
+      zapRequest.relays,
+      zapRequest.paymentRequest,
+      config,
+      timeoutMs
+    );
 
-    return true;
+    // Send appropriate notification based on payment status
+    const status = paymentVerified ? 'payment-accepted' : 'error';
+    await relayHandler.publishEvent(
+      keyManager.signEvent({
+        ...keyManager.createEventTemplate(NOTIFICATION_KIND),
+        tags: [
+          [TAG_STATUS, status],
+          [TAG_EVENT_ID, eventId],
+          [TAG_PUBKEY, pubkey],
+        ],
+      })
+    );
+
+    return paymentVerified;
   } catch (error) {
     loggerBridge(
       `Payment flow error: ${error instanceof Error ? error.message : String(error)}`
@@ -140,7 +131,7 @@ function subscribeToRelays(
 
 export async function generateZapRequest(
   amount: string,
-  toolName: string,
+  capabilityName: string,
   eventId: string,
   recipientPubkey: string,
   config: DvmcpBridgeConfig,
@@ -155,6 +146,7 @@ export async function generateZapRequest(
   | undefined
 > {
   try {
+    // Validate lightning configuration
     if (!config.lightning?.address) {
       loggerBridge(
         'No Lightning Address configured. Cannot generate zap request.'
@@ -162,46 +154,44 @@ export async function generateZapRequest(
       return undefined;
     }
 
+    // Fetch lightning address information
     const ln = new LightningAddress(config.lightning.address);
     await ln.fetch();
 
+    // Verify nostr pubkey is available
     if (!ln.nostrPubkey) {
       loggerBridge(
         'Lightning Address does not have a nostr pubkey. Cannot create zap request.'
       );
       return undefined;
     }
-    loggerBridge(`Lightning Address found: ${ln.nostrPubkey}`);
+
+    // Use dedicated zap relays if available, otherwise use default relays
     const relays = config.lightning?.zapRelays?.length
       ? config.lightning.zapRelays
       : config.nostr.relayUrls;
 
-    const zapArgs = {
-      satoshi: parseInt(amount, 10),
-      comment: `Payment for ${toolName} tool`,
-      relays: relays,
-      e: eventId,
-      p: recipientPubkey,
-    };
-
-    const zapOptions = {
-      nostr: createNostrProvider(keyManager),
-    };
-
+    // Generate invoice using Alby lightning tools
     const invoice = (await ln.zapInvoice(
-      zapArgs,
-      zapOptions
+      {
+        satoshi: parseInt(amount, 10),
+        comment: `Payment for ${capabilityName}`,
+        relays,
+        e: eventId,
+        p: recipientPubkey,
+      },
+      { nostr: createNostrProvider(keyManager) }
     )) as ZapInvoiceResponse;
 
     const zapRequestId = invoice.id || invoice.paymentHash;
     loggerBridge(
-      `Generated zap request with ID: ${zapRequestId}, and invoice: ${invoice.paymentRequest}`
+      `Generated zap request: ${zapRequestId.slice(0, 10)}..., invoice: ${invoice.paymentRequest.slice(0, 15)}...`
     );
 
     return {
       paymentRequest: invoice.paymentRequest,
-      zapRequestId: zapRequestId,
-      relays: relays,
+      zapRequestId,
+      relays,
       nostrPubkey: ln.nostrPubkey,
     };
   } catch (error) {
@@ -213,13 +203,11 @@ export async function generateZapRequest(
 export async function verifyZapPayment(
   relays: string[],
   paymentRequest: string,
-  config: DvmcpBridgeConfig
+  config: DvmcpBridgeConfig,
+  timeoutMs: number = 5 * 60 * 1000 // Default to 5 minutes if not specified
 ): Promise<boolean> {
   return new Promise((resolve) => {
-    const filter: Filter = {
-      kinds: [9735],
-      since: Math.floor(Date.now() / 1000) - 10,
-    };
+    // Use effective relays based on availability
     const zapRelays =
       relays.length > 0
         ? relays
@@ -231,33 +219,50 @@ export async function verifyZapPayment(
       `Subscribing to zap receipts on relays: ${zapRelays.join(', ')}`
     );
 
+    // Track state to prevent multiple resolutions
+    let isResolved = false;
+
+    // Setup subscription to listen for zap receipts
     const subscription = subscribeToRelays(
       config,
       zapRelays,
       (event: Event) => {
+        // Only process if not already resolved
+        if (isResolved) return;
+
         try {
+          // Check for matching bolt11 tag in zap receipt
           if (event.kind === 9735) {
             const bolt11Tag = event.tags.find(
               (tag) => tag[0] === 'bolt11'
             )?.[1];
 
-            if (bolt11Tag) {
-              if (bolt11Tag === paymentRequest) {
-                loggerBridge(
-                  `Found matching bolt11 tag in zap receipt: ${bolt11Tag.slice(0, 20)}...`
-                );
-                subscription.close();
-                resolve(true);
-                return;
-              }
+            if (bolt11Tag === paymentRequest) {
+              loggerBridge(`Payment verified: ${bolt11Tag.slice(0, 20)}...`);
+              cleanup(true);
             }
           }
         } catch (error) {
           loggerBridge('Error processing zap receipt:', error);
         }
       },
-      filter
+      { kinds: [9735], since: Math.floor(Date.now() / 1000) - 10 }
     );
+
+    // Set up timeout for automatic cleanup
+    const timeoutId = setTimeout(() => {
+      loggerBridge('Payment verification timeout reached');
+      cleanup(false);
+    }, timeoutMs);
+
+    // Helper function to clean up resources and resolve
+    function cleanup(success: boolean) {
+      if (isResolved) return;
+      isResolved = true;
+      clearTimeout(timeoutId);
+      subscription.close();
+      resolve(success);
+    }
   });
 }
 

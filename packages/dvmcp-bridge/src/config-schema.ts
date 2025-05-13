@@ -21,16 +21,12 @@ export interface NostrConfig {
 }
 
 /**
- * MCP tool price configuration (per tool/server).
+ * Common pricing configuration for MCP capabilities.
  */
-export interface MCPToolConfig {
+export interface MCPPricingConfig {
   /**
-   * Name of the tool exposed by the MCP server.
-   */
-  name: string;
-  /**
-   * Price for tool use/requests, as a string (integer in "sats" unless unit specified).
-   * If omitted, tool may be free or inherit global pricing.
+   * Price for capability use/requests, as a string (integer in "sats" unless unit specified).
+   * If omitted, capability may be free or inherit global pricing.
    * @example "1000"
    */
   price?: string;
@@ -39,6 +35,36 @@ export interface MCPToolConfig {
    * @default "sats"
    */
   unit?: string;
+}
+
+/**
+ * MCP tool price configuration (per tool/server).
+ */
+export interface MCPToolConfig extends MCPPricingConfig {
+  /**
+   * Name of the tool exposed by the MCP server.
+   */
+  name: string;
+}
+
+/**
+ * MCP prompt price configuration (per prompt/server).
+ */
+export interface MCPPromptConfig extends MCPPricingConfig {
+  /**
+   * Name of the prompt exposed by the MCP server.
+   */
+  name: string;
+}
+
+/**
+ * MCP resource price configuration (per resource/server).
+ */
+export interface MCPResourceConfig extends MCPPricingConfig {
+  /**
+   * URI of the resource exposed by the MCP server.
+   */
+  uri: string;
 }
 
 /**
@@ -61,6 +87,14 @@ export interface MCPServerConfig {
    * Array of tools/pricing exposed by this server.
    */
   tools?: MCPToolConfig[];
+  /**
+   * Array of prompts/pricing exposed by this server.
+   */
+  prompts?: MCPPromptConfig[];
+  /**
+   * Array of resources/pricing exposed by this server.
+   */
+  resources?: MCPResourceConfig[];
 }
 
 /**

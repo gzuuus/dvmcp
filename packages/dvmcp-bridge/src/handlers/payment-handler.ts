@@ -1,14 +1,110 @@
-import { LightningAddress } from '@getalby/lightning-tools';
 import { loggerBridge } from '@dvmcp/commons/logger';
+import {
+  TAG_AMOUNT,
+  TAG_EVENT_ID,
+  TAG_PUBKEY,
+  TAG_STATUS,
+  NOTIFICATION_KIND,
+} from '@dvmcp/commons/constants';
+import type { DvmcpBridgeConfig } from '../config-schema.js';
+import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
+import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { LightningAddress } from '@getalby/lightning-tools';
 import type { Event } from 'nostr-tools/pure';
 import type { SubCloser } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
-import {
-  createNostrProvider,
-  type KeyManager,
-} from '@dvmcp/commons/nostr/key-manager';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { DvmcpBridgeConfig } from './config-schema';
+import { createNostrProvider } from '@dvmcp/commons/nostr/key-manager';
+
+/**
+ * Handles the payment flow for a capability that requires payment
+ * @param price The price to charge for the capability
+ * @param capabilityName The name of the capability being paid for
+ * @param eventId The original event ID that triggered this payment flow
+ * @param pubkey The public key of the user making the request
+ * @param config The bridge configuration
+ * @param keyManager The key manager instance
+ * @param relayHandler The relay handler instance
+ * @returns A boolean indicating whether payment was successful
+ */
+export async function handlePaymentFlow(
+  price: string,
+  capabilityName: string,
+  eventId: string,
+  pubkey: string,
+  config: DvmcpBridgeConfig,
+  keyManager: KeyManager,
+  relayHandler: RelayHandler,
+  unit: string = 'sats'
+): Promise<boolean> {
+  try {
+    // Generate zap request
+    const zapRequest = await generateZapRequest(
+      price,
+      capabilityName,
+      eventId,
+      pubkey,
+      config,
+      keyManager
+    );
+
+    if (!zapRequest) {
+      loggerBridge(`Failed to generate zap request for ${capabilityName}`);
+      return false;
+    }
+
+    // Send payment required notification
+    const paymentRequiredStatus = keyManager.signEvent({
+      ...keyManager.createEventTemplate(NOTIFICATION_KIND),
+      tags: [
+        [TAG_STATUS, 'payment-required'],
+        [TAG_AMOUNT, price, unit],
+        ['invoice', zapRequest.paymentRequest],
+        [TAG_EVENT_ID, eventId],
+        [TAG_PUBKEY, pubkey],
+      ],
+    });
+    await relayHandler.publishEvent(paymentRequiredStatus);
+
+    // Verify payment
+    const paymentVerified = await verifyZapPayment(
+      zapRequest.relays,
+      zapRequest.paymentRequest,
+      config
+    );
+
+    if (!paymentVerified) {
+      // Send payment failed notification
+      const paymentFailedStatus = keyManager.signEvent({
+        ...keyManager.createEventTemplate(NOTIFICATION_KIND),
+        tags: [
+          [TAG_STATUS, 'error'],
+          [TAG_EVENT_ID, eventId],
+          [TAG_PUBKEY, pubkey],
+        ],
+      });
+      await relayHandler.publishEvent(paymentFailedStatus);
+      return false;
+    }
+
+    // Send payment accepted notification
+    const paymentAcceptedStatus = keyManager.signEvent({
+      ...keyManager.createEventTemplate(NOTIFICATION_KIND),
+      tags: [
+        [TAG_STATUS, 'payment-accepted'],
+        [TAG_EVENT_ID, eventId],
+        [TAG_PUBKEY, pubkey],
+      ],
+    });
+    await relayHandler.publishEvent(paymentAcceptedStatus);
+
+    return true;
+  } catch (error) {
+    loggerBridge(
+      `Payment flow error: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return false;
+  }
+}
 
 interface ZapInvoiceResponse {
   paymentRequest: string;

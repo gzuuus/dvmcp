@@ -39,8 +39,8 @@ const mockDVMAnnouncement = {
     ['d', 'dvm-announcement'],
     ['k', `${TOOL_REQUEST_KIND}`],
     ['capabilities', 'mcp-1.0'],
-    ['t', 'mcp'],
-    ['t', 'test-echo'],
+    ['cap', 'mcp'],
+    ['cap', 'test-echo'],
   ],
 } as UnsignedEvent;
 

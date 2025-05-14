@@ -112,7 +112,7 @@ export class NostrAnnouncer {
       for (const tool of toolsResult.tools) {
         const pricing = this.mcpPool.getToolPricing(tool.name);
         if (pricing?.price) {
-          tags.push(['t', tool.name, pricing.price, pricing.unit || 'sats']);
+          tags.push(['cap', tool.name, pricing.price, pricing.unit || 'sats']);
         }
       }
     }
@@ -140,7 +140,7 @@ export class NostrAnnouncer {
           const pricing = this.mcpPool.getResourcePricing(resource.uri);
           if (pricing?.price) {
             tags.push([
-              't',
+              'cap',
               resource.uri,
               pricing.price,
               pricing.unit || 'sats',
@@ -173,7 +173,7 @@ export class NostrAnnouncer {
           const pricing = this.mcpPool.getPromptPricing(prompt.name);
           if (pricing?.price) {
             tags.push([
-              't',
+              'cap',
               prompt.name,
               pricing.price,
               pricing.unit || 'sats',

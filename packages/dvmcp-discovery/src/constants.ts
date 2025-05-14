@@ -1,8 +1,4 @@
 /**
- * Constants for the DVMCP Discovery package
- */
-
-/**
  * CLI flag constants
  */
 export const CLI_FLAGS = {

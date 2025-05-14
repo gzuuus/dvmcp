@@ -1,12 +1,20 @@
 import { type Event } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
-import { type Tool } from '@modelcontextprotocol/sdk/types.js';
+import {
+  type CallToolRequest,
+  type Tool,
+} from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry.js';
 import {
-  TOOL_REQUEST_KIND,
-  TOOL_RESPONSE_KIND,
-  DVM_NOTICE_KIND,
+  REQUEST_KIND,
+  RESPONSE_KIND,
+  NOTIFICATION_KIND,
+  TAG_PUBKEY,
+  TAG_EVENT_ID,
+  TAG_METHOD,
+  TAG_SERVER_IDENTIFIER,
+  TAG_STATUS,
 } from '@dvmcp/commons/constants';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { NWCPaymentHandler } from './nwc-payment';
@@ -74,12 +82,16 @@ export class ToolExecutor {
 
       const subscription = this.relayHandler.subscribeToRequests(
         (event) => {
-          if (event.tags.some((t) => t[0] === 'e' && t[1] === executionId)) {
+          if (
+            event.tags.some(
+              (t) => t[0] === TAG_EVENT_ID && t[1] === executionId
+            )
+          ) {
             this.handleToolResponse(event, context, resolve, reject);
           }
         },
         {
-          kinds: [TOOL_RESPONSE_KIND, DVM_NOTICE_KIND],
+          kinds: [RESPONSE_KIND, NOTIFICATION_KIND],
           since: Math.floor(Date.now() / 1000),
         }
       );
@@ -130,24 +142,56 @@ export class ToolExecutor {
     resolve: (value: unknown) => void,
     reject: (reason: Error) => void
   ): Promise<void> {
-    if (event.kind === TOOL_RESPONSE_KIND) {
+    if (event.kind === RESPONSE_KIND) {
       try {
-        const result = JSON.parse(event.content);
+        // Parse the response content according to the DVMCP specification
+        const response = JSON.parse(event.content);
+
+        // Check if it's an error response
+        if (response.error) {
+          clearTimeout(context.timeoutId);
+          context.cleanup();
+          reject(new Error(response.error.message || 'Unknown error'));
+          return;
+        }
+
+        // Check if it's an execution error (isError flag)
+        if (response.isError === true) {
+          clearTimeout(context.timeoutId);
+          context.cleanup();
+          reject(
+            new Error(
+              typeof response.content === 'string'
+                ? response.content
+                : 'Tool execution error'
+            )
+          );
+          return;
+        }
+
+        // Handle successful response
         clearTimeout(context.timeoutId);
         context.cleanup();
-        resolve(result.content);
+        resolve(response.content);
       } catch (error) {
         clearTimeout(context.timeoutId);
         context.cleanup();
         reject(error instanceof Error ? error : new Error(String(error)));
       }
-    } else if (event.kind === DVM_NOTICE_KIND) {
-      const status = event.tags.find((t) => t[0] === 'status')?.[1];
-      if (status === 'error') {
+    } else if (event.kind === NOTIFICATION_KIND) {
+      // Check for method tag (MCP notification) or status tag (Nostr notification)
+      const method = event.tags.find((t) => t[0] === TAG_METHOD)?.[1];
+      const status = event.tags.find((t) => t[0] === TAG_STATUS)?.[1];
+
+      // Handle error notifications
+      if (status === 'error' || method === 'error') {
         clearTimeout(context.timeoutId);
         context.cleanup();
-        reject(new Error(event.content));
+        reject(new Error(event.content || 'Error notification received'));
+        return;
       }
+
+      // Handle payment required notifications
       if (status === 'payment-required') {
         try {
           // Extract the invoice from the event
@@ -200,28 +244,46 @@ export class ToolExecutor {
     tool: Tool,
     params: unknown
   ): Event {
-    const request = this.keyManager.createEventTemplate(TOOL_REQUEST_KIND);
-
-    const parameters =
-      !tool.inputSchema.properties ||
-      Object.keys(tool.inputSchema.properties).length === 0
-        ? {}
-        : params;
+    // Use the new request kind
+    const request = this.keyManager.createEventTemplate(REQUEST_KIND); // 25910
 
     const toolInfo = this.toolRegistry.getToolInfo(toolId);
     if (!toolInfo) throw new Error(`Tool ${toolId} not found`);
 
+    // Format parameters according to tool schema
+    const parameters =
+      !tool.inputSchema.properties ||
+      Object.keys(tool.inputSchema.properties).length === 0
+        ? {}
+        : (params as Record<string, unknown>);
+
+    // Create a properly typed CallToolRequest object
+    const requestContent: CallToolRequest = {
+      method: 'tools/call',
+      params: {
+        name: tool.name,
+        arguments: parameters,
+      },
+    };
+
+    // Create a JSON-RPC request object according to the DVMCP specification
+    // Add the id separately as it's part of the JSON-RPC standard but not the CallToolRequest type
     request.content = JSON.stringify({
-      name: tool.name,
-      parameters,
-      providerPubkey: toolInfo?.providerPubkey || '',
+      ...requestContent,
     });
 
-    request.tags.push(['c', 'execute-tool']);
+    // Add required tags according to the spec
+    // Target provider pubkey
+    if (toolInfo.providerPubkey) {
+      request.tags.push([TAG_PUBKEY, toolInfo.providerPubkey]);
+    }
 
-    // Only add provider pubkey tag if it exists
-    if (toolInfo?.providerPubkey) {
-      request.tags.push(['p', toolInfo.providerPubkey]);
+    // Add method tag according to the DVMCP specification
+    request.tags.push([TAG_METHOD, 'tools/call']);
+
+    // Add server ID tag if available
+    if (toolInfo.serverId) {
+      request.tags.push([TAG_SERVER_IDENTIFIER, toolInfo.serverId]);
     }
 
     return this.keyManager.signEvent(request);

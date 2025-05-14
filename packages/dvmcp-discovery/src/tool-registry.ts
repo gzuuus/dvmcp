@@ -1,4 +1,4 @@
-import { type Tool } from '@modelcontextprotocol/sdk/types.js';
+import { type Tool, type Resource } from '@modelcontextprotocol/sdk/types.js';
 import { ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
@@ -13,19 +13,34 @@ export class ToolRegistry {
       tool: Tool;
       providerPubkey?: string;
       isBuiltIn?: boolean;
+      serverId?: string;
     }
   > = new Map();
+
+  // Store server information
+  private servers: Map<
+    string,
+    {
+      pubkey: string;
+      content: string;
+      metadata?: any;
+    }
+  > = new Map();
+
+  // Store resources by server ID
+  private resources: Map<string, Resource[]> = new Map();
 
   constructor(private mcpServer: McpServer) {}
 
   public registerTool(
     toolId: string,
     tool: Tool,
-    providerPubkey: string
+    providerPubkey: string,
+    serverId?: string
   ): void {
     try {
       ToolSchema.parse(tool);
-      this.tools.set(toolId, { tool, providerPubkey });
+      this.tools.set(toolId, { tool, providerPubkey, serverId });
       this.registerWithMcp(toolId, tool);
     } catch (error) {
       console.error(`Invalid MCP tool format for ${toolId}:`, error);
@@ -243,6 +258,74 @@ export class ToolRegistry {
     callback: (toolId: string, args: unknown) => Promise<unknown>
   ): void {
     this.executionCallback = callback;
+  }
+
+  /**
+   * Register a server with the registry
+   * @param serverId - Server's unique identifier
+   * @param pubkey - Provider's public key
+   * @param content - Server announcement content
+   * @param metadata - Optional metadata about the server
+   */
+  public registerServer(
+    serverId: string,
+    pubkey: string,
+    content: string,
+    metadata?: any
+  ): void {
+    this.servers.set(serverId, { pubkey, content, metadata });
+    loggerDiscovery(`Registered server ${serverId} from ${pubkey}`);
+  }
+
+  /**
+   * Get server information by ID
+   * @param serverId - Server's unique identifier
+   * @returns Server information or undefined if not found
+   */
+  public getServer(
+    serverId: string
+  ): { pubkey: string; content: string; metadata?: any } | undefined {
+    return this.servers.get(serverId);
+  }
+
+  /**
+   * List all registered servers
+   * @returns Array of [serverId, serverInfo] pairs
+   */
+  public listServers(): [
+    string,
+    { pubkey: string; content: string; metadata?: any },
+  ][] {
+    return Array.from(this.servers.entries());
+  }
+
+  /**
+   * Register resources for a server
+   * @param serverId - Server's unique identifier
+   * @param resources - Array of resources to register
+   */
+  public registerResources(serverId: string, resources: Resource[]): void {
+    this.resources.set(serverId, resources);
+    loggerDiscovery(
+      `Registered ${resources.length} resources for server ${serverId}`
+    );
+  }
+
+  /**
+   * Get resources for a server
+   * @param serverId - Server's unique identifier
+   * @returns Array of resources or undefined if not found
+   */
+  public getResources(serverId: string): Resource[] | undefined {
+    return this.resources.get(serverId);
+  }
+
+  /**
+   * List all registered resources
+   * @returns Array of [serverId, resources] pairs
+   */
+  public listResources(): [string, Resource[]][] {
+    return Array.from(this.resources.entries());
   }
 
   private mapJsonSchemaToZod(schema: Tool['inputSchema']): z.ZodRawShape {

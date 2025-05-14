@@ -1,6 +1,6 @@
 import type { Event, Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
+import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
 import type { NaddrData, NprofileData } from './nip19-utils';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 
@@ -40,17 +40,16 @@ async function fetchAnnouncement(
 export async function fetchProviderAnnouncement(
   providerData: NprofileData
 ): Promise<Event | null> {
-  // Query for the provider's DVM announcement
+  // Query for the provider's server announcement
   const filter: Filter = {
-    kinds: [DVM_ANNOUNCEMENT_KIND],
+    kinds: [SERVER_ANNOUNCEMENT_KIND],
     authors: [providerData.pubkey],
-    '#t': ['mcp'],
   };
 
   const events = await fetchAnnouncement(
     providerData.relays,
     filter,
-    'No DVM announcement found for provider'
+    'No server announcement found for provider'
   );
 
   if (!events) return null;
@@ -77,13 +76,23 @@ export async function fetchServerAnnouncement(
   return fetchAnnouncement(
     addrData.relays,
     filter,
-    'No DVM announcement found for the specified coordinates'
+    'No server announcement found for the specified coordinates'
   );
 }
 
 export function parseAnnouncement(event: Event): DVMAnnouncement | null {
   try {
-    return JSON.parse(event.content);
+    // For SERVER_ANNOUNCEMENT_KIND, parse the content as JSON
+    if (event.kind === SERVER_ANNOUNCEMENT_KIND) {
+      return JSON.parse(event.content);
+    }
+    // For other kinds, return null as they should be handled differently
+    else {
+      console.error(
+        `Unsupported event kind for parsing announcement: ${event.kind}`
+      );
+      return null;
+    }
   } catch (error) {
     console.error(`Failed to parse announcement: ${error}`);
     return null;

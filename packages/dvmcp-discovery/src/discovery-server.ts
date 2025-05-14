@@ -4,8 +4,16 @@ import { type Event, type Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
 import { getConfig, type Config } from './config';
-import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import {
+  SERVER_ANNOUNCEMENT_KIND,
+  TOOLS_LIST_KIND,
+  RESOURCES_LIST_KIND,
+  PROMPTS_LIST_KIND,
+  TAG_SERVER_IDENTIFIER,
+  TAG_CAPABILITY,
+  TAG_UNIQUE_IDENTIFIER,
+} from '@dvmcp/commons/constants';
+import type { Tool, Resource } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
 import type { DVMAnnouncement } from './direct-discovery';
@@ -51,9 +59,12 @@ export class DiscoveryServer {
   }
   private async startDiscovery() {
     const filter: Filter = {
-      kinds: [DVM_ANNOUNCEMENT_KIND],
-      '#t': ['mcp'],
-      since: Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60,
+      kinds: [
+        SERVER_ANNOUNCEMENT_KIND, // 31316
+        TOOLS_LIST_KIND, // 31317
+        RESOURCES_LIST_KIND, // 31318
+        PROMPTS_LIST_KIND, // 31319
+      ],
     };
 
     // Add limit to the filter if it's specified in the configuration
@@ -65,17 +76,53 @@ export class DiscoveryServer {
     }
 
     const events = await this.relayHandler.queryEvents(filter);
-    await Promise.all(events.map((event) => this.handleDVMAnnouncement(event)));
+    await this.processAnnouncementEvents(events);
+  }
+
+  /**
+   * Process announcement events by grouping them by kind and processing each group
+   * @param events - Array of events to process
+   */
+  private async processAnnouncementEvents(events: Event[]) {
+    // Group events by kind for processing
+    const serverAnnouncements = events.filter(
+      (e) => e.kind === SERVER_ANNOUNCEMENT_KIND
+    );
+    const toolsLists = events.filter((e) => e.kind === TOOLS_LIST_KIND);
+    const resourcesLists = events.filter((e) => e.kind === RESOURCES_LIST_KIND);
+    const promptsLists = events.filter((e) => e.kind === PROMPTS_LIST_KIND);
+
+    // Process server announcements first
+    for (const event of serverAnnouncements) {
+      await this.handleServerAnnouncement(event);
+    }
+
+    // Then process capability lists
+    for (const event of toolsLists) {
+      await this.handleToolsList(event);
+    }
+
+    for (const event of resourcesLists) {
+      await this.handleResourcesList(event);
+    }
+
+    for (const event of promptsLists) {
+      await this.handlePromptsList(event);
+    }
   }
 
   public createToolId(toolName: string, pubkey: string): string {
     return `${toolName}_${pubkey.slice(0, 4)}`;
   }
 
-  private registerToolsFromAnnouncement(pubkey: string, tools: Tool[]): void {
+  private registerToolsFromAnnouncement(
+    pubkey: string,
+    tools: Tool[],
+    serverId?: string
+  ): void {
     for (const tool of tools) {
       const toolId = this.createToolId(tool.name, pubkey);
-      this.toolRegistry.registerTool(toolId, tool, pubkey);
+      this.toolRegistry.registerTool(toolId, tool, pubkey, serverId);
     }
   }
 
@@ -195,19 +242,184 @@ export class DiscoveryServer {
     return this.relayHandler;
   }
 
-  private async handleDVMAnnouncement(event: Event) {
+  /**
+   * Handle a server announcement event
+   * @param event - Server announcement event
+   */
+  private async handleServerAnnouncement(event: Event) {
     try {
       if (!this.isAllowedDVM(event.pubkey)) {
         loggerDiscovery('DVM not in whitelist:', event.pubkey);
         return;
       }
 
-      const announcement = this.parseAnnouncement(event.content);
-      if (!announcement?.tools) return;
+      // Extract server ID from d tag
+      const serverId = event.tags.find(
+        (t) => t[0] === TAG_UNIQUE_IDENTIFIER
+      )?.[1];
+      if (!serverId) {
+        loggerDiscovery('Server announcement missing server ID');
+        return;
+      }
 
-      this.registerToolsFromAnnouncement(event.pubkey, announcement.tools);
+      // Store server information for later use
+      this.toolRegistry.registerServer(serverId, event.pubkey, event.content);
+      loggerDiscovery(`Registered server: ${serverId} from ${event.pubkey}`);
     } catch (error) {
-      console.error('Error processing DVM announcement:', error);
+      console.error('Error processing server announcement:', error);
+    }
+  }
+
+  /**
+   * Handle a tools list event
+   * @param event - Tools list event
+   */
+  private async handleToolsList(event: Event) {
+    try {
+      if (!this.isAllowedDVM(event.pubkey)) {
+        loggerDiscovery('DVM not in whitelist:', event.pubkey);
+        return;
+      }
+
+      // Extract server ID from s tag
+      const serverId = event.tags.find(
+        (t) => t[0] === TAG_SERVER_IDENTIFIER
+      )?.[1];
+      if (!serverId) {
+        loggerDiscovery('Tools list missing server ID');
+        return;
+      }
+
+      // Extract tool names from cap tags
+      const toolNames = event.tags
+        .filter((t) => t[0] === TAG_CAPABILITY)
+        .map((t) => t[1]);
+
+      // Parse content as JSON
+      let toolsList: Tool[] = [];
+      try {
+        const content = JSON.parse(event.content);
+        // Check for both formats: direct array or nested under result
+        if (Array.isArray(content.tools)) {
+          toolsList = content.tools;
+        } else if (content.result?.tools) {
+          toolsList = content.result.tools;
+        }
+      } catch (error) {
+        console.error('Error parsing tools list content:', error);
+      }
+
+      // Register tools with the registry
+      if (toolsList.length > 0) {
+        this.registerToolsFromAnnouncement(event.pubkey, toolsList, serverId);
+        loggerDiscovery(
+          `Registered ${toolsList.length} tools from server ${serverId}`
+        );
+      } else {
+        loggerDiscovery(`No tools found in tools list from server ${serverId}`);
+      }
+    } catch (error) {
+      console.error('Error processing tools list:', error);
+    }
+  }
+
+  /**
+   * Handle a resources list event
+   * @param event - Resources list event
+   */
+  private async handleResourcesList(event: Event) {
+    try {
+      // Extract server ID from s tag
+      const serverId = event.tags.find(
+        (t) => t[0] === TAG_SERVER_IDENTIFIER
+      )?.[1];
+      if (!serverId) {
+        loggerDiscovery('Resources list missing server ID');
+        return;
+      }
+
+      // Extract resource names from cap tags
+      const resourceNames = event.tags
+        .filter((t) => t[0] === TAG_CAPABILITY)
+        .map((t) => t[1]);
+
+      // Parse content as JSON
+      let resourcesList: Resource[] = [];
+      try {
+        const content = JSON.parse(event.content);
+        // Check for both formats: direct array or nested under result
+        if (Array.isArray(content.resources)) {
+          resourcesList = content.resources;
+        } else if (content.result?.resources) {
+          resourcesList = content.result.resources;
+        }
+      } catch (error) {
+        console.error('Error parsing resources list content:', error);
+      }
+
+      // Register resources with the registry
+      if (resourcesList.length > 0) {
+        this.toolRegistry.registerResources(serverId, resourcesList);
+        loggerDiscovery(
+          `Registered ${resourcesList.length} resources from server ${serverId}`
+        );
+      } else {
+        loggerDiscovery(
+          `No resources found in resources list from server ${serverId}`
+        );
+      }
+    } catch (error) {
+      console.error('Error processing resources list:', error);
+    }
+  }
+
+  /**
+   * Handle a prompts list event
+   * @param event - Prompts list event
+   */
+  private async handlePromptsList(event: Event) {
+    try {
+      // Extract server ID from s tag
+      const serverId = event.tags.find(
+        (t) => t[0] === TAG_SERVER_IDENTIFIER
+      )?.[1];
+      if (!serverId) {
+        loggerDiscovery('Prompts list missing server ID');
+        return;
+      }
+
+      // Extract prompt names from cap tags
+      const promptNames = event.tags
+        .filter((t) => t[0] === TAG_CAPABILITY)
+        .map((t) => t[1]);
+
+      // Parse content as JSON
+      let promptsList: any[] = [];
+      try {
+        const content = JSON.parse(event.content);
+        // Check for both formats: direct array or nested under result
+        if (Array.isArray(content.prompts)) {
+          promptsList = content.prompts;
+        } else if (content.result?.prompts) {
+          promptsList = content.result.prompts;
+        }
+      } catch (error) {
+        console.error('Error parsing prompts list content:', error);
+      }
+
+      // Register prompts with the registry (if implemented)
+      if (promptsList.length > 0) {
+        // TODO: Implement prompt registration when needed
+        loggerDiscovery(
+          `Found ${promptsList.length} prompts from server ${serverId}`
+        );
+      } else {
+        loggerDiscovery(
+          `No prompts found in prompts list from server ${serverId}`
+        );
+      }
+    } catch (error) {
+      console.error('Error processing prompts list:', error);
     }
   }
 

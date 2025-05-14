@@ -7,8 +7,10 @@ import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
 import { type Tool, ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z, ZodError } from 'zod';
 import {
-  DVM_ANNOUNCEMENT_KIND,
-  TOOL_REQUEST_KIND,
+  SERVER_ANNOUNCEMENT_KIND,
+  REQUEST_KIND,
+  TAG_UNIQUE_IDENTIFIER,
+  TAG_CAPABILITY,
 } from '@dvmcp/commons/constants';
 
 describe('Tool Schema Validation', () => {
@@ -107,38 +109,68 @@ describe('Tool Schema Validation', () => {
     });
   });
   describe('Nostr Event to Tool Conversion', () => {
-    test('should correctly parse valid DVM announcement event', () => {
-      const mockDVMAnnouncement = {
-        kind: DVM_ANNOUNCEMENT_KIND,
+    test('should correctly parse valid server announcement event', () => {
+      const mockServerAnnouncement = {
+        kind: SERVER_ANNOUNCEMENT_KIND,
         content: JSON.stringify({
-          name: 'Test DVM',
-          about: 'A test DVM instance',
-          tools: [
-            {
-              name: 'test-echo',
-              description: 'Echo test tool',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  text: { type: 'string' },
-                },
-                required: ['text'],
-              },
+          jsonrpc: '2.0',
+          result: {
+            name: 'Test MCP Server',
+            version: '1.0.0',
+            capabilities: {
+              tools: true,
+              resources: true,
+              prompts: false,
             },
-          ],
+          },
         }),
         created_at: Math.floor(Date.now() / 1000),
         tags: [
-          ['d', 'dvm-announcement'],
-          ['k', `${TOOL_REQUEST_KIND}`],
-          ['capabilities', 'mcp-1.0'],
-          ['cap', 'mcp'],
-          ['cap', 'test-echo'],
+          [TAG_UNIQUE_IDENTIFIER, 'server-123'],
+          ['k', `${REQUEST_KIND}`],
+          [TAG_CAPABILITY, 'tools'],
+          [TAG_CAPABILITY, 'resources'],
         ],
       };
 
-      const content = JSON.parse(mockDVMAnnouncement.content);
-      const tool = content.tools[0] as Tool;
+      // Mock tools list event
+      const mockToolsList = {
+        kind: SERVER_ANNOUNCEMENT_KIND + 1, // TOOLS_LIST_KIND
+        content: JSON.stringify({
+          jsonrpc: '2.0',
+          result: {
+            tools: [
+              {
+                name: 'test-echo',
+                description: 'Echo test tool',
+                inputSchema: {
+                  type: 'object',
+                  properties: {
+                    text: { type: 'string' },
+                  },
+                  required: ['text'],
+                },
+              },
+            ],
+          },
+        }),
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [
+          [TAG_UNIQUE_IDENTIFIER, 'tools-list-123'],
+          ['s', 'server-123'],
+          [TAG_CAPABILITY, 'test-echo'],
+        ],
+      };
+
+      // Parse server announcement
+      const serverContent = JSON.parse(mockServerAnnouncement.content);
+      expect(serverContent.jsonrpc).toBe('2.0');
+      expect(serverContent.result.name).toBe('Test MCP Server');
+      expect(serverContent.result.capabilities.tools).toBe(true);
+
+      // Parse tools list
+      const toolsContent = JSON.parse(mockToolsList.content);
+      const tool = toolsContent.result.tools[0] as Tool;
 
       expect(ToolSchema.parse(tool));
 
@@ -148,71 +180,74 @@ describe('Tool Schema Validation', () => {
       expect(tool.inputSchema.properties).toHaveProperty('text');
     });
 
-    test('should reject malformed DVM announcement event', () => {
-      const malformedAnnouncement = {
-        kind: DVM_ANNOUNCEMENT_KIND,
+    test('should reject malformed tools list event', () => {
+      const malformedToolsList = {
+        kind: SERVER_ANNOUNCEMENT_KIND + 1, // TOOLS_LIST_KIND
         content: JSON.stringify({
-          name: 'Test DVM',
-          about: 'A test DVM instance',
-          tools: [
-            {
-              name: 'test-echo',
-              // Missing description and inputSchema
-            },
-          ],
+          jsonrpc: '2.0',
+          result: {
+            tools: [
+              {
+                name: 'test-echo',
+                // Missing description and inputSchema
+              },
+            ],
+          },
         }),
         created_at: Math.floor(Date.now() / 1000),
         tags: [
-          ['d', 'dvm-announcement'],
-          ['k', `${TOOL_REQUEST_KIND}`],
+          [TAG_UNIQUE_IDENTIFIER, 'tools-list-123'],
+          ['s', 'server-123'],
+          [TAG_CAPABILITY, 'test-echo'],
         ],
       };
 
-      const content = JSON.parse(malformedAnnouncement.content);
-      const tool = content.tools[0] as Tool;
+      const content = JSON.parse(malformedToolsList.content);
+      const tool = content.result.tools[0] as Tool;
 
       expect(() => ToolSchema.parse(tool));
     });
 
-    test('should validate tool tags in announcement event', () => {
-      const mockDVMAnnouncement = {
-        kind: DVM_ANNOUNCEMENT_KIND,
+    test('should validate tags in server announcement event', () => {
+      const mockServerAnnouncement = {
+        kind: SERVER_ANNOUNCEMENT_KIND,
         content: JSON.stringify({
-          name: 'Test DVM',
-          about: 'A test DVM instance',
-          tools: [
-            {
-              name: 'test-echo',
-              description: 'Echo test tool',
-              inputSchema: {
-                type: 'object',
-                properties: {
-                  text: { type: 'string' },
-                },
-                required: ['text'],
-              },
+          jsonrpc: '2.0',
+          result: {
+            name: 'Test MCP Server',
+            version: '1.0.0',
+            capabilities: {
+              tools: true,
+              resources: true,
+              prompts: false,
             },
-          ],
+          },
         }),
         created_at: Math.floor(Date.now() / 1000),
         tags: [
-          ['d', 'dvm-announcement'],
-          ['k', `${TOOL_REQUEST_KIND}`],
-          ['capabilities', 'mcp-1.0'],
-          ['cap', 'mcp'],
-          ['cap', 'test-echo'],
+          [TAG_UNIQUE_IDENTIFIER, 'server-123'],
+          ['k', `${REQUEST_KIND}`],
+          [TAG_CAPABILITY, 'tools'],
+          [TAG_CAPABILITY, 'resources'],
         ],
       };
 
-      const hasKindTag = mockDVMAnnouncement.tags.some(
-        ([key, value]) => key === 'k' && value === `${TOOL_REQUEST_KIND}`
+      // Check for required tags
+      const hasUniqueIdTag = mockServerAnnouncement.tags.some(
+        ([key, value]) =>
+          key === TAG_UNIQUE_IDENTIFIER && value === 'server-123'
+      );
+      expect(hasUniqueIdTag).toBe(true);
+
+      const hasKindTag = mockServerAnnouncement.tags.some(
+        ([key, value]) => key === 'k' && value === `${REQUEST_KIND}`
       );
       expect(hasKindTag).toBe(true);
 
-      const hasCapabilitiesTag = mockDVMAnnouncement.tags.some(
-        ([key, value]) => key === 'capabilities' && value === 'mcp-1.0'
+      const hasCapabilityTags = mockServerAnnouncement.tags.filter(
+        ([key]) => key === TAG_CAPABILITY
       );
-      expect(hasCapabilitiesTag).toBe(true);
+      expect(hasCapabilityTags.length).toBe(2);
     });
   });
 });

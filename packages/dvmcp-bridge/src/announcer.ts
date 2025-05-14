@@ -30,10 +30,7 @@ function getNip89Tags(cfg: DvmcpBridgeConfig['mcp']): string[][] {
     .filter((k) => cfg[k])
     .map((k) => [k, String(cfg[k as keyof typeof cfg])]);
 }
-/**
- * NostrAnnouncer handles publishing MCP server announcements to Nostr relays
- * It manages server, tools, resources, and prompts announcements
- */
+
 export class NostrAnnouncer {
   private relayHandler: RelayHandler;
   private mcpPool: MCPPool;
@@ -65,9 +62,6 @@ export class NostrAnnouncer {
     loggerBridge('Announced relay list metadata');
   }
 
-  /**
-   * Publishes the primary server announcement (Kind 31316)
-   */
   async announceServer() {
     const mainClient = this.mcpPool.getDefaultClient();
     if (!mainClient) {
@@ -107,10 +101,6 @@ export class NostrAnnouncer {
     return { event, serverId: this.serverId, announcementObject };
   }
 
-  /**
-   * Publishes tools list (Kind 31317)
-   * @param tools Optional pre-fetched tools list result
-   */
   async announceToolsList(tools?: ListToolsResult) {
     const toolsResult = tools || (await this.mcpPool.listTools());
     const tags: string[][] = [
@@ -118,7 +108,6 @@ export class NostrAnnouncer {
       [TAG_SERVER_IDENTIFIER, this.serverId],
     ];
 
-    // Add pricing tags for tools
     if (toolsResult.tools && toolsResult.tools.length > 0) {
       for (const tool of toolsResult.tools) {
         const pricing = this.mcpPool.getToolPricing(tool.name);
@@ -138,10 +127,6 @@ export class NostrAnnouncer {
     loggerBridge('Tools list announced');
   }
 
-  /**
-   * Publishes resources list (Kind 31318)
-   * @param resources Optional pre-fetched resources list result
-   */
   async announceResourcesList(resources?: ListResourcesResult) {
     const resourcesResult = resources || (await this.mcpPool.listResources());
     const tags: string[][] = [
@@ -149,7 +134,6 @@ export class NostrAnnouncer {
       [TAG_SERVER_IDENTIFIER, this.serverId],
     ];
 
-    // Add pricing tags for resources
     if (resourcesResult.resources && resourcesResult.resources.length > 0) {
       for (const resource of resourcesResult.resources) {
         if (resource.uri) {
@@ -176,10 +160,6 @@ export class NostrAnnouncer {
     loggerBridge('Resources list announced');
   }
 
-  /**
-   * Publishes prompts list (Kind 31319)
-   * @param prompts Optional pre-fetched prompts list result
-   */
   async announcePromptsList(prompts?: ListPromptsResult) {
     const promptsResult = prompts || (await this.mcpPool.listPrompts());
     const tags: string[][] = [
@@ -187,7 +167,6 @@ export class NostrAnnouncer {
       [TAG_SERVER_IDENTIFIER, this.serverId],
     ];
 
-    // Add pricing tags for prompts
     if (promptsResult.prompts && promptsResult.prompts.length > 0) {
       for (const prompt of promptsResult.prompts) {
         if (prompt.name) {
@@ -214,9 +193,6 @@ export class NostrAnnouncer {
     loggerBridge('Prompts list announced');
   }
 
-  /**
-   * Updates all relevant announcements to relays (Kind 31316/31317/31318/31319 + relay list)
-   */
   async updateAnnouncement() {
     const serverInfo = await this.announceServer();
     if (!serverInfo) return;
@@ -226,36 +202,25 @@ export class NostrAnnouncer {
 
     const announcePromises: Promise<void>[] = [];
 
-    // Fetch all capabilities data in parallel first to avoid duplicate calls
     const { tools, resources, prompts } =
       await this.fetchCapabilityData(capabilities);
 
-    // Announce tools list only if capability present and there are tools
     if (capabilities.tools && tools && tools.tools.length > 0) {
       announcePromises.push(this.announceToolsList(tools));
     }
 
-    // Announce resources list only if capability present and there are resources
     if (capabilities.resources && resources && resources.resources.length > 0) {
       announcePromises.push(this.announceResourcesList(resources));
     }
-
-    // Announce prompts list only if capability present and there are prompts
     if (capabilities.prompts && prompts && prompts.prompts.length > 0) {
       announcePromises.push(this.announcePromptsList(prompts));
     }
 
-    // Always announce relay list
     announcePromises.push(this.announceRelayList());
 
     await Promise.all(announcePromises);
   }
 
-  /**
-   * Fetches all capability data in parallel to avoid duplicate calls
-   * @param capabilities The server capabilities object
-   * @returns Object containing all fetched capability data
-   */
   private async fetchCapabilityData(capabilities: Record<string, any>) {
     const result: {
       tools?: ListToolsResult;
@@ -293,11 +258,6 @@ export class NostrAnnouncer {
     return result;
   }
 
-  /**
-   * Deletes all announcement events (Kind 31316/31317/31318/31319) by serverId with NIP-09
-   * @param reason Optional reason for deletion
-   * @returns Deletion event(s) published
-   */
   async deleteAnnouncement(
     reason: string = 'Service offline'
   ): Promise<Event[]> {
@@ -319,7 +279,7 @@ export class NostrAnnouncer {
       const filter = {
         kinds: [kind],
         authors: [this.keyManager.getPublicKey()],
-        '#d': [this.serverId], // Unique identifier tag
+        '#d': [this.serverId],
         '#s': [this.serverId],
       };
       const events = await this.relayHandler.queryEvents(filter);

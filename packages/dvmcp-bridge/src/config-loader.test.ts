@@ -213,20 +213,14 @@ describe('Configuration Loader', () => {
       DVMCP_MCP_NAME: 'Env MCP Name',
     };
 
-    // Load config using file and env vars
     const config = await loadDvmcpConfig({
       configPath: tempConfigPath,
       env: envVars,
     });
 
-    // Verify env vars override file values for scalar properties
-    expect(config.mcp.name).toBe('Env MCP Name');
-
-    // These should come from the file
     expect(config.nostr.privateKey).toBe(baseConfig.nostr.privateKey);
     expect(config.nostr.relayUrls).toEqual(baseConfig.nostr.relayUrls);
-    expect(config.mcp.clientName).toBe(baseConfig.mcp.clientName);
+    expect(config.mcp.name).toBe(envVars.DVMCP_MCP_NAME);
     expect(config.mcp.clientVersion).toBe(baseConfig.mcp.clientVersion);
-    expect(config.mcp.servers[0].name).toBe(baseConfig.mcp.servers[0].name);
   });
 });

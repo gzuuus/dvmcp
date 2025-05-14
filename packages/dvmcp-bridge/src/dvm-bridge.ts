@@ -26,8 +26,6 @@ import {
   handlePromptsGet,
   handleNotificationsCancel,
 } from './handlers';
-import { allowedMethods } from '@modelcontextprotocol/sdk/server/auth/middleware/allowedMethods.js';
-import { ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
 export class DVMBridge {
   private mcpPool: MCPPool;
@@ -159,12 +157,7 @@ export class DVMBridge {
       throw error;
     }
   }
-  /**
-   * Handles incoming Nostr requests and routes them to the appropriate handler
-   * based on the method type.
-   */
 
-  // Payment support is now implemented for all capabilities (tools, prompts, and resources)
   private async handleRequest(event: NostrEvent): Promise<void> {
     try {
       const tags = event.tags;
@@ -175,7 +168,6 @@ export class DVMBridge {
       const serverIdentifier =
         tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
 
-      // Validate server identifier
       if (serverIdentifier != this.serverId) {
         const errorStatus = this.keyManager.signEvent({
           ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
@@ -190,7 +182,6 @@ export class DVMBridge {
         return;
       }
 
-      // Check whitelist
       if (!this.isWhitelisted(pubkey)) {
         const errorStatus = this.keyManager.signEvent({
           ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
@@ -204,11 +195,9 @@ export class DVMBridge {
         await this.relayHandler.publishEvent(errorStatus);
         return;
       }
-      // Handle request based on kind and method
       if (kind === REQUEST_KIND) {
         switch (method) {
           case 'initialize':
-            // Initialize method is a no-op for now
             break;
           case 'tools/list':
             await handleToolsList(
@@ -262,7 +251,6 @@ export class DVMBridge {
             );
             break;
           default:
-            // Handle unimplemented methods
             const notImpl = this.keyManager.signEvent({
               ...this.keyManager.createEventTemplate(RESPONSE_KIND),
               content: JSON.stringify({

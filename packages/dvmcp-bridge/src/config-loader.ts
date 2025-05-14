@@ -6,11 +6,6 @@ import {
 } from './config-schema.js';
 import { loggerBridge } from '@dvmcp/commons/logger';
 
-/**
- * Utility to deeply walk the schema, returning:
- * - defaults: a config object with schema defaults applied.
- * - required checks, type checks, and error collection.
- */
 type ValidationError = { path: string; message: string };
 
 function getDefaults(schema: any): any {
@@ -26,21 +21,15 @@ function getDefaults(schema: any): any {
     return result;
   }
   if (schema.type === 'array') {
-    // No default for arrays; return undefined or empty if explicitly specified
     return [];
   }
   if ('default' in schema) return schema.default;
   return undefined;
 }
 
-/**
- * Deep merge utility for config objects.
- * Values in 'source' override those in 'target'.
- */
 function deepMerge(target: any, source: any): any {
   if (!source || typeof source !== 'object') return source;
   if (Array.isArray(source)) {
-    // Arrays: source replaces target.
     return source.slice();
   }
 
@@ -58,10 +47,8 @@ function deepMerge(target: any, source: any): any {
         result[key] !== null &&
         !Array.isArray(result[key])
       ) {
-        // Deep merge objects (but not arrays)
         result[key] = deepMerge(result[key], sourceValue);
       } else {
-        // Replace primitives, arrays, and null/undefined
         result[key] = sourceValue;
       }
     }
@@ -69,112 +56,6 @@ function deepMerge(target: any, source: any): any {
   return result;
 }
 
-/**
- * Parse environment variables to config structure.
- *   - Keys in SCREAMING_SNAKE (with _ and 0-index for arrays) map to config.
- *   - For objects/arrays: allow JSON or CSV (for arrays of strings/numbers).
- */
-function parseEnvToConfig(schema: any, prefix = '', env = process.env): any {
-  let out: any = {};
-
-  function parseValue(value: string, s: any) {
-    if (s.type === 'array') {
-      // Try JSON, else CSV
-      try {
-        const arr = JSON.parse(value);
-        if (Array.isArray(arr)) return arr;
-      } catch {}
-      return value.split(',').map((v) => v.trim());
-    }
-    if (s.type === 'object') {
-      // Try JSON
-      try {
-        const obj = JSON.parse(value);
-        if (typeof obj === 'object' && obj !== null) return obj;
-      } catch {}
-      // Otherwise skip (cannot parse object from flat env)
-      return undefined;
-    }
-    if (s.type === 'number') {
-      const n = Number(value);
-      return isNaN(n) ? undefined : n;
-    }
-    if (s.type === 'boolean') {
-      return value === 'true' || value === '1';
-    }
-    return value;
-  }
-
-  function walk(s: any, currentPrefix: string): any {
-    if (s.type === 'object') {
-      const o: any = {};
-      for (const f in s.fields) {
-        const fieldSchema = s.fields[f];
-        const envKey = `${currentPrefix}${f}`.toUpperCase();
-
-        // Match exact for top-level, or find nested via prefix
-        const found = Object.entries(env).find(([k]) => k === envKey);
-        if (found) {
-          if (found[1] !== undefined) {
-            o[f] = parseValue(found[1], fieldSchema);
-          }
-        } else {
-          // Recurse for nested
-          const subPrefix = `${envKey}_`;
-          o[f] = walk(fieldSchema, subPrefix);
-        }
-      }
-      // Collapse empty objects
-      if (Object.values(o).every((v) => v === undefined)) return undefined;
-      return o;
-    }
-    if (s.type === 'array') {
-      // Array as ENV: allow full JSON or CSV at whole-array level
-      const envKey = currentPrefix.replace(/_$/, '').toUpperCase();
-      const arrval = env[envKey];
-      if (arrval !== undefined) {
-        return parseValue(arrval, s);
-      }
-      // Try element-wise (e.g., FOO_0, FOO_1, ...)
-      const items: any[] = [];
-      let i = 0;
-      while (true) {
-        const itemKey = `${envKey}_${i}`;
-        if (env[itemKey] === undefined) break;
-        items.push(
-          parseValue(
-            env[itemKey],
-            s.itemType === 'object'
-              ? { type: 'object', fields: s.fields }
-              : { type: s.itemType }
-          )
-        );
-        i++;
-      }
-      if (items.length > 0) return items;
-      return undefined;
-    }
-    // Primitive
-    const envKey = currentPrefix.replace(/_$/, '').toUpperCase();
-    const val = env[envKey];
-    if (val !== undefined) return parseValue(val, s);
-    return undefined;
-  }
-  out = walk(schema, prefix);
-  // Remove all-undefined collapses at top
-  if (
-    out &&
-    typeof out === 'object' &&
-    Object.values(out).every((v) => v === undefined)
-  )
-    return undefined;
-  return out;
-}
-
-/**
- * Validate config object against schema.
- * Returns { ok, errors } where errors is an array with paths & messages.
- */
 function validateConfig(
   config: any,
   schema: any,
@@ -196,7 +77,6 @@ function validateConfig(
       }
 
       if (value !== undefined && value !== null) {
-        // Recursively validate nested
         const nestedErrors = validateConfig(value, field, fullPath);
         errors.push(...nestedErrors);
       }
@@ -218,7 +98,6 @@ function validateConfig(
       }
     }
   } else {
-    // Primitives: type checking
     if (config !== undefined && config !== null) {
       let typeOk = true;
       switch (schema.type) {
@@ -245,24 +124,14 @@ function validateConfig(
   return errors;
 }
 
-/**
- * Load, merge, and validate the dvmcp-bridge config.
- * Merging order: schema defaults < YAML file < ENV < CLI flags.
- *
- * @param opts Optional. { configPath?: string, env?: Record<string,string>, cliFlags?: Record<string, any> }
- * @returns fully merged, validated, and typed config object.
- * @throws on validation errors with details.
- */
 export async function loadDvmcpConfig(opts?: {
   configPath?: string;
   env?: Record<string, string>;
   cliFlags?: Record<string, any>;
 }): Promise<DvmcpBridgeConfig> {
   const schema = dvmcpBridgeConfigSchema;
-  // Get defaults
   const defaults = getDefaults(schema);
 
-  // Load YAML config file
   let configFile: Record<string, any> = {};
   let configPath = opts?.configPath || 'config.dvmcp.yml';
 
@@ -280,45 +149,34 @@ export async function loadDvmcpConfig(opts?: {
     loggerBridge(`⚠️ Configuration file not found at ${configPath}`);
   }
 
-  // Load environment variables (override YAML)
   const envVars = opts?.env || process.env;
 
-  // Process environment variables with DVMCP_ prefix
   const envConfig: Record<string, any> = {};
 
-  // Direct mapping for environment variables
   for (const [key, value] of Object.entries(envVars)) {
     if (key.startsWith('DVMCP_') && value !== undefined) {
-      // Convert DVMCP_MCP_ABOUT to mcp.about
       const parts = key
         .replace(/^DVMCP_/, '')
         .toLowerCase()
         .split('_');
 
       if (parts.length === 2) {
-        // Handle two-level keys like MCP_ABOUT
         const [section, field] = parts;
         if (!envConfig[section]) envConfig[section] = {};
         envConfig[section][field] = value;
       } else if (parts.length === 1) {
-        // Handle top-level keys
         const [field] = parts;
         envConfig[field] = value;
       }
-      // More complex nested paths could be handled here if needed
     }
   }
 
-  // CLI flags (highest priority)
   const cliFlags = opts?.cliFlags || {};
-
-  // Merge: defaults < YAML < ENV < CLI
   const merged = deepMerge(
     deepMerge(deepMerge(defaults, configFile), envConfig),
     cliFlags
   );
 
-  // Validate
   const errors = validateConfig(merged, schema);
   if (errors.length > 0) {
     loggerBridge('\n⚠️ Configuration validation issues found:');
@@ -343,7 +201,6 @@ export async function loadDvmcpConfig(opts?: {
     throw new Error(msg);
   }
 
-  // Log a simple message that configuration is loaded
   if (process.env.DEBUG) {
     loggerBridge('Configuration loaded and validated successfully');
   }

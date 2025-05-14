@@ -17,11 +17,6 @@ import {
 import { slugify } from './utils';
 import { loggerBridge } from '@dvmcp/commons/logger';
 
-/**
- * MCPPool manages a collection of MCP clients and provides centralized access to their capabilities
- * It handles tool, resource, and prompt registries with optimized capability checks
- */
-
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();
   private toolRegistry: Map<string, MCPClientHandler> = new Map();
@@ -42,29 +37,23 @@ export class MCPPool {
     // Handle both full config objects and direct server config arrays (for testing)
     let servers: DvmcpBridgeConfig['mcp']['servers'];
 
-    // Get default values from the config schema
     const defaultName = dvmcpBridgeConfigSchema.mcp.fields.name
       .default as string;
 
-    // Initialize with defaults
     let name = defaultName;
-    let clientVersion = '1.0.0'; // No default in schema, using fallback
+    let clientVersion = '1.0.0';
 
     if (Array.isArray(this.config)) {
-      // For tests: direct array of server configs
       servers = this.config;
     } else {
-      // Normal case: full config object
       servers = this.config.mcp.servers;
       name = this.config.mcp.name || defaultName;
       clientVersion = this.config.mcp.clientVersion || '1.0.0';
     }
 
     servers.forEach((serverConfig, index) => {
-      // Generate a server ID based on index
       const serverId = `server-${index}`;
 
-      // Create a copy of the server config with the generated ID
       const serverConfigWithId = { ...serverConfig, _serverId: serverId };
 
       const client = new MCPClientHandler(
@@ -73,12 +62,8 @@ export class MCPPool {
         clientVersion
       );
 
-      // Use the generated server ID as the key
       this.clients.set(serverId, client);
-      // Store the server config for later reference
       this.serverConfigs.set(serverId, serverConfigWithId);
-
-      // Register tool pricing if available
       if (serverConfig.tools && serverConfig.tools.length > 0) {
         serverConfig.tools.forEach((tool) => {
           if (tool.price || tool.unit) {
@@ -90,7 +75,6 @@ export class MCPPool {
         });
       }
 
-      // Register prompt pricing if available
       if (serverConfig.prompts && serverConfig.prompts.length > 0) {
         serverConfig.prompts.forEach((prompt) => {
           if (prompt.price || prompt.unit) {
@@ -102,7 +86,6 @@ export class MCPPool {
         });
       }
 
-      // Register resource pricing if available
       if (serverConfig.resources && serverConfig.resources.length > 0) {
         serverConfig.resources.forEach((resource) => {
           if (resource.price || resource.unit) {
@@ -200,22 +183,14 @@ export class MCPPool {
     return { prompts: allPrompts };
   }
 
-  /**
-   * Ensures a registry is populated by checking if it's empty and refreshing if needed
-   * @param registry The registry to check
-   * @param refreshMethod The method to call if refresh is needed
-   * @returns The handler if found after potential refresh, undefined otherwise
-   */
   private async ensureHandler<K extends string>(
     registry: Map<K, MCPClientHandler>,
     key: K,
     refreshMethod: () => Promise<any>
   ): Promise<MCPClientHandler | undefined> {
-    // Check if we already have the handler
     let handler = registry.get(key);
     if (handler) return handler;
 
-    // If registry is empty or handler not found, refresh and try again
     if (registry.size === 0 || !handler) {
       await refreshMethod();
       return registry.get(key);

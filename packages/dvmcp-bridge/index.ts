@@ -1,6 +1,5 @@
 export { DVMBridge } from './src/dvm-bridge';
 export { loadDvmcpConfig } from './src/config-loader';
-export { createRelayHandler } from './src/relay';
 export { dvmcpBridgeConfigSchema } from './src/config-schema';
 
 import { DVMBridge } from './src/dvm-bridge';

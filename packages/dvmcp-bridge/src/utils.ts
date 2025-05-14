@@ -1,5 +1,5 @@
 import { TAG_EVENT_ID, TAG_PUBKEY } from '@dvmcp/commons/constants';
-import { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { type KeyManager } from '@dvmcp/commons/nostr/key-manager';
 
 export function slugify(input: string): string {
   return input
@@ -25,17 +25,6 @@ export function getServerId(
   return slugify(combinedId);
 }
 
-/**
- * Creates a standardized error response for JSON-RPC protocol errors
- * according to the DVMCP specification.
- *
- * @param eventId - The ID of the request event
- * @param pubkey - The public key of the requester
- * @param errorCode - Standard JSON-RPC error code
- * @param errorMessage - Human-readable error message
- * @param keyManager - Key manager for signing the response
- * @returns Signed NostrEvent with error response
- */
 export function createProtocolErrorResponse(
   eventId: string,
   pubkey: string,

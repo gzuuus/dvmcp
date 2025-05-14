@@ -11,13 +11,9 @@ import type { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
 import { handlePaymentFlow } from './payment-handler';
 
-// Default payment timeout in milliseconds (5 minutes)
-const DEFAULT_PAYMENT_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
 
-/**
- * Common payment processor for all MCP capabilities (tools, prompts, resources)
- * Provides a consistent way to handle payment processing across different capability types
- */
+// TODO: handle variable price payment. Price definition should be a range '100-1000' then get the price based in the request. To get the price, we can add a basic function based on the length of the request. For more advanced pricing, we can use a separate mcp server configured to get the price by capability name and request
 export class PaymentProcessor {
   constructor(
     private config: DvmcpBridgeConfig,

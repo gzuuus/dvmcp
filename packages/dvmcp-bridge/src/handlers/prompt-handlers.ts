@@ -140,8 +140,13 @@ export async function handlePromptsGet(
       return;
     }
 
-    const prompt: GetPromptResult | undefined =
-      await mcpPool.getPrompt(promptName);
+    const promptArgs = getParams.params.arguments || {};
+    loggerBridge(`Getting prompt '${promptName}' with arguments:`, promptArgs);
+
+    const prompt: GetPromptResult | undefined = await mcpPool.getPrompt(
+      promptName,
+      promptArgs
+    );
     if (!prompt) {
       throw new Error(`Prompt not found: ${promptName}`);
     }

@@ -233,7 +233,10 @@ export class MCPPool {
     }
   }
 
-  async getPrompt(promptName: string): Promise<GetPromptResult | undefined> {
+  async getPrompt(
+    promptName: string,
+    args?: Record<string, any>
+  ): Promise<GetPromptResult | undefined> {
     const handler = await this.ensureHandler(
       this.promptRegistry,
       promptName,
@@ -246,9 +249,11 @@ export class MCPPool {
     }
 
     try {
-      const result: GetPromptResult | undefined =
-        await handler.getPrompt(promptName);
-      loggerBridge('prompt get result', result);
+      const result: GetPromptResult | undefined = await handler.getPrompt(
+        promptName,
+        args
+      );
+      loggerBridge('prompt get result with args:', args, result);
 
       if (!result) {
         loggerBridge(`[getPrompt] Empty result for prompt: ${promptName}`);

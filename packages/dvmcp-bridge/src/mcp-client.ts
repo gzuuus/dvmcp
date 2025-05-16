@@ -75,8 +75,14 @@ export class MCPClientHandler {
     return await this.client.listPrompts();
   }
 
-  async getPrompt(promptName: string): Promise<GetPromptResult | undefined> {
-    return await this.client.getPrompt({ name: promptName });
+  async getPrompt(
+    promptName: string,
+    args?: Record<string, any>
+  ): Promise<GetPromptResult | undefined> {
+    return await this.client.getPrompt({
+      name: promptName,
+      arguments: args,
+    });
   }
 
   async callTool(
@@ -114,8 +120,9 @@ export const listTools = (
 
 export const getPrompt = (
   handler: MCPClientHandler,
-  name: string
-): Promise<GetPromptResult | undefined> => handler.getPrompt(name);
+  name: string,
+  args?: Record<string, any>
+): Promise<GetPromptResult | undefined> => handler.getPrompt(name, args);
 
 export const callTool = (
   handler: MCPClientHandler,

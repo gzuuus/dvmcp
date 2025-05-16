@@ -8,6 +8,8 @@ export interface DVMAnnouncement {
   name: string;
   about: string;
   tools: any[];
+  resources?: any[];
+  prompts?: any[];
 }
 
 async function fetchAnnouncement(
@@ -84,7 +86,32 @@ export function parseAnnouncement(event: Event): DVMAnnouncement | null {
   try {
     // For SERVER_ANNOUNCEMENT_KIND, parse the content as JSON
     if (event.kind === SERVER_ANNOUNCEMENT_KIND) {
-      return JSON.parse(event.content);
+      const content = JSON.parse(event.content);
+
+      // Create a structured announcement object with all capability types
+      const announcement: DVMAnnouncement = {
+        name: content.name || content.serverInfo?.name || 'Unknown Server',
+        about: content.about || content.serverInfo?.description || '',
+        tools: content.tools || [],
+      };
+
+      // Add resources if available
+      if (content.resources && Array.isArray(content.resources)) {
+        announcement.resources = content.resources;
+      }
+
+      // Add prompts if available
+      if (content.prompts && Array.isArray(content.prompts)) {
+        announcement.prompts = content.prompts;
+      }
+
+      loggerDiscovery(
+        `Parsed announcement with ${announcement.tools.length} tools, ` +
+          `${announcement.resources?.length || 0} resources, ` +
+          `${announcement.prompts?.length || 0} prompts`
+      );
+
+      return announcement;
     }
     // For other kinds, return null as they should be handled differently
     else {

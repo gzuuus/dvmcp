@@ -11,6 +11,7 @@ import {
   SERVER_ANNOUNCEMENT_KIND,
   TOOLS_LIST_KIND,
 } from '@dvmcp/commons/constants';
+import { createCapabilityId } from './utils/capabilities';
 
 /**
  * Built-in tool definition with execution function
@@ -519,10 +520,7 @@ builtInToolRegistry.registerTool(
               if (!discoveryServerRef) {
                 throw new Error('Discovery server reference is not set');
               }
-              const toolId = discoveryServerRef.createToolId(
-                tool.name,
-                announcement.pubkey
-              ); //`${tool.name}_${announcement.pubkey.slice(0, 4)}`;
+              const toolId = createCapabilityId(tool.name, announcement.pubkey); //`${tool.name}_${announcement.pubkey.slice(0, 4)}`;
 
               // Skip already registered tools
               if (
@@ -544,8 +542,7 @@ builtInToolRegistry.registerTool(
               if (discoveryServerRef) {
                 discoveryServerRef.registerToolFromAnnouncement(
                   announcement.pubkey,
-                  tool,
-                  false // Don't notify for each individual tool
+                  tool
                 );
               }
 

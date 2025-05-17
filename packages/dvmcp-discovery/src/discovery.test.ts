@@ -29,7 +29,7 @@ describe('DiscoveryServer E2E', () => {
   });
   afterAll(async () => {
     if (discoveryServer) {
-      await discoveryServer.cleanup();
+      discoveryServer.cleanup();
     }
 
     stopRelay();

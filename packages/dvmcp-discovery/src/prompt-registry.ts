@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { z } from 'zod';
+import { createCapabilityId } from './utils/capabilities';
 
 export interface PromptArgument {
   name: string;
@@ -175,7 +176,7 @@ export class PromptRegistry {
   public registerServerPrompts(
     serverId: string,
     prompts: PromptDefinition[],
-    providerPubkey?: string
+    providerPubkey: string
   ): void {
     this.serverPrompts.set(serverId, prompts);
     loggerDiscovery(
@@ -184,7 +185,7 @@ export class PromptRegistry {
 
     // Register each prompt individually
     prompts.forEach((prompt) => {
-      const promptId = this.createPromptId(prompt.name, serverId);
+      const promptId = createCapabilityId(prompt.name, providerPubkey);
       this.registerPrompt(promptId, prompt, providerPubkey || '', serverId);
     });
   }

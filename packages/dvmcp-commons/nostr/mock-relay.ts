@@ -7,19 +7,48 @@ import {
   type UnsignedEvent,
 } from 'nostr-tools';
 import {
-  DVM_ANNOUNCEMENT_KIND,
-  TOOL_REQUEST_KIND,
-  TOOL_RESPONSE_KIND,
+  SERVER_ANNOUNCEMENT_KIND,
+  TOOLS_LIST_KIND,
+  REQUEST_KIND,
+  RESPONSE_KIND,
+  TAG_METHOD,
+  TAG_EVENT_ID,
+  TAG_PUBKEY,
+  TAG_CAPABILITY,
+  TAG_UNIQUE_IDENTIFIER,
 } from '../constants';
 
 const relayPort = 3334;
 let mockEvents: NostrEvent[] = [];
 
-const mockDVMAnnouncement = {
-  kind: DVM_ANNOUNCEMENT_KIND,
+// Server announcement event according to DVMCP 2025-03-26
+const mockServerAnnouncement = {
+  kind: SERVER_ANNOUNCEMENT_KIND,
   content: JSON.stringify({
-    name: 'Test DVM',
-    about: 'A test DVM instance',
+    protocolVersion: '2025-03-26',
+    capabilities: {
+      tools: {
+        listChanged: true,
+      },
+    },
+    serverInfo: {
+      name: 'Test DVM',
+      version: '1.0.0',
+    },
+  }),
+  created_at: Math.floor(Date.now() / 1000),
+  tags: [
+    [TAG_UNIQUE_IDENTIFIER, 'test-server-id'],
+    ['k', `${REQUEST_KIND}`],
+    ['name', 'Test DVM'],
+    ['about', 'A test DVM for DVMCP testing'],
+  ],
+} as UnsignedEvent;
+
+// Tools list event according to DVMCP 2025-03-26
+const mockToolsList = {
+  kind: TOOLS_LIST_KIND,
+  content: JSON.stringify({
     tools: [
       {
         name: 'test-echo',
@@ -36,49 +65,61 @@ const mockDVMAnnouncement = {
   }),
   created_at: Math.floor(Date.now() / 1000),
   tags: [
-    ['d', 'dvm-announcement'],
-    ['k', `${TOOL_REQUEST_KIND}`],
-    ['capabilities', 'mcp-1.0'],
-    ['cap', 'mcp'],
-    ['cap', 'test-echo'],
+    [TAG_UNIQUE_IDENTIFIER, 'tools-list-id'],
+    ['s', 'test-server-id'],
+    [TAG_CAPABILITY, 'test-echo'],
   ],
 } as UnsignedEvent;
 
-const finalizedEvent = finalizeEvent(mockDVMAnnouncement, generateSecretKey());
-mockEvents.push(finalizedEvent);
+// Generate and add the server announcement event
+const serverSecretKey = generateSecretKey();
+const finalizedServerEvent = finalizeEvent(
+  mockServerAnnouncement,
+  serverSecretKey
+);
+mockEvents.push(finalizedServerEvent);
+
+// Generate and add the tools list event
+const finalizedToolsEvent = finalizeEvent(mockToolsList, serverSecretKey);
+mockEvents.push(finalizedToolsEvent);
 
 const handleToolExecution = (event: NostrEvent) => {
-  if (event.kind === TOOL_REQUEST_KIND) {
-    const commandTag = event.tags.find((tag) => tag[0] === 'c');
-    if (commandTag && commandTag[1] === 'execute-tool') {
-      const request = JSON.parse(event.content);
-      console.log('Processing execution request:', request);
+  if (event.kind === REQUEST_KIND) {
+    // Check for tools/call method
+    const methodTag = event.tags.find((tag) => tag[0] === TAG_METHOD);
+    if (methodTag && methodTag[1] === 'tools/call') {
+      try {
+        const request = JSON.parse(event.content);
+        console.log('Processing execution request:', request);
 
-      const responseEvent = {
-        kind: TOOL_RESPONSE_KIND,
-        content: JSON.stringify({
-          content: [
-            {
-              type: 'text',
-              text: `[test] ${request.parameters.text}`,
-            },
+        // Extract the parameters from the request
+        const params = request.params || {};
+        const args = params.arguments || {};
+
+        const responseEvent = {
+          kind: RESPONSE_KIND,
+          content: JSON.stringify({
+            content: [
+              {
+                type: 'text',
+                text: `[test] ${args.text}`,
+              },
+            ],
+          }),
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            [TAG_EVENT_ID, event.id],
+            [TAG_PUBKEY, event.pubkey],
           ],
-        }),
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ['e', event.id],
-          ['p', event.pubkey],
-          ['c', 'execute-tool-response'],
-        ],
-      } as UnsignedEvent;
+        } as UnsignedEvent;
 
-      console.log('Created response event:', responseEvent);
-      const finalizedResponse = finalizeEvent(
-        responseEvent,
-        generateSecretKey()
-      );
-      mockEvents.push(finalizedResponse);
-      return finalizedResponse;
+        console.log('Created response event:', responseEvent);
+        const finalizedResponse = finalizeEvent(responseEvent, serverSecretKey);
+        mockEvents.push(finalizedResponse);
+        return finalizedResponse;
+      } catch (error) {
+        console.error('Error processing tool execution:', error);
+      }
     }
   }
   return null;
@@ -190,7 +231,8 @@ const stop = async () => {
     }
   }
   activeSubscriptions.clear();
-  mockEvents = [];
+  // Reset the mockEvents array
+  mockEvents.length = 0;
   server.stop();
 };
 

@@ -26,6 +26,7 @@ import {
   builtInToolRegistry,
   setDiscoveryServerReference,
 } from './built-in-tools';
+import { createCapabilityId } from './utils/capabilities';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;
@@ -191,17 +192,13 @@ export class DiscoveryServer {
     }
   }
 
-  public createToolId(toolName: string, pubkey: string): string {
-    return `${toolName}_${pubkey.slice(0, 4)}`;
-  }
-
   private registerToolsFromAnnouncement(
     pubkey: string,
     tools: Tool[],
     serverId?: string
   ): void {
     for (const tool of tools) {
-      const toolId = this.createToolId(tool.name, pubkey);
+      const toolId = createCapabilityId(tool.name, pubkey);
       this.toolRegistry.registerTool(toolId, tool, pubkey, serverId);
     }
   }
@@ -213,19 +210,12 @@ export class DiscoveryServer {
    * @returns Boolean indicating if the tool is already registered
    */
   public isToolRegistered(toolName: string, pubkey: string): boolean {
-    const toolId = this.createToolId(toolName, pubkey);
+    const toolId = createCapabilityId(toolName, pubkey);
     return this.toolRegistry.getTool(toolId) !== undefined;
   }
 
-  /**
-   * Register a tool from an announcement (public method for built-in tools)
-   * @param pubkey - Provider public key
-   * @param tool - Tool definition
-   * @param notifyClient - Whether to notify clients about the tool list change
-   * @returns Tool ID
-   */
   public registerToolFromAnnouncement(pubkey: string, tool: Tool): string {
-    const toolId = this.createToolId(tool.name, pubkey);
+    const toolId = createCapabilityId(tool.name, pubkey);
 
     // Check if the tool is already registered
     if (this.isToolRegistered(tool.name, pubkey)) {
@@ -415,7 +405,7 @@ export class DiscoveryServer {
       let resourcesList: Resource[] = [];
       try {
         const content = JSON.parse(event.content);
-
+        // TODO: simplify this
         // Check for both formats: direct array or nested under result
         if (Array.isArray(content.resources)) {
           resourcesList = content.resources;
@@ -721,7 +711,8 @@ export class DiscoveryServer {
       const serverId = `direct_${pubkey.slice(0, 8)}`;
       this.resourceRegistry.registerServerResources(
         serverId,
-        announcement.resources
+        announcement.resources,
+        pubkey
       );
       loggerDiscovery(
         `Registered ${announcement.resources.length} resources from direct server`
@@ -732,7 +723,11 @@ export class DiscoveryServer {
     if (announcement?.prompts && announcement.prompts.length > 0) {
       // Create a server ID for the direct server
       const serverId = `direct_${pubkey.slice(0, 8)}`;
-      this.promptRegistry.registerServerPrompts(serverId, announcement.prompts);
+      this.promptRegistry.registerServerPrompts(
+        serverId,
+        announcement.prompts,
+        pubkey
+      );
       loggerDiscovery(
         `Registered ${announcement.prompts.length} prompts from direct server`
       );

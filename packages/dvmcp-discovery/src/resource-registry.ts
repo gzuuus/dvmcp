@@ -2,6 +2,7 @@ import { type Resource } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { createCapabilityId } from './utils/capabilities';
 
 export class ResourceRegistry {
   // Store all resources with their source information
@@ -164,7 +165,7 @@ export class ResourceRegistry {
   public registerServerResources(
     serverId: string,
     resources: Resource[],
-    providerPubkey?: string
+    providerPubkey: string
   ): void {
     this.serverResources.set(serverId, resources);
     loggerDiscovery(
@@ -173,7 +174,7 @@ export class ResourceRegistry {
 
     // Register each resource individually
     resources.forEach((resource, index) => {
-      const resourceId = this.createResourceId(resource, serverId, index);
+      const resourceId = createCapabilityId(resource.uri, providerPubkey);
       this.registerResource(
         resourceId,
         resource,
@@ -198,17 +199,6 @@ export class ResourceRegistry {
    */
   public listServerResources(): [string, Resource[]][] {
     return Array.from(this.serverResources.entries());
-  }
-
-  private createResourceId(
-    resource: Resource,
-    serverId: string,
-    index: number
-  ): string {
-    // Use URI if available, otherwise create a unique ID based on server and index
-    return resource.uri
-      ? `${serverId}_${encodeURIComponent(resource.uri)}`
-      : `${serverId}_resource_${index}`;
   }
 
   private registerWithMcp(resourceId: string, resource: Resource): void {

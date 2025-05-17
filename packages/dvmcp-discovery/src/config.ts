@@ -5,7 +5,7 @@ import { HEX_KEYS_REGEX } from '@dvmcp/commons/constants';
 import { generateSecretKey } from 'nostr-tools/pure';
 import { bytesToHex } from '@noble/hashes/utils';
 import { CLI_FLAGS, DEFAULT_VALUES, ENV_VARS } from './constants';
-
+// TODO: Update configuration system
 /**
  * Nostr configuration
  */

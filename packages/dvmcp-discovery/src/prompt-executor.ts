@@ -1,11 +1,7 @@
 import { type Event } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
-import {
-  type CallToolRequest,
-  type Tool,
-} from '@modelcontextprotocol/sdk/types.js';
-import { ToolRegistry } from './tool-registry.js';
+import { PromptRegistry, type PromptDefinition } from './prompt-registry.js';
 import {
   REQUEST_KIND,
   RESPONSE_KIND,
@@ -19,13 +15,14 @@ import {
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { NWCPaymentHandler } from './nwc-payment';
 import { getConfig } from './config';
+import type { GetPromptRequest } from '@modelcontextprotocol/sdk/types.js';
 
 interface ExecutionContext {
   timeoutId: ReturnType<typeof setTimeout>;
   cleanup: () => void;
 }
 
-export class ToolExecutor {
+export class PromptExecutor {
   private executionSubscriptions: Map<string, () => void> = new Map();
   private static readonly EXECUTION_TIMEOUT = 30000;
   private nwcPaymentHandler: NWCPaymentHandler | null = null;
@@ -33,7 +30,7 @@ export class ToolExecutor {
   constructor(
     private relayHandler: RelayHandler,
     private keyManager: ReturnType<typeof createKeyManager>,
-    private toolRegistry: ToolRegistry
+    private promptRegistry: PromptRegistry
   ) {
     // Initialize the NWC payment handler if NWC is configured
     try {
@@ -52,31 +49,17 @@ export class ToolExecutor {
    */
   public updateRelayHandler(relayHandler: RelayHandler): void {
     this.relayHandler = relayHandler;
-    loggerDiscovery('Updated relay handler in tool executor');
+    loggerDiscovery('Updated relay handler in prompt executor');
   }
 
-  public async executeTool(
-    toolId: string,
-    tool: Tool,
-    params: unknown
+  public async executePrompt(
+    promptId: string,
+    prompt: PromptDefinition,
+    args: Record<string, string>
   ): Promise<unknown> {
-    // Get tool info to determine if it's built-in
-    const toolInfo = this.toolRegistry.getToolInfo(toolId);
-
-    // Check if this is a built-in tool
-    if (toolInfo?.isBuiltIn) {
-      try {
-        // Execute built-in tool directly
-        return await this.toolRegistry.executeBuiltInTool(toolId, params);
-      } catch (error) {
-        loggerDiscovery(`Error executing built-in tool ${toolId}:`, error);
-        throw error;
-      }
-    }
-
-    // Handle external tools via Nostr
+    // Handle external prompts via Nostr
     return new Promise((resolve, reject) => {
-      const request = this.createToolRequest(toolId, tool, params);
+      const request = this.createPromptRequest(promptId, prompt, args);
       const executionId = request.id;
       const context = this.createExecutionContext(executionId);
 
@@ -87,7 +70,7 @@ export class ToolExecutor {
               (t) => t[0] === TAG_EVENT_ID && t[1] === executionId
             )
           ) {
-            this.handleToolResponse(event, context, resolve, reject);
+            this.handlePromptResponse(event, context, resolve, reject);
           }
         },
         {
@@ -122,7 +105,7 @@ export class ToolExecutor {
     const timeoutId = setTimeout(() => {
       loggerDiscovery('Execution timeout for:', executionId);
       this.cleanupExecution(executionId);
-    }, ToolExecutor.EXECUTION_TIMEOUT);
+    }, PromptExecutor.EXECUTION_TIMEOUT);
 
     const cleanup = () => this.cleanupExecution(executionId);
     return { timeoutId, cleanup };
@@ -136,7 +119,7 @@ export class ToolExecutor {
     }
   }
 
-  private async handleToolResponse(
+  private async handlePromptResponse(
     event: Event,
     context: ExecutionContext,
     resolve: (value: unknown) => void,
@@ -163,7 +146,7 @@ export class ToolExecutor {
             new Error(
               typeof response.content === 'string'
                 ? response.content
-                : 'Tool execution error'
+                : 'Prompt execution error'
             )
           );
           return;
@@ -172,7 +155,20 @@ export class ToolExecutor {
         // Handle successful response
         clearTimeout(context.timeoutId);
         context.cleanup();
-        resolve(response.content);
+
+        // Process the response according to the MCP specification
+        if (
+          response.messages &&
+          Array.isArray(response.messages) &&
+          response.messages.length > 0
+        ) {
+          // Return the full structured response to support all content types
+          // This allows the caller to handle different content types appropriately
+          resolve(response);
+        } else {
+          // Fallback for non-standard responses
+          resolve(response);
+        }
       } catch (error) {
         clearTimeout(context.timeoutId);
         context.cleanup();
@@ -201,7 +197,7 @@ export class ToolExecutor {
           }
 
           loggerDiscovery(
-            'Payment required for tool execution. Invoice:',
+            'Payment required for prompt execution. Invoice:',
             invoice
           );
 
@@ -214,7 +210,7 @@ export class ToolExecutor {
             context.cleanup();
             reject(
               new Error(
-                'Tool requires payment but NWC is not configured. Please add NWC configuration to use paid tools.'
+                'Prompt requires payment but NWC is not configured. Please add NWC configuration to use paid prompts.'
               )
             );
             return;
@@ -223,8 +219,10 @@ export class ToolExecutor {
           // Pay the invoice using NWC
           const success = await this.nwcPaymentHandler.payInvoice(invoice);
           if (success) {
-            loggerDiscovery('Payment successful, waiting for tool response...');
-            // Payment successful, now we wait for the actual tool response
+            loggerDiscovery(
+              'Payment successful, waiting for prompt response...'
+            );
+            // Payment successful, now we wait for the actual prompt response
             // Don't resolve or reject here, just continue waiting
           } else {
             throw new Error('Payment failed');
@@ -239,51 +237,40 @@ export class ToolExecutor {
     }
   }
 
-  private createToolRequest(
-    toolId: string,
-    tool: Tool,
-    params: unknown
+  private createPromptRequest(
+    promptId: string,
+    prompt: PromptDefinition,
+    args: Record<string, string>
   ): Event {
     // Use the new request kind
     const request = this.keyManager.createEventTemplate(REQUEST_KIND); // 25910
 
-    const toolInfo = this.toolRegistry.getToolInfo(toolId);
-    if (!toolInfo) throw new Error(`Tool ${toolId} not found`);
+    const promptInfo = this.promptRegistry.getPromptInfo(promptId);
+    if (!promptInfo) throw new Error(`Prompt ${promptId} not found`);
 
-    // Format parameters according to tool schema
-    const parameters =
-      !tool.inputSchema.properties ||
-      Object.keys(tool.inputSchema.properties).length === 0
-        ? {}
-        : (params as Record<string, unknown>);
-
-    // Create a properly typed CallToolRequest object
-    const requestContent: CallToolRequest = {
-      method: 'tools/call',
+    // Create a JSON-RPC request object according to the DVMCP specification
+    const requestContent: GetPromptRequest = {
+      method: 'prompts/get',
       params: {
-        name: tool.name,
-        arguments: parameters,
+        name: prompt.name,
+        arguments: args,
       },
     };
 
-    // Create a JSON-RPC request object according to the DVMCP specification
-    // Add the id separately as it's part of the JSON-RPC standard but not the CallToolRequest type
-    request.content = JSON.stringify({
-      ...requestContent,
-    });
+    request.content = JSON.stringify(requestContent);
 
     // Add required tags according to the spec
     // Target provider pubkey
-    if (toolInfo.providerPubkey) {
-      request.tags.push([TAG_PUBKEY, toolInfo.providerPubkey]);
+    if (promptInfo.providerPubkey) {
+      request.tags.push([TAG_PUBKEY, promptInfo.providerPubkey]);
     }
 
     // Add method tag according to the DVMCP specification
-    request.tags.push([TAG_METHOD, 'tools/call']);
+    request.tags.push([TAG_METHOD, 'prompts/get']);
 
     // Add server ID tag if available
-    if (toolInfo.serverId) {
-      request.tags.push([TAG_SERVER_IDENTIFIER, toolInfo.serverId]);
+    if (promptInfo.serverId) {
+      request.tags.push([TAG_SERVER_IDENTIFIER, promptInfo.serverId]);
     }
 
     return this.keyManager.signEvent(request);

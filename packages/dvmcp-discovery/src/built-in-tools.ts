@@ -1,6 +1,5 @@
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import type { Filter } from 'nostr-tools';
 import type { DVMAnnouncement } from './direct-discovery';
@@ -8,6 +7,11 @@ import type { DiscoveryServer } from './discovery-server';
 import { DEFAULT_VALUES } from './constants';
 import { NWCPaymentHandler } from './nwc-payment';
 import { getConfig } from './config';
+import {
+  SERVER_ANNOUNCEMENT_KIND,
+  TOOLS_LIST_KIND,
+} from '@dvmcp/commons/constants';
+import { createCapabilityId } from './utils/capabilities';
 
 /**
  * Built-in tool definition with execution function
@@ -213,11 +217,10 @@ builtInToolRegistry.registerTool(
         `Querying relay ${relay} for tools matching keywords: ${keywords.join(', ')}...`
       );
 
-      // Create a filter for DVM announcements
+      // Construct a filter to find server announcements and tools lists
       const filter: Filter = {
-        kinds: [DVM_ANNOUNCEMENT_KIND],
-        '#t': ['mcp'],
-        since: Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60,
+        kinds: [SERVER_ANNOUNCEMENT_KIND, TOOLS_LIST_KIND],
+        since: Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60, // Last 7 days
       };
 
       // Add limit to the filter if specified
@@ -517,10 +520,7 @@ builtInToolRegistry.registerTool(
               if (!discoveryServerRef) {
                 throw new Error('Discovery server reference is not set');
               }
-              const toolId = discoveryServerRef.createToolId(
-                tool.name,
-                announcement.pubkey
-              ); //`${tool.name}_${announcement.pubkey.slice(0, 4)}`;
+              const toolId = createCapabilityId(tool.name, announcement.pubkey); //`${tool.name}_${announcement.pubkey.slice(0, 4)}`;
 
               // Skip already registered tools
               if (
@@ -542,8 +542,7 @@ builtInToolRegistry.registerTool(
               if (discoveryServerRef) {
                 discoveryServerRef.registerToolFromAnnouncement(
                   announcement.pubkey,
-                  tool,
-                  false // Don't notify for each individual tool
+                  tool
                 );
               }
 

@@ -1,4 +1,3 @@
-
 # DVMCP
 
 ## MCP Integration for Nostr
@@ -75,7 +74,13 @@ DVMCP bridges MCP and Nostr protocols through a consistent message structure and
 
 The protocol uses these key design principles for message handling:
 
-1. **Content Field Structure**: The `content` field of Nostr events contains stringified MCP messages. This approach maintains protocol integrity while enabling translation between the two systems.
+1. **Content Field Structure**: The `content` field of Nostr events contains stringified simplified MCP messages that:
+   - Omit the `jsonrpc` version field
+   - Omit the `id` field
+   - For requests: Contain only `method` and `params` fields
+   - For responses: Contain the response data directly at the root level without nesting inside a `result` field
+   
+   This approach maintains protocol integrity while enabling translation between the two systems.
 
 2. **Nostr Metadata in Tags**: All Nostr-specific metadata uses event tags:
    - `d`: Unique server identifier, defined by the provider
@@ -134,16 +139,15 @@ Providers announce their servers and capabilities by publishing events with kind
 
 After a client discovers a server through these announcements, it can immediately begin making requests to the server without requiring an explicit initialization step.
 
+**Notice:** The content field of all events must always be a string. For better readability, event examples are presented as JSON objects. However, these must first be converted to strings before they can be included in the content field.
+
 #### Server Announcement Event
 
 ```json
 {
   "kind": 31316,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "result": {
+  "content": {
       "protocolVersion": "2025-03-26",
       "capabilities": {
         "prompts": {
@@ -162,8 +166,7 @@ After a client discovers a server through these announcements, it can immediatel
         "version": "1.0.0"
       },
       "instructions": "Optional instructions for the client"
-    }
-  }",
+    },
   "tags": [
     ["d", "<server-identifier>"],          // Required: Unique identifier for the server
     ["k", "25910"],                        // Required: Accepted event kinds (for requests)
@@ -181,28 +184,24 @@ After a client discovers a server through these announcements, it can immediatel
 {
   "kind": 31317,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "result": {
-      "tools": [
-        {
-          "name": "get_weather",
-          "description": "Get current weather information for a location",
-          "inputSchema": {
-            "type": "object",
-            "properties": {
-              "location": {
-                "type": "string",
-                "description": "City name or zip code"
-              }
-            },
-            "required": ["location"]
+  "content": {
+        "tools": [
+          {
+            "name": "get_weather",
+            "description": "Get current weather information for a location",
+            "inputSchema": {
+              "type": "object",
+              "properties": {
+                "location": {
+                  "type": "string",
+                  "description": "City name or zip code"
+                }
+              },
+              "required": ["location"]
+            }
           }
-        }
-      ]
-    }
-  }",
+        ]
+      },
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the tools list
     ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
@@ -217,26 +216,23 @@ After a client discovers a server through these announcements, it can immediatel
 {
   "kind": 31318,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "result": {
-      "resources": [
-        {
-          "uri": "file:///project/src/main.rs",
-          "name": "main.rs",
-          "description": "Primary application entry point",
-          "mimeType": "text/x-rust"
-        }
-      ]
-    }
-  }",
+  "content": {
+        "resources": [
+          {
+            "uri": "file:///project/src/main.rs",
+            "name": "main.rs",
+            "description": "Primary application entry point",
+            "mimeType": "text/x-rust"
+          }
+        ]
+      },
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the resources list
     ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
     ["cap", "main.rs"]                    // Optional: One cap tag per resource name
   ]
 }
+
 ```
 
 #### Prompts List Event
@@ -245,25 +241,21 @@ After a client discovers a server through these announcements, it can immediatel
 {
   "kind": 31319,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "result": {
-      "prompts": [
-        {
-          "name": "code_review",
-          "description": "Asks the LLM to analyze code quality and suggest improvements",
-          "arguments": [
-            {
-              "name": "code",
-              "description": "The code to review",
-              "required": true
-            }
-          ]
-        }
-      ]
-    }
-  }",
+  "content": {
+        "prompts": [
+          {
+            "name": "code_review",
+            "description": "Asks the LLM to analyze code quality and suggest improvements",
+            "arguments": [
+              {
+                "name": "code",
+                "description": "The code to review",
+                "required": true
+              }
+            ]
+          }
+        ]
+      },
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the prompts list
     ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
@@ -271,6 +263,60 @@ After a client discovers a server through these announcements, it can immediatel
   ]
 }
 ```
+
+### Capability Pricing
+
+DVMCP supports pricing for capabilities through the use of `cap` tags in announcement events.
+
+#### Pricing Tag Format
+
+Pricing information is conveyed using the `cap` tag with the following format:
+
+```
+['cap', <capability-identifier>, <price>, <currency-unit>]
+```
+
+Where:
+- `<capability-identifier>` is the name of the tool, prompt, or resource URI
+- `<price>` is a string representing the numerical amount (e.g., "100")
+- `<currency-unit>` is the currency symbol (e.g., "sats", "usd")
+
+#### Example
+
+A tool list event with pricing for the `get_weather` tool:
+
+```json
+{
+  "kind": 31317,
+  "tags": [
+    ["d", "server-123/tools/list"],
+    ["s", "server-123"],
+    ["cap", "get_weather", "100", "sats"]
+  ],
+  "content": {
+    "tools": [
+      {
+        "name": "get_weather",
+        "description": "Get current weather information"
+        // ... other tool properties
+      }
+    ]
+  }
+}
+```
+
+This indicates that using the `get_weather` tool costs 100 satoshis. Clients can use this information to display pricing to users and handle payments before making requests.
+
+#### Payment Handling
+
+When a capability has pricing information, clients should handle payments before making requests. The payment process follows these steps:
+
+1. **Payment Request**: Client sends a payment request to the server with the capability identifier
+2. **Invoice Generation**: Server generates an invoice (e.g., Lightning Network invoice)
+3. **Payment Verification**: Client pays the invoice and provides proof of payment
+4. **Capability Access**: Once payment is verified, the server processes the capability request
+
+Payment verification can be implemented using Lightning Network zaps (NIP-57) or other payment methods. The specific payment flow is implementation-dependent, but servers should include payment verification before processing paid capability requests.
 
 ### Direct Discovery (Private Servers)
 
@@ -281,24 +327,22 @@ For servers that are not publicly announced, clients MUST use the MCP initializa
 ```json
 {
   "kind": 25910,
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "initialize",
-    "params": {
-      "protocolVersion": "2025-03-26",
-      "capabilities": {
-        "roots": {
-          "listChanged": true
+  "content": {
+      "method": "initialize",
+      "params": {
+        "protocolVersion": "2025-03-26",
+        "capabilities": {
+          "roots": {
+            "listChanged": true
+          },
+          "sampling": {}
         },
-        "sampling": {}
-      },
-      "clientInfo": {
-        "name": "ExampleClient",
-        "version": "1.0.0"
+        "clientInfo": {
+          "name": "ExampleClient",
+          "version": "1.0.0"
+        }
       }
-    }
-  }",
+    },
   "tags": [
     ["p", "<provider-pubkey>"],
     ["s", "<server-identifier>"],
@@ -318,31 +362,27 @@ For servers that are not publicly announced, clients MUST use the MCP initializa
 {
   "kind": 26910,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "result": {
-      "protocolVersion": "2025-03-26",
-      "capabilities": {
-        "logging": {},
-        "prompts": {
-          "listChanged": true
+  "content": {
+        "protocolVersion": "2025-03-26",
+        "capabilities": {
+          "logging": {},
+          "prompts": {
+            "listChanged": true
+          },
+          "resources": {
+            "subscribe": true,
+            "listChanged": true
+          },
+          "tools": {
+            "listChanged": true
+          }
         },
-        "resources": {
-          "subscribe": true,
-          "listChanged": true
+        "serverInfo": {
+          "name": "ExampleServer",
+          "version": "1.0.0"
         },
-        "tools": {
-          "listChanged": true
-        }
-      },
-      "serverInfo": {
-        "name": "ExampleServer",
-        "version": "1.0.0"
-      },
-      "instructions": "Optional instructions for the client"
-    }
-  }",
+        "instructions": "Optional instructions for the client"
+    },
   "tags": [
     ["e", "<client-init-request-id>"],
     ["d", "<server-identifier>"]
@@ -364,10 +404,9 @@ After receiving the server initialization response, the client MUST send an init
 {
   "kind": 21316,
   "pubkey": "<client-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
+  "content": {
     "method": "notifications/initialized"
-  }",
+  },
   "tags": [
     ["p", "<provider-pubkey>"],                   // Required: Target provider public key
     ["s", "<server-identifier>"],                  // Required: Server identifier
@@ -393,14 +432,12 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
   "kind": 25910,
   "pubkey": "<client-pubkey>",
   "id": "<request-event-id>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": "<request-id>",
+  "content": {
     "method": "<capability>/list",  // tools/list, resources/list, or prompts/list
     "params": {
       "cursor": "optional-cursor-value"
     }
-  }",
+  },
   "tags": [
     ["method", "<capability>/list"],  // Required: Same as method in content for filtering
     ["p", "<provider-pubkey>"],       // Required: Provider's public key
@@ -415,16 +452,12 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 {
   "kind": 26910,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": "<request-id>",
-    "result": {
-      "<items>": [  // "tools", "resources", or "prompts" based on capability
-        // Capability-specific item objects
-      ],
-      "nextCursor": "next-page-cursor" 
-    }
-  }",
+  "content": {
+        "<items>": [  // "tools", "resources", or "prompts" based on capability
+          // Capability-specific item objects
+        ],
+        "nextCursor": "next-page-cursor"
+    },
   "tags": [
     ["e", "<request-event-id>"]        // Required: Reference to the request event
   ]
@@ -460,10 +493,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 {
   "kind": 25910,
   "pubkey": "<client-pubkey>",
-  "id": "<request-event-id>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 3,
+  "content": {
     "method": "tools/call",
     "params": {
       "name": "get_weather",
@@ -471,7 +501,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
         "location": "New York"
       }
     }
-  }",
+  },
   "tags": [
     ["method", "tools/call"],
     ["p", "<provider-pubkey>"],
@@ -486,19 +516,15 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 {
   "kind": 26910,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 3,
-    "result": {
-      "content": [
+  "content": {
+    "content": [
         {
           "type": "text",
           "text": "Current weather in New York:\nTemperature: 72°F\nConditions: Partly cloudy"
         }
       ],
-      "isError": false
-    }
-  }",
+    "isError": false
+  },
   "tags": [
     ["e", "<request-event-id>"],
   ]
@@ -523,15 +549,12 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 {
   "kind": 25910,
   "pubkey": "<client-pubkey>",
-  "id": "<request-event-id>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 5,
+  "content": {
     "method": "resources/read",
     "params": {
       "uri": "file:///project/src/main.rs"
     }
-  }",
+  },
   "tags": [
     ["method", "resources/read"],
     ["p", "<provider-pubkey>"],
@@ -546,19 +569,15 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 {
   "kind": 26910,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 5,
-    "result": {
-      "contents": [
+  "content": {
+    "contents": [
         {
           "uri": "file:///project/src/main.rs",
           "mimeType": "text/x-rust",
           "text": "fn main() {\n    println!(\"Hello world!\");\n}"
         }
       ]
-    }
-  }",
+  },
   "tags": [
     ["e", "<request-event-id>"]        // Required: Reference to the request event
   ]
@@ -588,10 +607,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 {
   "kind": 25910,
   "pubkey": "<client-pubkey>",
-  "id": "<request-event-id>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 7,
+  "content": {
     "method": "prompts/get",
     "params": {
       "name": "code_review",
@@ -599,7 +615,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
         "code": "def hello():\n    print('world')"
       }
     }
-  }",
+  },
   "tags": [
     ["method", "prompts/get"],
     ["p", "<provider-pubkey>"],
@@ -614,22 +630,17 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 {
   "kind": 26910,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": 7,
-    "result": {
-      "description": "Code review prompt",
-      "messages": [
+  "content": {
+    "messages": [
         {
           "role": "user",
-          "content": "{
+          "content": {
             "type": "text",
             "text": "Please review this Python code:\ndef hello():\n    print('world')"
           }
         }
       ]
-    }
-  }",
+  },
   "tags": [
     ["e", "<request-event-id>"]        // Required: Reference to the request event
   ]
@@ -644,7 +655,7 @@ For notifications, we use an ephemeral event type (21316), meaning they are not 
 
 ### MCP-compliant Notifications
 
-For MCP-compliant notifications, the content field follows the same pattern as other MCP messages, containing a stringified JSON RPC object that adheres to the MCP specification.
+For MCP-compliant notifications, the content field follows the same pattern as other MCP messages, containing a stringified simplified JSON-RPC object that adheres to the MCP specification.
 
 The direction of the notifications is determined by the `p` tag used. Client to server notifications are signed by the client pubkey and use the server pubkey as `p` tag, server to client notifications are signed by the server's provider pubkey and use the client pubkey as `p` tag.
 
@@ -654,11 +665,10 @@ The direction of the notifications is determined by the `p` tag used. Client to 
 {
   "kind": 21316,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
+  "content": {
     "method": "notifications/<type>",
     "params": { /* Optional parameters */ }
-  }",
+  },
   "tags": [
     ["p", "<client-pubkey>"],                    // Required: Target public key (recipient)
     ["method", "notifications/<type>"],          // Required: Same as method in content
@@ -715,7 +725,7 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 | Error Type | Description | Format |
 |------------|-------------|--------|
 | Protocol Error | JSON-RPC protocol-level errors (invalid method, params, etc.) | Error object in content with error code and message |
-| Execution Error | Errors during tool execution (API failures, business logic errors) | Result object with `isError: true` and error details in content |
+| Execution Error | Errors during tool execution (API failures, business logic errors) | Object with `isError: true` and error details in content |
 
 ### Error Response Template
 
@@ -723,25 +733,21 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 {
   "kind": 26910,
   "pubkey": "<provider-pubkey>",
-  "content": "{
-    "jsonrpc": "2.0",
-    "id": "<request-id>",
+  "content": {
     // Either an error object (protocol error):
     "error": {
       "code": -32602,  // Standard JSON-RPC error code
       "message": "Error description"
     },
-    // Or a result with isError flag (execution error):
-    "result": {
-      "content": [
-        {
-          "type": "text",
-          "text": "Error details"
-        }
-      ],
-      "isError": true
-    }
-  }",
+    // Or a direct response with isError flag (execution error):
+    "content": [
+      {
+        "type": "text",
+        "text": "Error details"
+      }
+    ],
+    "isError": true
+  },
   "tags": [
     ["e", "<request-event-id>"],                  // Required: Reference to the request event
   ]
@@ -761,7 +767,7 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 ### Providers and Servers MUST:
 
 1. Use consistent server identifiers in the `d` tags
-2. Structure event content as valid JSON-RPC stringified objects according to MCP specification
+2. Structure event content as valid stringified simplified JSON-RPC objects (without jsonrpc version, id fields, and nested result objects) according to MCP specification
 3. Respond to initialization requests with proper capability information
 4. Process the initialized notification for Direct Discovery connections
 5. Include appropriate error information for failed requests
@@ -771,7 +777,7 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 ### Clients MUST:
 
 1. Include the proper server reference in the `s` tag for all requests
-2. Parse JSON-RPC responses from the event content
+2. Parse simplified JSON-RPC responses from the event content (without jsonrpc version, id fields, and nested result objects)
 3. Handle error conditions appropriately
 4. Track event IDs for request-response correlation
 5. Subscribe to notifications from the server is interacting with

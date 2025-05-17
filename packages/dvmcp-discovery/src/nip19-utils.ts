@@ -1,5 +1,5 @@
 import { nip19 } from 'nostr-tools';
-import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
+import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 
 // Default fallback relay when no relay hints are provided
@@ -59,9 +59,11 @@ export function decodeNaddr(naddrEntity: string): NaddrData | null {
       return null;
     }
 
-    // Validate that the kind is a DVM announcement
-    if (data.kind !== DVM_ANNOUNCEMENT_KIND) {
-      console.error(`Expected kind ${DVM_ANNOUNCEMENT_KIND}, got ${data.kind}`);
+    // Validate that the kind is a server announcement or other valid DVMCP kind
+    if (data.kind !== SERVER_ANNOUNCEMENT_KIND) {
+      console.error(
+        `Expected kind ${SERVER_ANNOUNCEMENT_KIND}, got ${data.kind}`
+      );
       return null;
     }
 

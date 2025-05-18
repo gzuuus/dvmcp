@@ -64,17 +64,13 @@ export class ResourceExecutor extends BaseExecutor<
     resource: Resource,
     params: ReadResourceRequest['params']
   ): Promise<ReadResourceResult> {
-    // Convert Resource to ResourceCapability if needed
     const resourceCapability = resource as ResourceCapability;
-
-    // Use the base executor's execute method
     return this.execute(resourceId, resourceCapability, params);
   }
 
   public cleanup(): void {
     super.cleanup();
 
-    // Clean up the NWC payment handler if it exists
     if (this.nwcPaymentHandler) {
       this.nwcPaymentHandler.cleanup();
     }
@@ -95,17 +91,14 @@ export class ResourceExecutor extends BaseExecutor<
   ): Promise<void> {
     if (event.kind === RESPONSE_KIND) {
       try {
-        // Parse the response content according to the DVMCP specification
-        const response: ReadResourceResult = JSON.parse(event.content);
+        const response = JSON.parse(event.content);
 
-        // Check if it's an error response
         if (response.error) {
           this.cleanupExecution(context.executionId);
           reject(new Error('Read resource parse error'));
           return;
         }
 
-        // Check if it's an execution error (isError flag)
         if (response.isError === true) {
           this.cleanupExecution(context.executionId);
           reject(
@@ -118,7 +111,6 @@ export class ResourceExecutor extends BaseExecutor<
           return;
         }
 
-        // Handle successful response
         this.cleanupExecution(context.executionId);
         resolve(response);
       } catch (error) {
@@ -126,21 +118,17 @@ export class ResourceExecutor extends BaseExecutor<
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     } else if (event.kind === NOTIFICATION_KIND) {
-      // Check for method tag (MCP notification) or status tag (Nostr notification)
       const method = event.tags.find((t) => t[0] === TAG_METHOD)?.[1];
       const status = event.tags.find((t) => t[0] === TAG_STATUS)?.[1];
 
-      // Handle error notifications
       if (status === 'error' || method === 'error') {
         this.cleanupExecution(context.executionId);
         reject(new Error(event.content || 'Error notification received'));
         return;
       }
 
-      // Handle payment required notifications
       if (status === 'payment-required') {
         try {
-          // Extract the invoice from the event
           const invoice = event.tags.find((t) => t[0] === 'invoice')?.[1];
           if (!invoice) {
             throw new Error('No invoice found in payment-required event');
@@ -151,7 +139,6 @@ export class ResourceExecutor extends BaseExecutor<
             invoice
           );
 
-          // Check if we have a payment handler
           if (!this.nwcPaymentHandler) {
             loggerDiscovery(
               'NWC payment handler not configured. Cannot process payment automatically.'
@@ -165,14 +152,11 @@ export class ResourceExecutor extends BaseExecutor<
             return;
           }
 
-          // Pay the invoice using NWC
           const success = await this.nwcPaymentHandler.payInvoice(invoice);
           if (success) {
             loggerDiscovery(
               'Payment successful, waiting for resource response...'
             );
-            // Payment successful, now we wait for the actual resource response
-            // Don't resolve or reject here, just continue waiting
           } else {
             throw new Error('Payment failed');
           }
@@ -189,44 +173,39 @@ export class ResourceExecutor extends BaseExecutor<
    * Create a resource request event
    * @param id - ID of the resource
    * @param item - Resource capability
-   * @param params - Resource parameters
+   * @param args - Resource arguments
    * @returns Nostr event for the request
    */
   protected createRequest(
     id: string,
     item: ResourceCapability,
-    params: ReadResourceRequest['params']
+    args: ReadResourceRequest['params']['arguments']
   ): NostrEvent {
-    // Use the new request kind
-    const request = this.keyManager.createEventTemplate(REQUEST_KIND); // 25910
+    const request = this.keyManager.createEventTemplate(REQUEST_KIND);
 
     const resourceInfo = this.resourceRegistry.getResourceInfo(id);
     if (!resourceInfo) throw new Error(`Resource ${id} not found`);
 
-    // Create a JSON-RPC request object according to the DVMCP specification
     const requestContent: ReadResourceRequest = {
       method: 'resources/read',
       params: {
         uri: item.uri,
-        arguments: params,
+        arguments: args,
       },
     };
 
-    // Create a JSON-RPC request object according to the DVMCP specification
     request.content = JSON.stringify({
       ...requestContent,
     });
 
-    // Add required tags according to the spec
-    // Target provider pubkey
     if (resourceInfo.providerPubkey) {
       request.tags.push([TAG_PUBKEY, resourceInfo.providerPubkey]);
     }
-
-    // Add method tag according to the DVMCP specification
+    if (resourceInfo.providerPubkey) {
+      request.tags.push([TAG_PUBKEY, resourceInfo.providerPubkey]);
+    }
     request.tags.push([TAG_METHOD, requestContent.method]);
 
-    // Add server ID tag if available
     if (resourceInfo.serverId) {
       request.tags.push([TAG_SERVER_IDENTIFIER, resourceInfo.serverId]);
     }

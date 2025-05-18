@@ -69,12 +69,10 @@ export class ToolExecutor extends BaseExecutor<
       throw new Error(`Tool ${toolId} not found`);
     }
 
-    const tool = toolInfo.tool as ToolCapability;
+    const tool = toolInfo.item as ToolCapability;
 
-    // Check if this is a built-in tool
     if (tool.isBuiltIn) {
       try {
-        // Execute built-in tool directly
         return await this.toolRegistry.executeBuiltInTool(toolId, params);
       } catch (error) {
         loggerDiscovery(`Error executing built-in tool ${toolId}:`, error);
@@ -82,20 +80,16 @@ export class ToolExecutor extends BaseExecutor<
       }
     }
 
-    // For external tools, use the base executor's execute method
     return this.execute(toolId, tool, params);
   }
 
   public cleanup(): void {
     super.cleanup();
 
-    // Clean up the NWC payment handler if it exists
     if (this.nwcPaymentHandler) {
       this.nwcPaymentHandler.cleanup();
     }
   }
-
-  // These methods are now handled by the BaseExecutor class
 
   /**
    * Handle a tool response event
@@ -112,17 +106,14 @@ export class ToolExecutor extends BaseExecutor<
   ): Promise<void> {
     if (event.kind === RESPONSE_KIND) {
       try {
-        // Parse the response content according to the DVMCP specification
         const response = JSON.parse(event.content);
 
-        // Check if it's an error response
         if (response.error) {
           this.cleanupExecution(context.executionId);
           reject(new Error(response.error.message || 'Unknown error'));
           return;
         }
 
-        // Check if it's an execution error (isError flag)
         if (response.isError === true) {
           this.cleanupExecution(context.executionId);
           reject(
@@ -135,29 +126,24 @@ export class ToolExecutor extends BaseExecutor<
           return;
         }
 
-        // Handle successful response
         this.cleanupExecution(context.executionId);
-        resolve(response.content);
+        resolve(response);
       } catch (error) {
         this.cleanupExecution(context.executionId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     } else if (event.kind === NOTIFICATION_KIND) {
-      // Check for method tag (MCP notification) or status tag (Nostr notification)
       const method = event.tags.find((t) => t[0] === TAG_METHOD)?.[1];
       const status = event.tags.find((t) => t[0] === TAG_STATUS)?.[1];
 
-      // Handle error notifications
       if (status === 'error' || method === 'error') {
         this.cleanupExecution(context.executionId);
         reject(new Error(event.content || 'Error notification received'));
         return;
       }
 
-      // Handle payment required notifications
       if (status === 'payment-required') {
         try {
-          // Extract the invoice from the event
           const invoice = event.tags.find((t) => t[0] === 'invoice')?.[1];
           if (!invoice) {
             throw new Error('No invoice found in payment-required event');
@@ -168,7 +154,6 @@ export class ToolExecutor extends BaseExecutor<
             invoice
           );
 
-          // Check if we have a payment handler
           if (!this.nwcPaymentHandler) {
             loggerDiscovery(
               'NWC payment handler not configured. Cannot process payment automatically.'
@@ -182,12 +167,9 @@ export class ToolExecutor extends BaseExecutor<
             return;
           }
 
-          // Pay the invoice using NWC
           const success = await this.nwcPaymentHandler.payInvoice(invoice);
           if (success) {
             loggerDiscovery('Payment successful, waiting for tool response...');
-            // Payment successful, now we wait for the actual tool response
-            // Don't resolve or reject here, just continue waiting
           } else {
             throw new Error('Payment failed');
           }
@@ -217,7 +199,6 @@ export class ToolExecutor extends BaseExecutor<
     const toolInfo = this.toolRegistry.getToolInfo(id);
     if (!toolInfo) throw new Error(`Tool ${id} not found`);
 
-    // Create a properly typed CallToolRequest object
     const requestContent: CallToolRequest = {
       method: 'tools/call',
       params: {
@@ -226,20 +207,13 @@ export class ToolExecutor extends BaseExecutor<
       },
     };
 
-    // Create a JSON-RPC request object according to the DVMCP specification
     request.content = JSON.stringify({
       ...requestContent,
     });
-
-    // Target provider pubkey
     if (toolInfo.providerPubkey) {
       request.tags.push([TAG_PUBKEY, toolInfo.providerPubkey]);
     }
-
-    // Add method tag
     request.tags.push([TAG_METHOD, requestContent.method]);
-
-    // Add server ID tag if available
     if (toolInfo.serverId) {
       request.tags.push([TAG_SERVER_IDENTIFIER, toolInfo.serverId]);
     }

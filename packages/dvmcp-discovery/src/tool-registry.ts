@@ -1,7 +1,7 @@
 import {
   type Tool,
-  type Resource,
   type CallToolResult,
+  type CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import { ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -11,13 +11,11 @@ import { builtInToolRegistry } from './built-in-tools';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
 
-// Extend Tool interface to include Capability properties
 export interface ToolCapability extends Tool, Capability {
   type: 'tool';
 }
 
 export class ToolRegistry extends BaseRegistry<ToolCapability> {
-  // Store server information
   private servers: Map<
     string,
     {
@@ -39,14 +37,12 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
   ): void {
     try {
       ToolSchema.parse(tool);
-      // Convert Tool to ToolCapability
       const toolCapability: ToolCapability = {
         ...tool,
         id: toolId,
         type: 'tool',
       };
 
-      // Use the base class method to store the item
       this.items.set(toolId, {
         item: toolCapability,
         providerPubkey,
@@ -63,12 +59,7 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
     if (!info) return undefined;
 
     // Convert back to the expected format for backward compatibility
-    return {
-      tool: info.item,
-      providerPubkey: info.providerPubkey,
-      serverId: info.serverId,
-      isBuiltIn: info.item.isBuiltIn,
-    };
+    return info;
   }
 
   public getTool(toolId: string): Tool | undefined {
@@ -195,27 +186,18 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
         toolId,
         tool.description ?? '',
         this.mapJsonSchemaToZod(tool.inputSchema),
-        async (args: unknown) => {
+        async (params: CallToolRequest['params']) => {
           try {
-            let result;
+            let result: CallToolResult | undefined;
 
             const toolInfo = this.getItemInfo(toolId);
 
-            // Handle built-in tools directly, otherwise use the execution callback
             if (toolInfo?.item.isBuiltIn) {
-              result = await this.executeBuiltInTool(toolId, args);
+              result = await this.executeBuiltInTool(toolId, params);
             } else {
-              result = await this.executionCallback?.(toolId, args);
+              result = await this.executionCallback?.(toolId, params);
             }
-
-            return {
-              content: [
-                {
-                  type: 'text' as const,
-                  text: JSON.stringify(result),
-                },
-              ],
-            };
+            return result;
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
@@ -282,11 +264,14 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
 
   private executionCallback?: (
     toolId: string,
-    args: unknown
+    params: CallToolRequest['params']
   ) => Promise<CallToolResult>;
 
   public setExecutionCallback(
-    callback: (toolId: string, args: unknown) => Promise<CallToolResult>
+    callback: (
+      toolId: string,
+      params: CallToolRequest['params']
+    ) => Promise<CallToolResult>
   ): void {
     this.executionCallback = callback;
   }

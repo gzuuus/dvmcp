@@ -6,9 +6,16 @@ import {
   type NostrEvent,
   type UnsignedEvent,
 } from 'nostr-tools';
+import type {
+  CallToolResult,
+  ReadResourceResult,
+  GetPromptResult,
+} from '@modelcontextprotocol/sdk/types.js';
 import {
   SERVER_ANNOUNCEMENT_KIND,
   TOOLS_LIST_KIND,
+  RESOURCES_LIST_KIND,
+  PROMPTS_LIST_KIND,
   REQUEST_KIND,
   RESPONSE_KIND,
   TAG_METHOD,
@@ -28,6 +35,12 @@ const mockServerAnnouncement = {
     protocolVersion: '2025-03-26',
     capabilities: {
       tools: {
+        listChanged: true,
+      },
+      resources: {
+        listChanged: true,
+      },
+      prompts: {
         listChanged: true,
       },
     },
@@ -71,6 +84,53 @@ const mockToolsList = {
   ],
 } as UnsignedEvent;
 
+// Resources list event according to DVMCP 2025-03-26
+const mockResourcesList = {
+  kind: RESOURCES_LIST_KIND,
+  content: JSON.stringify({
+    resources: [
+      {
+        uri: 'test-resource',
+        description: 'Test resource for unit tests',
+        mimeType: 'text/plain',
+      },
+    ],
+  }),
+  created_at: Math.floor(Date.now() / 1000),
+  tags: [
+    [TAG_UNIQUE_IDENTIFIER, 'resources-list-id'],
+    ['s', 'test-server-id'],
+    [TAG_CAPABILITY, 'test-resource'],
+  ],
+} as UnsignedEvent;
+
+// Prompts list event according to DVMCP 2025-03-26
+const mockPromptsList = {
+  kind: PROMPTS_LIST_KIND,
+  content: JSON.stringify({
+    prompts: [
+      {
+        name: 'test-prompt',
+        description: 'Test prompt for unit tests',
+        arguments: [
+          {
+            name: 'input',
+            description: 'Input text for the prompt',
+            type: 'string',
+            required: true,
+          },
+        ],
+      },
+    ],
+  }),
+  created_at: Math.floor(Date.now() / 1000),
+  tags: [
+    [TAG_UNIQUE_IDENTIFIER, 'prompts-list-id'],
+    ['s', 'test-server-id'],
+    [TAG_CAPABILITY, 'test-prompt'],
+  ],
+} as UnsignedEvent;
+
 // Generate and add the server announcement event
 const serverSecretKey = generateSecretKey();
 const finalizedServerEvent = finalizeEvent(
@@ -83,29 +143,46 @@ mockEvents.push(finalizedServerEvent);
 const finalizedToolsEvent = finalizeEvent(mockToolsList, serverSecretKey);
 mockEvents.push(finalizedToolsEvent);
 
-const handleToolExecution = (event: NostrEvent) => {
-  if (event.kind === REQUEST_KIND) {
-    // Check for tools/call method
-    const methodTag = event.tags.find((tag) => tag[0] === TAG_METHOD);
-    if (methodTag && methodTag[1] === 'tools/call') {
-      try {
-        const request = JSON.parse(event.content);
-        console.log('Processing execution request:', request);
+// Generate and add the resources list event
+const finalizedResourcesEvent = finalizeEvent(
+  mockResourcesList,
+  serverSecretKey
+);
+mockEvents.push(finalizedResourcesEvent);
 
+// Generate and add the prompts list event
+const finalizedPromptsEvent = finalizeEvent(mockPromptsList, serverSecretKey);
+mockEvents.push(finalizedPromptsEvent);
+
+const handleRequest = (event: NostrEvent) => {
+  if (event.kind === REQUEST_KIND) {
+    // Check for method tag
+    const methodTag = event.tags.find((tag) => tag[0] === TAG_METHOD);
+    if (!methodTag) return null;
+
+    try {
+      const request = JSON.parse(event.content);
+      console.log('Processing execution request:', request);
+
+      // Handle tools/call method
+      if (methodTag[1] === 'tools/call') {
         // Extract the parameters from the request
         const params = request.params || {};
         const args = params.arguments || {};
 
+        // Create a properly typed tool response
+        const toolResponse: CallToolResult = {
+          content: [
+            {
+              type: 'text',
+              text: `[test] ${args.text}`,
+            },
+          ],
+        };
+
         const responseEvent = {
           kind: RESPONSE_KIND,
-          content: JSON.stringify({
-            content: [
-              {
-                type: 'text',
-                text: `[test] ${args.text}`,
-              },
-            ],
-          }),
+          content: JSON.stringify(toolResponse),
           created_at: Math.floor(Date.now() / 1000),
           tags: [
             [TAG_EVENT_ID, event.id],
@@ -117,9 +194,83 @@ const handleToolExecution = (event: NostrEvent) => {
         const finalizedResponse = finalizeEvent(responseEvent, serverSecretKey);
         mockEvents.push(finalizedResponse);
         return finalizedResponse;
-      } catch (error) {
-        console.error('Error processing tool execution:', error);
       }
+
+      // Handle resources/read method
+      else if (methodTag[1] === 'resources/read') {
+        const params = request.params || {};
+        const uri = params.uri;
+
+        if (uri === 'test-resource') {
+          // Create a properly typed resource response
+          const resourceResponse: ReadResourceResult = {
+            contents: [
+              {
+                text: 'This is a test resource content',
+                uri: 'test-resource',
+                mimeType: 'text/plain',
+              },
+            ],
+          };
+
+          const responseEvent = {
+            kind: RESPONSE_KIND,
+            content: JSON.stringify(resourceResponse),
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+              [TAG_EVENT_ID, event.id],
+              [TAG_PUBKEY, event.pubkey],
+            ],
+          } as UnsignedEvent;
+
+          console.log('Created resource response event:', responseEvent);
+          const finalizedResponse = finalizeEvent(
+            responseEvent,
+            serverSecretKey
+          );
+          mockEvents.push(finalizedResponse);
+          return finalizedResponse;
+        }
+      }
+
+      // Handle prompts/get method
+      else if (
+        methodTag[1] === 'prompts/get' ||
+        methodTag[1] === 'prompts/execute'
+      ) {
+        const params = request.params || {};
+        const input = params.input || '';
+
+        // Create a properly typed prompt response based on the schema requirements
+        const promptResponse: GetPromptResult = {
+          messages: [
+            {
+              role: 'assistant',
+              content: {
+                type: 'text',
+                text: `This is a response to your prompt input: ${input}`,
+              },
+            },
+          ],
+        };
+
+        const responseEvent = {
+          kind: RESPONSE_KIND,
+          content: JSON.stringify(promptResponse),
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            [TAG_EVENT_ID, event.id],
+            [TAG_PUBKEY, event.pubkey],
+          ],
+        } as UnsignedEvent;
+
+        console.log('Created prompt response event:', responseEvent);
+        const finalizedResponse = finalizeEvent(responseEvent, serverSecretKey);
+        mockEvents.push(finalizedResponse);
+        return finalizedResponse;
+      }
+    } catch (error) {
+      console.error('Error processing request:', error);
     }
   }
   return null;
@@ -172,7 +323,7 @@ const server = serve({
           const event: NostrEvent = data[1];
           mockEvents.push(event);
 
-          const response = handleToolExecution(event);
+          const response = handleRequest(event);
           if (response) {
             console.log('Created response event:', response);
             mockEvents.push(response);

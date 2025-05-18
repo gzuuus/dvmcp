@@ -4,6 +4,10 @@ import { z } from 'zod';
 import { createCapabilityId } from './utils/capabilities';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
+import type {
+  GetPromptRequest,
+  GetPromptResult,
+} from '@modelcontextprotocol/sdk/types.js';
 
 export interface PromptArgument {
   name: string;
@@ -74,12 +78,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
     const info = this.getItemInfo(promptId);
     if (!info) return undefined;
 
-    // Convert back to the expected format for backward compatibility
-    return {
-      prompt: info.item,
-      providerPubkey: info.providerPubkey,
-      serverId: info.serverId,
-    };
+    return info;
   }
 
   /**
@@ -224,16 +223,14 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
         promptId,
         prompt.description || `Prompt: ${promptId}`,
         zodSchema,
-        async (args: Record<string, unknown>) => {
+        async (params: GetPromptRequest['params']) => {
           try {
             // Call the execution callback if set
-            const result = await this.executionCallback?.(
-              promptId,
-              args as Record<string, string>
-            );
+            const result = await this.executionCallback?.(promptId, params);
 
             return result;
           } catch (error) {
+            // TODO: send error
             const errorMessage =
               error instanceof Error ? error.message : String(error);
             console.error(`Error executing prompt ${promptId}:`, errorMessage);
@@ -250,8 +247,8 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
 
   private executionCallback?: (
     promptId: string,
-    args: Record<string, string>
-  ) => Promise<unknown>;
+    params: GetPromptRequest['params']
+  ) => Promise<GetPromptResult>;
 
   /**
    * Set the execution callback for prompts
@@ -260,8 +257,8 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
   public setExecutionCallback(
     callback: (
       promptId: string,
-      args: Record<string, string>
-    ) => Promise<unknown>
+      params: GetPromptRequest['params']
+    ) => Promise<GetPromptResult>
   ): void {
     this.executionCallback = callback;
   }

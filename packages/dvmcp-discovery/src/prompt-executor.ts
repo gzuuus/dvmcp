@@ -69,7 +69,7 @@ export class PromptExecutor extends BaseExecutor<
       throw new Error(`Prompt ${promptId} not found`);
     }
 
-    const prompt = promptInfo.prompt as PromptCapability;
+    const prompt = promptInfo.item as PromptCapability;
 
     // Use the base executor's execute method
     return this.execute(promptId, prompt, args);
@@ -101,17 +101,14 @@ export class PromptExecutor extends BaseExecutor<
   ): Promise<void> {
     if (event.kind === RESPONSE_KIND) {
       try {
-        // Parse the response content according to the DVMCP specification
         const response = JSON.parse(event.content);
 
-        // Check if it's an error response
         if (response.error) {
           this.cleanupExecution(context.executionId);
           reject(new Error(response.error.message || 'Unknown error'));
           return;
         }
 
-        // Check if it's an execution error (isError flag)
         if (response.isError === true) {
           this.cleanupExecution(context.executionId);
           reject(
@@ -124,42 +121,24 @@ export class PromptExecutor extends BaseExecutor<
           return;
         }
 
-        // Handle successful response
         this.cleanupExecution(context.executionId);
-
-        // Process the response according to the MCP specification
-        if (
-          response.messages &&
-          Array.isArray(response.messages) &&
-          response.messages.length > 0
-        ) {
-          // Return the full structured response to support all content types
-          // This allows the caller to handle different content types appropriately
-          resolve(response);
-        } else {
-          // Fallback for non-standard responses
-          resolve(response);
-        }
+        resolve(response);
       } catch (error) {
         this.cleanupExecution(context.executionId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     } else if (event.kind === NOTIFICATION_KIND) {
-      // Check for method tag (MCP notification) or status tag (Nostr notification)
       const method = event.tags.find((t) => t[0] === TAG_METHOD)?.[1];
       const status = event.tags.find((t) => t[0] === TAG_STATUS)?.[1];
 
-      // Handle error notifications
       if (status === 'error' || method === 'error') {
         this.cleanupExecution(context.executionId);
         reject(new Error(event.content || 'Error notification received'));
         return;
       }
 
-      // Handle payment required notifications
       if (status === 'payment-required') {
         try {
-          // Extract the invoice from the event
           const invoice = event.tags.find((t) => t[0] === 'invoice')?.[1];
           if (!invoice) {
             throw new Error('No invoice found in payment-required event');
@@ -170,7 +149,6 @@ export class PromptExecutor extends BaseExecutor<
             invoice
           );
 
-          // Check if we have a payment handler
           if (!this.nwcPaymentHandler) {
             loggerDiscovery(
               'NWC payment handler not configured. Cannot process payment automatically.'
@@ -184,14 +162,11 @@ export class PromptExecutor extends BaseExecutor<
             return;
           }
 
-          // Pay the invoice using NWC
           const success = await this.nwcPaymentHandler.payInvoice(invoice);
           if (success) {
             loggerDiscovery(
               'Payment successful, waiting for prompt response...'
             );
-            // Payment successful, now we wait for the actual prompt response
-            // Don't resolve or reject here, just continue waiting
           } else {
             throw new Error('Payment failed');
           }
@@ -216,13 +191,11 @@ export class PromptExecutor extends BaseExecutor<
     item: PromptCapability,
     args: GetPromptRequest['params']['arguments']
   ): NostrEvent {
-    // Use the new request kind
-    const request = this.keyManager.createEventTemplate(REQUEST_KIND); // 25910
+    const request = this.keyManager.createEventTemplate(REQUEST_KIND);
 
     const promptInfo = this.promptRegistry.getPromptInfo(id);
     if (!promptInfo) throw new Error(`Prompt ${id} not found`);
 
-    // Create a JSON-RPC request object according to the DVMCP specification
     const requestContent: GetPromptRequest = {
       method: 'prompts/get',
       params: {
@@ -233,16 +206,11 @@ export class PromptExecutor extends BaseExecutor<
 
     request.content = JSON.stringify(requestContent);
 
-    // Add required tags according to the spec
-    // Target provider pubkey
     if (promptInfo.providerPubkey) {
       request.tags.push([TAG_PUBKEY, promptInfo.providerPubkey]);
     }
-
-    // Add method tag according to the DVMCP specification
     request.tags.push([TAG_METHOD, requestContent.method]);
 
-    // Add server ID tag if available
     if (promptInfo.serverId) {
       request.tags.push([TAG_SERVER_IDENTIFIER, promptInfo.serverId]);
     }

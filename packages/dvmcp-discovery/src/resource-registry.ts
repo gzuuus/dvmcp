@@ -1,21 +1,19 @@
 import {
+  type ReadResourceRequest,
+  type ReadResourceResult,
   type Resource,
-  type ResourceContents,
 } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
-import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createCapabilityId } from './utils/capabilities';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
 
-// Extend Resource interface to include Capability properties
 export interface ResourceCapability extends Resource, Capability {
   type: 'resource';
 }
 
 export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
-  // Store server resources by server ID
   private serverResources: Map<string, Resource[]> = new Map();
 
   constructor(mcpServer: McpServer) {
@@ -36,14 +34,12 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     serverId?: string
   ): void {
     try {
-      // Convert Resource to ResourceCapability
       const resourceCapability: ResourceCapability = {
         ...resource,
         id: resourceId,
         type: 'resource',
       };
 
-      // Use the base class method to store the item
       this.items.set(resourceId, {
         item: resourceCapability,
         providerPubkey,
@@ -64,12 +60,7 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     const info = this.getItemInfo(resourceId);
     if (!info) return undefined;
 
-    // Convert back to the expected format for backward compatibility
-    return {
-      resource: info.item,
-      providerPubkey: info.providerPubkey,
-      serverId: info.serverId,
-    };
+    return info;
   }
 
   /**
@@ -199,10 +190,34 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     resource: ResourceCapability
   ): void {
     try {
-      // Ensure we have a valid MIME type
-      const mimeType = resource.mimeType || 'text/plain';
+      this.mcpServer.resource(
+        resource.name,
+        resource.uri,
+        async (params: ReadResourceRequest['params']) => {
+          try {
+            return await this.executionCallback?.(
+              resourceId,
+              params.uri,
+              params
+            );
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
 
-      this.registerIndividualResource(resourceId, resource, mimeType);
+            // Return a formatted error response
+            return {
+              contents: [
+                {
+                  uri: params.uri,
+                  mimeType: 'text/plain',
+                  text: `Error: ${errorMessage}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        }
+      );
 
       loggerDiscovery('Resource registered successfully:', resourceId);
     } catch (error) {
@@ -210,105 +225,11 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     }
   }
 
-  /**
-   * Register an individual resource (a resource that doesn't list child resources)
-   * @param resourceId - ID of the resource
-   * @param resource - Resource definition
-   * @param mimeType - MIME type of the resource
-   */
-  private registerIndividualResource(
-    resourceId: string,
-    resource: Resource,
-    mimeType: string
-  ): void {
-    // Register the resource directly with the MCP server (no template)
-    this.mcpServer.resource(
-      resourceId,
-      resource.uri,
-      async (uri: string, params: Record<string, unknown>) => {
-        try {
-          // Convert params to a simple Record<string, string> for the callback
-          const simpleParams: Record<string, string> = {};
-          for (const [key, value] of Object.entries(params)) {
-            if (typeof value === 'string') {
-              simpleParams[key] = value;
-            } else if (Array.isArray(value)) {
-              simpleParams[key] = value.join(',');
-            }
-          }
-
-          // Call the execution callback if set
-          const result = await this.executionCallback?.(
-            resourceId,
-            uri,
-            simpleParams
-          );
-
-          // Prepare the response based on the result type
-          return this.createResourceResponse(uri, result, mimeType);
-        } catch (error) {
-          const errorMessage =
-            error instanceof Error ? error.message : String(error);
-          console.error(
-            `Error executing individual resource ${resourceId}:`,
-            errorMessage
-          );
-          throw error;
-        }
-      }
-    );
-  }
-
-  /**
-   * Create a resource response object based on the result type and MIME type
-   * @param uri - Resource URI
-   * @param result - Result from the execution callback
-   * @param mimeType - MIME type of the resource
-   * @returns Resource response object
-   */
-  private createResourceResponse(
-    uri: string,
-    result: unknown,
-    mimeType: string
-  ): { contents: Array<ResourceContents> } {
-    // Determine if this is a binary resource based on the MIME type
-    const isBinary =
-      mimeType.startsWith('image/') ||
-      mimeType.startsWith('audio/') ||
-      mimeType.startsWith('video/') ||
-      mimeType.startsWith('application/octet-stream');
-
-    // Create the appropriate response based on the resource type
-    if (isBinary && typeof result === 'string') {
-      // For binary resources, return blob data
-      return {
-        contents: [
-          {
-            uri,
-            blob: result,
-            mimeType,
-          },
-        ],
-      };
-    } else {
-      // For text resources, return text content
-      return {
-        contents: [
-          {
-            uri,
-            text: String(result || ''),
-            mimeType,
-          },
-        ],
-      };
-    }
-  }
-
   private executionCallback?: (
     resourceId: string,
     uri: string,
-    params: unknown
-  ) => Promise<unknown>;
+    params: ReadResourceRequest['params']
+  ) => Promise<ReadResourceResult>;
 
   /**
    * Set the execution callback for resources
@@ -318,8 +239,8 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     callback: (
       resourceId: string,
       uri: string,
-      params: unknown
-    ) => Promise<unknown>
+      params: ReadResourceRequest['params']
+    ) => Promise<ReadResourceResult>
   ): void {
     this.executionCallback = callback;
   }

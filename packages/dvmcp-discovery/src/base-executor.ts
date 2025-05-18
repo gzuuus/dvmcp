@@ -43,6 +43,14 @@ export abstract class BaseExecutor<T extends Capability, P, R> {
 
   protected abstract createRequest(id: string, item: T, params: P): NostrEvent;
 
+  /**
+   * Handle a response event from the bridge
+   * This method should parse the response content and pass it through without transformation
+   * @param event - Nostr event containing the response
+   * @param context - Execution context
+   * @param resolve - Function to resolve the promise
+   * @param reject - Function to reject the promise
+   */
   protected abstract handleResponse(
     event: NostrEvent,
     context: ExecutionContext,

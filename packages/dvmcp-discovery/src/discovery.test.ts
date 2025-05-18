@@ -96,7 +96,7 @@ describe('DiscoveryServer E2E', () => {
     console.log('Final discovered resources:', resources);
 
     expect(resources.length).toBeGreaterThan(0);
-    const mockResource = resources.find((r) => r.uri === 'test-resource');
+    const mockResource = resources.find((r) => r.uri === 'test://resource');
     expect(mockResource).toBeDefined();
     expect(mockResource?.mimeType).toBe('text/plain');
   });
@@ -104,7 +104,7 @@ describe('DiscoveryServer E2E', () => {
   test('should read discovered resource', async () => {
     const resources = await discoveryServer.listResources();
     const mockResource = resources.find(
-      (r) => r.uri === 'test-resource'
+      (r) => r.uri === 'test://resource'
     ) as Resource;
     expect(mockResource).toBeDefined();
     console.log('Found resource:', mockResource);
@@ -115,7 +115,7 @@ describe('DiscoveryServer E2E', () => {
     );
     console.log('Available resource IDs:', resourceIds);
 
-    const resourceId = resourceIds.find((id) => id.includes(`test-resource`));
+    const resourceId = resourceIds.find((id) => id.startsWith(`test-resource`));
     expect(resourceId).toBeDefined();
     console.log('Selected resource ID:', resourceId);
 

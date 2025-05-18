@@ -90,7 +90,8 @@ const mockResourcesList = {
   content: JSON.stringify({
     resources: [
       {
-        uri: 'test-resource',
+        name: 'test-resource',
+        uri: 'test://resource',
         description: 'Test resource for unit tests',
         mimeType: 'text/plain',
       },
@@ -201,7 +202,7 @@ const handleRequest = (event: NostrEvent) => {
         const params = request.params || {};
         const uri = params.uri;
 
-        if (uri === 'test-resource') {
+        if (uri === 'test://resource') {
           // Create a properly typed resource response
           const resourceResponse: ReadResourceResult = {
             contents: [
@@ -234,10 +235,7 @@ const handleRequest = (event: NostrEvent) => {
       }
 
       // Handle prompts/get method
-      else if (
-        methodTag[1] === 'prompts/get' ||
-        methodTag[1] === 'prompts/execute'
-      ) {
+      else if (methodTag[1] === 'prompts/get') {
         const params = request.params || {};
         const input = params.input || '';
 

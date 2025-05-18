@@ -9,7 +9,7 @@ import { encrypt, decrypt } from 'nostr-tools/nip04';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { getConfig } from './config';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-
+// TODO: We can abstract this payment handler and the one in the bridge package to @commons
 interface NWCConnection {
   pubkey: string;
   relay: string;
@@ -138,13 +138,11 @@ export class NWCPaymentHandler {
   constructor() {
     const config = getConfig();
 
-    // Check if NWC is configured
     if (!config.nwc?.connectionString) {
       throw new Error('NWC connection string not configured');
     }
 
     try {
-      // Parse the connection string
       const { pubkey, relay, secret } = parseConnectionString(
         config.nwc.connectionString
       );
@@ -153,7 +151,6 @@ export class NWCPaymentHandler {
       this.walletRelay = relay;
       this.secret = hexToBytes(secret);
 
-      // Create a RelayHandler for relay communication
       this.relayHandler = new RelayHandler([this.walletRelay]);
 
       loggerDiscovery('NWC payment handler initialized successfully');
@@ -177,7 +174,6 @@ export class NWCPaymentHandler {
       try {
         loggerDiscovery('Starting NWC payment process for invoice:', invoice);
 
-        // Create and sign the payment request event
         const paymentRequest = await makeNwcRequestEvent(
           this.walletPubkey,
           this.secret,
@@ -185,7 +181,6 @@ export class NWCPaymentHandler {
         );
         loggerDiscovery('Payment request created with ID:', paymentRequest.id);
 
-        // Create a filter for the response event
         const filter = {
           kinds: [NWCWalletResponse],
           '#e': [paymentRequest.id],
@@ -196,11 +191,9 @@ export class NWCPaymentHandler {
           'Setting up subscription to listen for payment response...'
         );
 
-        // Subscribe to the relay for the response using RelayHandler
         const sub = this.relayHandler.subscribeToRequests((event: Event) => {
           loggerDiscovery('Received response event:', event.id);
           try {
-            // Decrypt the response
             const decryptedContent = decrypt(
               this.secret,
               event.pubkey,
@@ -237,9 +230,8 @@ export class NWCPaymentHandler {
           loggerDiscovery('Payment request timed out after 60 seconds');
           sub.close();
           reject(new Error('Payment request timed out'));
-        }, 60000); // 60 second timeout
+        }, 60000);
 
-        // Publish the payment request
         loggerDiscovery('Publishing payment request to relay...');
         await this.relayHandler.publishEvent(paymentRequest);
         loggerDiscovery(

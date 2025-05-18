@@ -35,7 +35,6 @@ export class PromptExecutor extends BaseExecutor<
   ) {
     super(relayHandler, keyManager, promptRegistry);
 
-    // Initialize the NWC payment handler if NWC is configured
     try {
       if (getConfig().nwc?.connectionString) {
         this.nwcPaymentHandler = new NWCPaymentHandler();
@@ -71,20 +70,16 @@ export class PromptExecutor extends BaseExecutor<
 
     const prompt = promptInfo.item as PromptCapability;
 
-    // Use the base executor's execute method
     return this.execute(promptId, prompt, args);
   }
 
   public cleanup(): void {
     super.cleanup();
 
-    // Clean up the NWC payment handler if it exists
     if (this.nwcPaymentHandler) {
       this.nwcPaymentHandler.cleanup();
     }
   }
-
-  // These methods are now handled by the BaseExecutor class
 
   /**
    * Handle a prompt response event

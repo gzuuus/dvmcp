@@ -1,7 +1,7 @@
 import type { Event, Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
-import type { NaddrData, NprofileData } from './nip19-utils';
+import type { NaddrData, NprofileData } from './utils';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 
 export interface DVMAnnouncement {

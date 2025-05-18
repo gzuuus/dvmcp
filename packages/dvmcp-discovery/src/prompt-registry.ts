@@ -1,12 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { z } from 'zod';
-import { createCapabilityId } from './utils/capabilities';
+import { createCapabilityId } from './utils';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
 import type {
   GetPromptRequest,
   GetPromptResult,
+  Prompt,
 } from '@modelcontextprotocol/sdk/types.js';
 
 export interface PromptArgument {
@@ -24,13 +25,13 @@ export interface PromptDefinition {
 }
 
 // Extend PromptDefinition interface to include Capability properties
-export interface PromptCapability extends PromptDefinition, Capability {
+export interface PromptCapability extends Prompt, Capability {
   type: 'prompt';
 }
 
 export class PromptRegistry extends BaseRegistry<PromptCapability> {
   // Store server prompts by server ID
-  private serverPrompts: Map<string, PromptDefinition[]> = new Map();
+  private serverPrompts: Map<string, Prompt[]> = new Map();
 
   constructor(mcpServer: McpServer) {
     super(mcpServer);
@@ -45,7 +46,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
    */
   public registerPrompt(
     promptId: string,
-    prompt: PromptDefinition,
+    prompt: Prompt,
     providerPubkey: string,
     serverId?: string
   ): void {
@@ -86,7 +87,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
    * @param promptId - ID of the prompt
    * @returns Prompt or undefined if not found
    */
-  public getPrompt(promptId: string): PromptDefinition | undefined {
+  public getPrompt(promptId: string): Prompt | undefined {
     return this.getItem(promptId);
   }
 
@@ -94,7 +95,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
    * List all prompts in the registry
    * @returns Array of prompts
    */
-  public listPrompts(): PromptDefinition[] {
+  public listPrompts(): Prompt[] {
     return this.listItems();
   }
 
@@ -102,7 +103,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
    * List all prompts with their IDs
    * @returns Array of [promptId, prompt] pairs
    */
-  public listPromptsWithIds(): [string, PromptDefinition][] {
+  public listPromptsWithIds(): [string, Prompt][] {
     return this.listItemsWithIds();
   }
 
@@ -166,7 +167,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
    */
   public registerServerPrompts(
     serverId: string,
-    prompts: PromptDefinition[],
+    prompts: Prompt[],
     providerPubkey: string
   ): void {
     this.serverPrompts.set(serverId, prompts);
@@ -186,7 +187,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
    * @param serverId - Server's unique identifier
    * @returns Array of prompts or undefined if not found
    */
-  public getServerPrompts(serverId: string): PromptDefinition[] | undefined {
+  public getServerPrompts(serverId: string): Prompt[] | undefined {
     return this.serverPrompts.get(serverId);
   }
 
@@ -194,7 +195,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
    * List all server prompts
    * @returns Array of [serverId, prompts] pairs
    */
-  public listServerPrompts(): [string, PromptDefinition[]][] {
+  public listServerPrompts(): [string, Prompt[]][] {
     return Array.from(this.serverPrompts.entries());
   }
 
@@ -214,23 +215,19 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
           `Created schema for prompt ${promptId} with ${prompt.arguments.length} arguments`
         );
       } else {
-        // Log warning if arguments are missing
         loggerDiscovery(`Warning: Prompt ${promptId} has no arguments defined`);
       }
 
-      // Register the prompt with the MCP server
       this.mcpServer.prompt(
         promptId,
         prompt.description || `Prompt: ${promptId}`,
         zodSchema,
-        async (params: GetPromptRequest['params']) => {
+        async (args: GetPromptRequest['params']['arguments']) => {
           try {
-            // Call the execution callback if set
-            const result = await this.executionCallback?.(promptId, params);
+            const result = await this.executionCallback?.(promptId, args);
 
             return result;
           } catch (error) {
-            // TODO: send error
             const errorMessage =
               error instanceof Error ? error.message : String(error);
             console.error(`Error executing prompt ${promptId}:`, errorMessage);
@@ -247,7 +244,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
 
   private executionCallback?: (
     promptId: string,
-    params: GetPromptRequest['params']
+    args: GetPromptRequest['params']['arguments']
   ) => Promise<GetPromptResult>;
 
   /**
@@ -257,7 +254,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
   public setExecutionCallback(
     callback: (
       promptId: string,
-      params: GetPromptRequest['params']
+      args: GetPromptRequest['params']['arguments']
     ) => Promise<GetPromptResult>
   ): void {
     this.executionCallback = callback;

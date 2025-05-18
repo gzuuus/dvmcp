@@ -11,7 +11,7 @@ import {
   SERVER_ANNOUNCEMENT_KIND,
   TOOLS_LIST_KIND,
 } from '@dvmcp/commons/constants';
-import { createCapabilityId } from './utils/capabilities';
+import { createCapabilityId } from './utils';
 
 /**
  * Built-in tool definition with execution function
@@ -804,10 +804,10 @@ builtInToolRegistry.registerTool(
       if (toolId) {
         // Get tool info for better logging
         const toolInfo = toolRegistry.getToolInfo(toolId);
-        const toolName = toolInfo?.tool.name || 'unknown';
+        const toolName = toolInfo?.item.name || 'unknown';
 
         // Check if it's a built-in tool (which shouldn't be removed)
-        if (toolInfo?.isBuiltIn) {
+        if (toolInfo?.item.isBuiltIn) {
           return {
             success: false,
             message: `Cannot remove built-in tool: ${toolId} (${toolName})`,

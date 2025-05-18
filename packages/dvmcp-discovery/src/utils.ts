@@ -82,3 +82,10 @@ export function decodeNaddr(naddrEntity: string): NaddrData | null {
     return null;
   }
 }
+
+export function createCapabilityId(
+  capabilityName: string,
+  pubkey: string
+): string {
+  return `${capabilityName}_${pubkey.slice(0, 4)}`;
+}

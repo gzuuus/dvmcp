@@ -5,7 +5,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
-import { createCapabilityId } from './utils/capabilities';
+import { createCapabilityId } from './utils';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
 
@@ -104,20 +104,16 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
   public removeResource(resourceId: string): boolean {
     const resourceInfo = this.getItemInfo(resourceId);
 
-    // If resource doesn't exist, return false
     if (!resourceInfo) {
       loggerDiscovery(`Resource not found for removal: ${resourceId}`);
       return false;
     }
 
-    // Use the base class method to remove the item
     const result = this.removeItem(resourceId);
     if (result) {
       loggerDiscovery(`Resource removed from registry: ${resourceId}`);
     }
 
-    // Note: The MCP server doesn't have a direct method to remove resources
-    // The resource list changed notification will be handled by the discovery server
     return result;
   }
 
@@ -127,7 +123,6 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
    * @returns Array of removed resource IDs
    */
   public removeResourcesByProvider(providerPubkey: string): string[] {
-    // Use the base class method
     return this.removeItemsByProvider(providerPubkey);
   }
 
@@ -137,7 +132,6 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
    * @returns Array of removed resource IDs
    */
   public removeResourcesByPattern(pattern: RegExp): string[] {
-    // Use the base class method
     return this.removeItemsByPattern(pattern);
   }
 
@@ -156,8 +150,7 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
       `Registered ${resources.length} resources for server ${serverId}`
     );
 
-    // Register each resource individually
-    resources.forEach((resource, index) => {
+    resources.forEach((resource) => {
       const resourceId = createCapabilityId(resource.uri, providerPubkey);
       this.registerResource(
         resourceId,
@@ -195,26 +188,15 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
         resource.uri,
         async (params: ReadResourceRequest['params']) => {
           try {
-            return await this.executionCallback?.(
-              resourceId,
-              params.uri,
-              params
-            );
+            return await this.executionCallback?.(resourceId, params);
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
-
-            // Return a formatted error response
-            return {
-              contents: [
-                {
-                  uri: params.uri,
-                  mimeType: 'text/plain',
-                  text: `Error: ${errorMessage}`,
-                },
-              ],
-              isError: true,
-            };
+            console.error(
+              `Error executing resource ${resourceId}:`,
+              errorMessage
+            );
+            throw error;
           }
         }
       );
@@ -227,7 +209,6 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
 
   private executionCallback?: (
     resourceId: string,
-    uri: string,
     params: ReadResourceRequest['params']
   ) => Promise<ReadResourceResult>;
 
@@ -238,7 +219,6 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
   public setExecutionCallback(
     callback: (
       resourceId: string,
-      uri: string,
       params: ReadResourceRequest['params']
     ) => Promise<ReadResourceResult>
   ): void {

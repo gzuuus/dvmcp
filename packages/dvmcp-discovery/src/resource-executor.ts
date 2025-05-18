@@ -4,7 +4,6 @@ import { type KeyManager } from '@dvmcp/commons/nostr/key-manager';
 import {
   type ReadResourceRequest,
   type ReadResourceResult,
-  type Resource,
 } from '@modelcontextprotocol/sdk/types.js';
 import { BaseExecutor } from './base-executor';
 import type { ExecutionContext } from './base-interfaces';
@@ -61,11 +60,11 @@ export class ResourceExecutor extends BaseExecutor<
    */
   public async executeResource(
     resourceId: string,
-    resource: Resource,
     params: ReadResourceRequest['params']
   ): Promise<ReadResourceResult> {
-    const resourceCapability = resource as ResourceCapability;
-    return this.execute(resourceId, resourceCapability, params);
+    const resource = this.resourceRegistry.getResource(resourceId);
+    if (!resource) throw new Error('Resource not found');
+    return this.execute(resourceId, resource as ResourceCapability, params);
   }
 
   public cleanup(): void {

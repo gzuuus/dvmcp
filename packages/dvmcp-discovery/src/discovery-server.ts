@@ -10,20 +10,21 @@ import {
   RESOURCES_LIST_KIND,
   PROMPTS_LIST_KIND,
   TAG_SERVER_IDENTIFIER,
-  TAG_CAPABILITY,
   TAG_UNIQUE_IDENTIFIER,
 } from '@dvmcp/commons/constants';
 import type {
   Tool,
   Resource,
-  ReadResourceRequest,
-  CallToolRequest,
+  ListToolsResult,
+  ListPromptsResult,
+  Prompt,
+  ListResourcesResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
 import { ResourceRegistry } from './resource-registry';
 import { ResourceExecutor } from './resource-executor';
-import { PromptRegistry, type PromptDefinition } from './prompt-registry';
+import { PromptRegistry } from './prompt-registry';
 import { PromptExecutor } from './prompt-executor';
 import type { DVMAnnouncement } from './direct-discovery';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
@@ -31,14 +32,13 @@ import {
   builtInToolRegistry,
   setDiscoveryServerReference,
 } from './built-in-tools';
-import { createCapabilityId } from './utils/capabilities';
+import { createCapabilityId } from './utils';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;
   private relayHandler: RelayHandler;
   private keyManager: ReturnType<typeof createKeyManager>;
 
-  // Capability registries and executors
   private toolRegistry: ToolRegistry;
   private toolExecutor: ToolExecutor;
   private resourceRegistry: ResourceRegistry;
@@ -58,7 +58,6 @@ export class DiscoveryServer {
       version: config.mcp.version,
     });
 
-    // Initialize all capability registries and executors
     this.toolRegistry = new ToolRegistry(this.mcpServer);
     this.toolExecutor = new ToolExecutor(
       this.relayHandler,
@@ -80,33 +79,18 @@ export class DiscoveryServer {
       this.promptRegistry
     );
 
-    // Set up execution callbacks for all capability types
     this.toolRegistry.setExecutionCallback(async (toolId, args) => {
-      // No need to get the tool separately, executeTool will handle that
-      return this.toolExecutor.executeTool(
-        toolId,
-        args as CallToolRequest['params']
-      );
+      return this.toolExecutor.executeTool(toolId, args);
     });
 
-    this.resourceRegistry.setExecutionCallback(
-      async (resourceId, uri, params) => {
-        const resource = this.resourceRegistry.getResource(resourceId);
-        if (!resource) throw new Error('Resource not found');
-        return this.resourceExecutor.executeResource(
-          resourceId,
-          resource,
-          params as ReadResourceRequest['params']
-        );
-      }
-    );
+    this.resourceRegistry.setExecutionCallback(async (resourceId, params) => {
+      return this.resourceExecutor.executeResource(resourceId, params);
+    });
 
     this.promptRegistry.setExecutionCallback(async (promptId, args) => {
-      // No need to get the prompt separately, executePrompt will handle that
       return this.promptExecutor.executePrompt(promptId, args);
     });
 
-    // Set the discovery server reference for the integration tool
     setDiscoveryServerReference(this);
   }
   private async startDiscovery() {
@@ -114,14 +98,13 @@ export class DiscoveryServer {
 
     const filter: Filter = {
       kinds: [
-        SERVER_ANNOUNCEMENT_KIND, // 31316
-        TOOLS_LIST_KIND, // 31317
-        RESOURCES_LIST_KIND, // 31318
-        PROMPTS_LIST_KIND, // 31319
+        SERVER_ANNOUNCEMENT_KIND,
+        TOOLS_LIST_KIND,
+        RESOURCES_LIST_KIND,
+        PROMPTS_LIST_KIND,
       ],
     };
 
-    // Add limit to the filter if it's specified in the configuration
     if (this.config.discovery?.limit !== undefined) {
       filter.limit = this.config.discovery.limit;
       loggerDiscovery(
@@ -129,14 +112,12 @@ export class DiscoveryServer {
       );
     }
 
-    // Fetch all announcement events in a single query
     loggerDiscovery('Querying Nostr relays for capability announcements...');
     const events = await this.relayHandler.queryEvents(filter);
     loggerDiscovery(
       `Received ${events.length} announcement events from relays`
     );
 
-    // Process all announcements in the correct order to ensure proper registration
     await this.processAnnouncementEvents(events);
 
     loggerDiscovery('Discovery process completed');
@@ -148,7 +129,6 @@ export class DiscoveryServer {
    * @param events - Array of events to process
    */
   private async processAnnouncementEvents(events: Event[]) {
-    // Group events by kind for processing
     const serverAnnouncements = events.filter(
       (e) => e.kind === SERVER_ANNOUNCEMENT_KIND
     );
@@ -156,14 +136,12 @@ export class DiscoveryServer {
     const resourcesLists = events.filter((e) => e.kind === RESOURCES_LIST_KIND);
     const promptsLists = events.filter((e) => e.kind === PROMPTS_LIST_KIND);
 
-    // Log the number of events for each type
     loggerDiscovery(
       `Processing events: ${serverAnnouncements.length} server announcements, ` +
         `${toolsLists.length} tools lists, ${resourcesLists.length} resources lists, ` +
         `${promptsLists.length} prompts lists`
     );
 
-    // Process server announcements first to establish server contexts
     if (serverAnnouncements.length > 0) {
       loggerDiscovery('Processing server announcements...');
       for (const event of serverAnnouncements) {
@@ -171,8 +149,6 @@ export class DiscoveryServer {
       }
     }
 
-    // Then process all capability lists
-    // Process tools lists
     if (toolsLists.length > 0) {
       loggerDiscovery('Processing tools lists...');
       for (const event of toolsLists) {
@@ -180,7 +156,6 @@ export class DiscoveryServer {
       }
     }
 
-    // Process resources lists
     if (resourcesLists.length > 0) {
       loggerDiscovery('Processing resources lists...');
       for (const event of resourcesLists) {
@@ -188,7 +163,6 @@ export class DiscoveryServer {
       }
     }
 
-    // Process prompts lists
     if (promptsLists.length > 0) {
       loggerDiscovery('Processing prompts lists...');
       for (const event of promptsLists) {
@@ -222,7 +196,6 @@ export class DiscoveryServer {
   public registerToolFromAnnouncement(pubkey: string, tool: Tool): string {
     const toolId = createCapabilityId(tool.name, pubkey);
 
-    // Check if the tool is already registered
     if (this.isToolRegistered(tool.name, pubkey)) {
       loggerDiscovery(
         `Tool ${tool.name} (${toolId}) is already registered, skipping registration`
@@ -247,27 +220,19 @@ export class DiscoveryServer {
       return false;
     }
 
-    // Track the integrated relay
     this.integratedRelays.add(relayUrl);
     loggerDiscovery(`Added relay ${relayUrl} to integrated relays`);
 
-    // Create a new relay handler with all relays (existing + new)
-    const currentRelays = this.config.nostr.relayUrls;
-    const allRelays = [...new Set([...currentRelays, relayUrl])];
+    const allRelays = [...new Set([...this.config.nostr.relayUrls, relayUrl])];
 
-    // Update the config with the new relay list
     this.config.nostr.relayUrls = allRelays;
 
-    // Create a new relay handler with the updated relay list
     const newRelayHandler = new RelayHandler(allRelays);
 
-    // Clean up the old relay handler
     this.relayHandler.cleanup();
 
-    // Replace the relay handler with the new one
     this.relayHandler = newRelayHandler;
 
-    // Update the tool executor with the new relay handler
     this.toolExecutor.updateRelayHandler(this.relayHandler);
     this.resourceExecutor.updateRelayHandler(this.relayHandler);
     this.promptExecutor.updateRelayHandler(this.relayHandler);
@@ -285,10 +250,8 @@ export class DiscoveryServer {
    * @param relayHandler - The updated relay handler
    */
   public updateRelayHandler(relayHandler: RelayHandler): void {
-    // Replace the relay handler with the new one
     this.relayHandler = relayHandler;
 
-    // Update all capability executors with the new relay handler
     this.toolExecutor.updateRelayHandler(relayHandler);
     this.resourceExecutor.updateRelayHandler(relayHandler);
     this.promptExecutor.updateRelayHandler(relayHandler);
@@ -315,7 +278,6 @@ export class DiscoveryServer {
         return;
       }
 
-      // Extract server ID from d tag
       const serverId = event.tags.find(
         (t) => t[0] === TAG_UNIQUE_IDENTIFIER
       )?.[1];
@@ -323,8 +285,7 @@ export class DiscoveryServer {
         loggerDiscovery('Server announcement missing server ID');
         return;
       }
-
-      // Store server information for later use
+      // TODO: Move server registration to a separate method
       this.toolRegistry.registerServer(serverId, event.pubkey, event.content);
       loggerDiscovery(`Registered server: ${serverId} from ${event.pubkey}`);
     } catch (error) {
@@ -343,7 +304,6 @@ export class DiscoveryServer {
         return;
       }
 
-      // Extract server ID from s tag
       const serverId = event.tags.find(
         (t) => t[0] === TAG_SERVER_IDENTIFIER
       )?.[1];
@@ -352,24 +312,14 @@ export class DiscoveryServer {
         return;
       }
 
-      // Note: We could extract tool names from cap tags, but we're not using them currently
-      // Instead, we parse the full tool definitions from the content
-
-      // Parse content as JSON
       let toolsList: Tool[] = [];
       try {
-        const content = JSON.parse(event.content);
-        // Check for both formats: direct array or nested under result
-        if (Array.isArray(content.tools)) {
-          toolsList = content.tools;
-        } else if (content.result?.tools) {
-          toolsList = content.result.tools;
-        }
+        const content: ListToolsResult = JSON.parse(event.content);
+        toolsList = content.tools;
       } catch (error) {
         console.error('Error parsing tools list content:', error);
       }
 
-      // Register tools with the registry
       if (toolsList.length > 0) {
         this.registerToolsFromAnnouncement(event.pubkey, toolsList, serverId);
         loggerDiscovery(
@@ -394,7 +344,6 @@ export class DiscoveryServer {
         return;
       }
 
-      // Extract server ID from s tag
       const serverId = event.tags.find(
         (t) => t[0] === TAG_SERVER_IDENTIFIER
       )?.[1];
@@ -403,48 +352,14 @@ export class DiscoveryServer {
         return;
       }
 
-      // Note: We could extract resource names from cap tags, but we're not using them currently
-      // Instead, we parse the full resource definitions from the content
-
-      // Parse content as JSON
       let resourcesList: Resource[] = [];
       try {
-        const content = JSON.parse(event.content);
-        // TODO: simplify this
-        // Check for both formats: direct array or nested under result
-        if (Array.isArray(content.resources)) {
-          resourcesList = content.resources;
-        } else if (content.result && Array.isArray(content.result.resources)) {
-          resourcesList = content.result.resources;
-        } else if (Array.isArray(content)) {
-          // Handle case where content is a direct array
-          resourcesList = content;
-        }
-
-        // Validate each resource to ensure it has the required fields
-        resourcesList = resourcesList.filter((resource) => {
-          if (!resource.uri) {
-            loggerDiscovery(
-              `Skipping resource without URI in server ${serverId}`
-            );
-            return false;
-          }
-
-          // Ensure resource has a MIME type, default to text/plain if missing
-          if (!resource.mimeType) {
-            resource.mimeType = 'text/plain';
-            loggerDiscovery(
-              `Resource ${resource.uri} missing MIME type, defaulting to text/plain`
-            );
-          }
-
-          return true;
-        });
+        const content: ListResourcesResult = JSON.parse(event.content);
+        resourcesList = content.resources;
       } catch (error) {
         console.error('Error parsing resources list content:', error);
       }
 
-      // Register resources with the registry
       if (resourcesList.length > 0) {
         this.resourceRegistry.registerServerResources(
           serverId,
@@ -469,7 +384,6 @@ export class DiscoveryServer {
    */
   public notifyToolListChanged(): void {
     try {
-      // Send the tool list changed notification to clients
       this.mcpServer.server
         .sendToolListChanged()
         .then(() => {
@@ -497,7 +411,6 @@ export class DiscoveryServer {
         return;
       }
 
-      // Extract server ID from s tag
       const serverId = event.tags.find(
         (t) => t[0] === TAG_SERVER_IDENTIFIER
       )?.[1];
@@ -506,51 +419,11 @@ export class DiscoveryServer {
         return;
       }
 
-      // Note: We could extract prompt names from cap tags, but we're not using them currently
-      // Instead, we parse the full prompt definitions from the content
-
-      // Parse content as JSON
-      let promptsList: PromptDefinition[] = [];
+      let promptsList: Prompt[] = [];
       try {
-        const content = JSON.parse(event.content);
+        const content: ListPromptsResult = JSON.parse(event.content);
 
-        // Check for both formats: direct array or nested under result
-        if (Array.isArray(content.prompts)) {
-          promptsList = content.prompts;
-        } else if (content.result && Array.isArray(content.result.prompts)) {
-          promptsList = content.result.prompts;
-        } else if (Array.isArray(content)) {
-          // Handle case where content is a direct array
-          promptsList = content;
-        }
-
-        // Validate each prompt to ensure it has the required fields
-        promptsList = promptsList.filter((prompt) => {
-          if (!prompt.name) {
-            loggerDiscovery(
-              `Skipping prompt without name in server ${serverId}`
-            );
-            return false;
-          }
-
-          // Ensure prompt has a description, default to name if missing
-          if (!prompt.description) {
-            prompt.description = `Prompt: ${prompt.name}`;
-            loggerDiscovery(
-              `Prompt ${prompt.name} missing description, using name as description`
-            );
-          }
-
-          // Ensure prompt has an arguments array, default to empty array if missing
-          if (!prompt.arguments || !Array.isArray(prompt.arguments)) {
-            prompt.arguments = [];
-            loggerDiscovery(
-              `Prompt ${prompt.name} missing arguments array, using empty array`
-            );
-          }
-
-          return true;
-        });
+        promptsList = content.prompts;
       } catch (error) {
         console.error('Error parsing prompts list content:', error);
       }
@@ -622,7 +495,7 @@ export class DiscoveryServer {
    * List all prompts in the registry
    * @returns Array of prompts
    */
-  public async listPrompts(): Promise<PromptDefinition[]> {
+  public async listPrompts(): Promise<Prompt[]> {
     return this.promptRegistry.listPrompts();
   }
 
@@ -630,7 +503,7 @@ export class DiscoveryServer {
    * List all prompts in the registry with their IDs
    * @returns Array of [promptId, prompt] pairs
    */
-  public async listPromptsWithIds(): Promise<[string, PromptDefinition][]> {
+  public async listPromptsWithIds(): Promise<[string, Prompt][]> {
     return this.promptRegistry.listPromptsWithIds();
   }
 
@@ -697,10 +570,8 @@ export class DiscoveryServer {
       'Starting discovery server with direct server capabilities...'
     );
 
-    // Register built-in capabilities first
     this.registerBuiltInCapabilities();
 
-    // Register tools if available
     if (announcement?.tools && announcement.tools.length > 0) {
       this.registerToolsFromAnnouncement(pubkey, announcement.tools);
       loggerDiscovery(
@@ -710,9 +581,7 @@ export class DiscoveryServer {
       loggerDiscovery('No tools found in server announcement');
     }
 
-    // Register resources if available
     if (announcement?.resources && announcement.resources.length > 0) {
-      // Create a server ID for the direct server
       const serverId = `direct_${pubkey.slice(0, 8)}`;
       this.resourceRegistry.registerServerResources(
         serverId,
@@ -724,9 +593,7 @@ export class DiscoveryServer {
       );
     }
 
-    // Register prompts if available
     if (announcement?.prompts && announcement.prompts.length > 0) {
-      // Create a server ID for the direct server
       const serverId = `direct_${pubkey.slice(0, 8)}`;
       this.promptRegistry.registerServerPrompts(
         serverId,
@@ -738,7 +605,6 @@ export class DiscoveryServer {
       );
     }
 
-    // Log the total number of registered capabilities
     loggerDiscovery(
       `Direct server registration complete: ` +
         `${this.toolRegistry.listTools().length} tools, ` +
@@ -746,7 +612,6 @@ export class DiscoveryServer {
         `${this.promptRegistry.listPrompts().length} prompts`
     );
 
-    // Connect the MCP server AFTER all capabilities are registered
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
 
@@ -757,7 +622,6 @@ export class DiscoveryServer {
     const config = getConfig();
     this.config = config;
 
-    // Log interactive mode and relay configuration
     const isInteractive = config.featureFlags?.interactive === true;
     loggerDiscovery(
       `Starting discovery server with interactive mode: ${isInteractive ? 'enabled' : 'disabled'}`
@@ -766,15 +630,10 @@ export class DiscoveryServer {
       `Relay URLs: ${config.nostr.relayUrls.length > 0 ? config.nostr.relayUrls.join(', ') : 'none'}`
     );
 
-    // Register built-in capabilities first
     this.registerBuiltInCapabilities();
 
-    // Only if we have relay URLs or if not in interactive-only mode
     if (config.nostr.relayUrls.length > 0 || !isInteractive) {
-      // Discover and register all capabilities from Nostr
       await this.startDiscovery();
-
-      // Log discovery results for all capability types
       loggerDiscovery(
         `Discovery complete: ${this.toolRegistry.listTools().length} tools, ` +
           `${this.resourceRegistry.listResources().length} resources, ` +
@@ -786,7 +645,6 @@ export class DiscoveryServer {
       );
     }
 
-    // Connect the MCP server AFTER all capabilities are registered
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
     loggerDiscovery('MCP server connected');
@@ -814,14 +672,7 @@ export class DiscoveryServer {
       'Interactive mode is enabled. Registering built-in capabilities...'
     );
 
-    // Register built-in tools
     this.registerBuiltInTools();
-
-    // Register built-in resources (if any)
-    this.registerBuiltInResources();
-
-    // Register built-in prompts (if any)
-    this.registerBuiltInPrompts();
   }
 
   /**
@@ -850,29 +701,8 @@ export class DiscoveryServer {
     }
   }
 
-  /**
-   * Register built-in resources with the resource registry
-   * @private
-   */
-  private registerBuiltInResources(): void {
-    // Currently no built-in resources, but the method is here for future expansion
-    loggerDiscovery('No built-in resources to register');
-  }
-
-  /**
-   * Register built-in prompts with the prompt registry
-   * @private
-   */
-  private registerBuiltInPrompts(): void {
-    // Currently no built-in prompts, but the method is here for future expansion
-    loggerDiscovery('No built-in prompts to register');
-  }
-
   public cleanup(): void {
-    // Clean up the relay handler
     this.relayHandler.cleanup();
-
-    // Clean up all capability executors
     this.toolExecutor.cleanup();
     this.resourceExecutor.cleanup();
     this.promptExecutor.cleanup();

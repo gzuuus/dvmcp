@@ -1,9 +1,6 @@
 import { expect, test, describe } from 'bun:test';
 import { ToolRegistry } from './tool-registry';
-import { ToolExecutor } from './tool-executor';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
 import { type Tool, ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z, ZodError } from 'zod';
 import {
@@ -11,6 +8,7 @@ import {
   REQUEST_KIND,
   TAG_UNIQUE_IDENTIFIER,
   TAG_CAPABILITY,
+  TAG_SERVER_IDENTIFIER,
 } from '@dvmcp/commons/constants';
 
 describe('Tool Schema Validation', () => {
@@ -43,8 +41,6 @@ describe('Tool Schema Validation', () => {
       registry.registerTool('test:test-tool', validTool, 'test-pubkey');
       const retrievedTool = registry.getTool('test:test-tool');
 
-      // Extract only the original properties for comparison
-      // since the BaseRegistry now adds id and type properties
       const { id, type, ...toolWithoutIdAndType } = retrievedTool as any;
       expect(toolWithoutIdAndType).toEqual(validTool);
     });
@@ -137,11 +133,9 @@ describe('Tool Schema Validation', () => {
         ],
       };
 
-      // Mock tools list event
       const mockToolsList = {
-        kind: SERVER_ANNOUNCEMENT_KIND + 1, // TOOLS_LIST_KIND
+        kind: SERVER_ANNOUNCEMENT_KIND + 1,
         content: JSON.stringify({
-          jsonrpc: '2.0',
           result: {
             tools: [
               {
@@ -161,18 +155,16 @@ describe('Tool Schema Validation', () => {
         created_at: Math.floor(Date.now() / 1000),
         tags: [
           [TAG_UNIQUE_IDENTIFIER, 'tools-list-123'],
-          ['s', 'server-123'],
+          [TAG_SERVER_IDENTIFIER, 'server-123'],
           [TAG_CAPABILITY, 'test-echo'],
         ],
       };
 
-      // Parse server announcement
       const serverContent = JSON.parse(mockServerAnnouncement.content);
       expect(serverContent.jsonrpc).toBe('2.0');
       expect(serverContent.result.name).toBe('Test MCP Server');
       expect(serverContent.result.capabilities.tools).toBe(true);
 
-      // Parse tools list
       const toolsContent = JSON.parse(mockToolsList.content);
       const tool = toolsContent.result.tools[0] as Tool;
 
@@ -186,14 +178,13 @@ describe('Tool Schema Validation', () => {
 
     test('should reject malformed tools list event', () => {
       const malformedToolsList = {
-        kind: SERVER_ANNOUNCEMENT_KIND + 1, // TOOLS_LIST_KIND
+        kind: SERVER_ANNOUNCEMENT_KIND + 1,
         content: JSON.stringify({
           jsonrpc: '2.0',
           result: {
             tools: [
               {
                 name: 'test-echo',
-                // Missing description and inputSchema
               },
             ],
           },
@@ -201,7 +192,7 @@ describe('Tool Schema Validation', () => {
         created_at: Math.floor(Date.now() / 1000),
         tags: [
           [TAG_UNIQUE_IDENTIFIER, 'tools-list-123'],
-          ['s', 'server-123'],
+          [TAG_SERVER_IDENTIFIER, 'server-123'],
           [TAG_CAPABILITY, 'test-echo'],
         ],
       };
@@ -236,7 +227,6 @@ describe('Tool Schema Validation', () => {
         ],
       };
 
-      // Check for required tags
       const hasUniqueIdTag = mockServerAnnouncement.tags.some(
         ([key, value]) =>
           key === TAG_UNIQUE_IDENTIFIER && value === 'server-123'

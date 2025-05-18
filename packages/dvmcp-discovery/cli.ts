@@ -18,15 +18,15 @@ import {
   resetConfig,
   type Config,
 } from './src/config.js';
-import { decodeNaddr, decodeNprofile } from './src/nip19-utils.js';
+import { decodeNaddr, decodeNprofile } from './src/utils.js';
 import {
   fetchProviderAnnouncement,
   fetchServerAnnouncement,
   parseAnnouncement,
 } from './src/direct-discovery.js';
 import type { DirectServerInfo } from './index.js';
-import logger from './src/logger';
 import { CLI_FLAGS } from './src/constants';
+import { loggerDiscovery as logger } from '@dvmcp/commons/logger';
 
 // CLI argument definitions
 interface CliOption {

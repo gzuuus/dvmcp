@@ -123,8 +123,7 @@ describe('DiscoveryServer E2E', () => {
 
     const result = await discoveryServer['resourceExecutor'].executeResource(
       resourceId!,
-      mockResource,
-      { uri: mockResource.uri }
+      mockResource
     );
     ReadResourceResultSchema.parse(result);
     console.log('Resource content:', result);

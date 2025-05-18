@@ -58,7 +58,6 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
     const info = this.getItemInfo(toolId);
     if (!info) return undefined;
 
-    // Convert back to the expected format for backward compatibility
     return info;
   }
 
@@ -75,7 +74,6 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
   }
 
   public clear(): void {
-    // Remove all tools except built-in tools
     for (const [id, info] of this.items.entries()) {
       if (!info.item.isBuiltIn) {
         this.items.delete(id);
@@ -91,20 +89,15 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
   public removeTool(toolId: string): boolean {
     const toolInfo = this.getItemInfo(toolId);
 
-    // If tool doesn't exist, return false
     if (!toolInfo) {
       loggerDiscovery(`Tool not found for removal: ${toolId}`);
       return false;
     }
 
-    // Use the base class method to remove the item
     const result = this.removeItem(toolId);
     if (result) {
       loggerDiscovery(`Tool removed from registry: ${toolId}`);
     }
-
-    // Note: The MCP server doesn't have a direct method to remove tools
-    // The tool list changed notification will be handled by the discovery server
     return result;
   }
 
@@ -119,22 +112,17 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
     excludeBuiltIn: boolean = true
   ): string[] {
     if (!excludeBuiltIn) {
-      // Use the base class method if we don't need to exclude built-in tools
       return this.removeItemsByProvider(providerPubkey);
     }
 
     const removedToolIds: string[] = [];
 
-    // Find all tools from this provider
     for (const [id, info] of this.items.entries()) {
-      // Skip built-in tools if excludeBuiltIn is true
       if (excludeBuiltIn && info.item.isBuiltIn) {
         continue;
       }
 
-      // Check if this tool belongs to the specified provider
       if (info.providerPubkey === providerPubkey) {
-        // Remove the tool
         this.items.delete(id);
         removedToolIds.push(id);
         loggerDiscovery(`Removed tool ${id} from provider ${providerPubkey}`);
@@ -155,22 +143,17 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
     excludeBuiltIn: boolean = true
   ): string[] {
     if (!excludeBuiltIn) {
-      // Use the base class method if we don't need to exclude built-in tools
       return this.removeItemsByPattern(pattern);
     }
 
     const removedToolIds: string[] = [];
 
-    // Find all tools matching the pattern
     for (const [id, info] of this.items.entries()) {
-      // Skip built-in tools if excludeBuiltIn is true
       if (excludeBuiltIn && info.item.isBuiltIn) {
         continue;
       }
 
-      // Check if this tool ID matches the pattern
       if (pattern.test(id)) {
-        // Remove the tool
         this.items.delete(id);
         removedToolIds.push(id);
         loggerDiscovery(`Removed tool ${id} matching pattern ${pattern}`);
@@ -228,7 +211,6 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
   public registerBuiltInTool(toolId: string, tool: Tool): void {
     try {
       ToolSchema.parse(tool);
-      // Convert to ToolCapability and add isBuiltIn flag
       const toolCapability: ToolCapability & { isBuiltIn: boolean } = {
         ...tool,
         id: toolId,

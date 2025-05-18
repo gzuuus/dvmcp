@@ -13,7 +13,12 @@ import {
   TAG_CAPABILITY,
   TAG_UNIQUE_IDENTIFIER,
 } from '@dvmcp/commons/constants';
-import type { Tool, Resource } from '@modelcontextprotocol/sdk/types.js';
+import type {
+  Tool,
+  Resource,
+  ReadResourceRequest,
+  CallToolRequest,
+} from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
 import { ResourceRegistry } from './resource-registry';
@@ -77,9 +82,11 @@ export class DiscoveryServer {
 
     // Set up execution callbacks for all capability types
     this.toolRegistry.setExecutionCallback(async (toolId, args) => {
-      const tool = this.toolRegistry.getTool(toolId);
-      if (!tool) throw new Error('Tool not found');
-      return this.toolExecutor.executeTool(toolId, tool, args);
+      // No need to get the tool separately, executeTool will handle that
+      return this.toolExecutor.executeTool(
+        toolId,
+        args as CallToolRequest['params']
+      );
     });
 
     this.resourceRegistry.setExecutionCallback(
@@ -89,16 +96,14 @@ export class DiscoveryServer {
         return this.resourceExecutor.executeResource(
           resourceId,
           resource,
-          uri,
-          params
+          params as ReadResourceRequest['params']
         );
       }
     );
 
     this.promptRegistry.setExecutionCallback(async (promptId, args) => {
-      const prompt = this.promptRegistry.getPrompt(promptId);
-      if (!prompt) throw new Error('Prompt not found');
-      return this.promptExecutor.executePrompt(promptId, prompt, args);
+      // No need to get the prompt separately, executePrompt will handle that
+      return this.promptExecutor.executePrompt(promptId, args);
     });
 
     // Set the discovery server reference for the integration tool

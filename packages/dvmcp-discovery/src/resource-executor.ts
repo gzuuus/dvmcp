@@ -1,17 +1,22 @@
-import { type Event } from 'nostr-tools';
+import { type Event as NostrEvent } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { type KeyManager } from '@dvmcp/commons/nostr/key-manager';
 import {
   type ReadResourceRequest,
+  type ReadResourceResult,
   type Resource,
 } from '@modelcontextprotocol/sdk/types.js';
-import { ResourceRegistry } from './resource-registry.js';
+import { BaseExecutor } from './base-executor';
+import type { ExecutionContext } from './base-interfaces';
+import {
+  ResourceRegistry,
+  type ResourceCapability,
+} from './resource-registry.js';
 import {
   REQUEST_KIND,
   RESPONSE_KIND,
   NOTIFICATION_KIND,
   TAG_PUBKEY,
-  TAG_EVENT_ID,
   TAG_METHOD,
   TAG_SERVER_IDENTIFIER,
   TAG_STATUS,
@@ -20,22 +25,20 @@ import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { NWCPaymentHandler } from './nwc-payment';
 import { getConfig } from './config';
 
-interface ExecutionContext {
-  timeoutId: ReturnType<typeof setTimeout>;
-  cleanup: () => void;
-}
-
-export class ResourceExecutor {
-  private executionSubscriptions: Map<string, () => void> = new Map();
-  private static readonly EXECUTION_TIMEOUT = 30000;
-  private nwcPaymentHandler: NWCPaymentHandler | null = null;
+export class ResourceExecutor extends BaseExecutor<
+  ResourceCapability,
+  ReadResourceRequest['params'],
+  ReadResourceResult
+> {
+  protected nwcPaymentHandler: NWCPaymentHandler | null = null;
 
   constructor(
-    private relayHandler: RelayHandler,
-    private keyManager: ReturnType<typeof createKeyManager>,
+    relayHandler: RelayHandler,
+    keyManager: KeyManager,
     private resourceRegistry: ResourceRegistry
   ) {
-    // Initialize the NWC payment handler if NWC is configured
+    super(relayHandler, keyManager, resourceRegistry);
+
     try {
       if (getConfig().nwc?.connectionString) {
         this.nwcPaymentHandler = new NWCPaymentHandler();
@@ -45,59 +48,31 @@ export class ResourceExecutor {
     }
   }
 
-  /**
-   * Update the relay handler reference
-   * This is needed when new relays are added to the pool
-   * @param relayHandler - The updated relay handler
-   */
   public updateRelayHandler(relayHandler: RelayHandler): void {
-    this.relayHandler = relayHandler;
-    loggerDiscovery('Updated relay handler in resource executor');
+    super.updateRelayHandler(relayHandler);
   }
 
+  /**
+   * Execute a resource with the given ID, and parameters
+   * @param resourceId - ID of the resource to execute
+   * @param resource - Resource definition
+   * @param params - Parameters to pass to the resource
+   * @returns Resource execution result
+   */
   public async executeResource(
     resourceId: string,
     resource: Resource,
-    uri: URL,
-    params: Record<string, string>
-  ): Promise<unknown> {
-    // Handle external resources via Nostr
-    return new Promise((resolve, reject) => {
-      const request = this.createResourceRequest(resourceId, resource);
-      const executionId = request.id;
-      const context = this.createExecutionContext(executionId);
+    params: ReadResourceRequest['params']
+  ): Promise<ReadResourceResult> {
+    // Convert Resource to ResourceCapability if needed
+    const resourceCapability = resource as ResourceCapability;
 
-      const subscription = this.relayHandler.subscribeToRequests(
-        (event) => {
-          if (
-            event.tags.some(
-              (t) => t[0] === TAG_EVENT_ID && t[1] === executionId
-            )
-          ) {
-            this.handleResourceResponse(event, context, resolve, reject);
-          }
-        },
-        {
-          kinds: [RESPONSE_KIND, NOTIFICATION_KIND],
-          since: Math.floor(Date.now() / 1000),
-        }
-      );
-
-      this.executionSubscriptions.set(executionId, subscription.close);
-
-      this.relayHandler.publishEvent(request).catch((err) => {
-        clearTimeout(context.timeoutId);
-        context.cleanup();
-        reject(err);
-      });
-    });
+    // Use the base executor's execute method
+    return this.execute(resourceId, resourceCapability, params);
   }
 
   public cleanup(): void {
-    for (const sub of this.executionSubscriptions.values()) {
-      sub();
-    }
-    this.executionSubscriptions.clear();
+    super.cleanup();
 
     // Clean up the NWC payment handler if it exists
     if (this.nwcPaymentHandler) {
@@ -105,47 +80,34 @@ export class ResourceExecutor {
     }
   }
 
-  private createExecutionContext(executionId: string): ExecutionContext {
-    const timeoutId = setTimeout(() => {
-      loggerDiscovery('Execution timeout for:', executionId);
-      this.cleanupExecution(executionId);
-    }, ResourceExecutor.EXECUTION_TIMEOUT);
-
-    const cleanup = () => this.cleanupExecution(executionId);
-    return { timeoutId, cleanup };
-  }
-
-  private cleanupExecution(executionId: string): void {
-    const sub = this.executionSubscriptions.get(executionId);
-    if (sub) {
-      sub();
-      this.executionSubscriptions.delete(executionId);
-    }
-  }
-
-  private async handleResourceResponse(
-    event: Event,
+  /**
+   * Handle a resource response event
+   * @param event - Nostr event containing the response
+   * @param context - Execution context
+   * @param resolve - Function to resolve the promise
+   * @param reject - Function to reject the promise
+   */
+  protected async handleResponse(
+    event: NostrEvent,
     context: ExecutionContext,
-    resolve: (value: unknown) => void,
+    resolve: (value: ReadResourceResult) => void,
     reject: (reason: Error) => void
   ): Promise<void> {
     if (event.kind === RESPONSE_KIND) {
       try {
         // Parse the response content according to the DVMCP specification
-        const response = JSON.parse(event.content);
+        const response: ReadResourceResult = JSON.parse(event.content);
 
         // Check if it's an error response
         if (response.error) {
-          clearTimeout(context.timeoutId);
-          context.cleanup();
-          reject(new Error(response.error.message || 'Unknown error'));
+          this.cleanupExecution(context.executionId);
+          reject(new Error('Read resource parse error'));
           return;
         }
 
         // Check if it's an execution error (isError flag)
         if (response.isError === true) {
-          clearTimeout(context.timeoutId);
-          context.cleanup();
+          this.cleanupExecution(context.executionId);
           reject(
             new Error(
               typeof response.content === 'string'
@@ -157,12 +119,10 @@ export class ResourceExecutor {
         }
 
         // Handle successful response
-        clearTimeout(context.timeoutId);
-        context.cleanup();
-        resolve(response.contents?.[0]?.text || response.contents);
+        this.cleanupExecution(context.executionId);
+        resolve(response);
       } catch (error) {
-        clearTimeout(context.timeoutId);
-        context.cleanup();
+        this.cleanupExecution(context.executionId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     } else if (event.kind === NOTIFICATION_KIND) {
@@ -172,8 +132,7 @@ export class ResourceExecutor {
 
       // Handle error notifications
       if (status === 'error' || method === 'error') {
-        clearTimeout(context.timeoutId);
-        context.cleanup();
+        this.cleanupExecution(context.executionId);
         reject(new Error(event.content || 'Error notification received'));
         return;
       }
@@ -197,8 +156,7 @@ export class ResourceExecutor {
             loggerDiscovery(
               'NWC payment handler not configured. Cannot process payment automatically.'
             );
-            clearTimeout(context.timeoutId);
-            context.cleanup();
+            this.cleanupExecution(context.executionId);
             reject(
               new Error(
                 'Resource requires payment but NWC is not configured. Please add NWC configuration to use paid resources.'
@@ -220,26 +178,37 @@ export class ResourceExecutor {
           }
         } catch (error) {
           loggerDiscovery('Payment error:', error);
-          clearTimeout(context.timeoutId);
-          context.cleanup();
+          this.cleanupExecution(context.executionId);
           reject(error instanceof Error ? error : new Error(String(error)));
         }
       }
     }
   }
 
-  private createResourceRequest(resourceId: string, resource: Resource): Event {
+  /**
+   * Create a resource request event
+   * @param id - ID of the resource
+   * @param item - Resource capability
+   * @param params - Resource parameters
+   * @returns Nostr event for the request
+   */
+  protected createRequest(
+    id: string,
+    item: ResourceCapability,
+    params: ReadResourceRequest['params']
+  ): NostrEvent {
     // Use the new request kind
     const request = this.keyManager.createEventTemplate(REQUEST_KIND); // 25910
 
-    const resourceInfo = this.resourceRegistry.getResourceInfo(resourceId);
-    if (!resourceInfo) throw new Error(`Resource ${resourceId} not found`);
+    const resourceInfo = this.resourceRegistry.getResourceInfo(id);
+    if (!resourceInfo) throw new Error(`Resource ${id} not found`);
 
-    // Create a properly typed ReadResourceRequest object
+    // Create a JSON-RPC request object according to the DVMCP specification
     const requestContent: ReadResourceRequest = {
       method: 'resources/read',
       params: {
-        uri: resource.uri,
+        uri: item.uri,
+        arguments: params,
       },
     };
 
@@ -255,7 +224,7 @@ export class ResourceExecutor {
     }
 
     // Add method tag according to the DVMCP specification
-    request.tags.push([TAG_METHOD, 'resources/read']);
+    request.tags.push([TAG_METHOD, requestContent.method]);
 
     // Add server ID tag if available
     if (resourceInfo.serverId) {

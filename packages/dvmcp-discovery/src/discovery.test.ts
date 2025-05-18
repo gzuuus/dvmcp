@@ -54,7 +54,9 @@ describe('DiscoveryServer E2E', () => {
     console.log('Found tool:', mockTool);
 
     const toolRegistry = discoveryServer['toolRegistry'];
-    const toolIds = Array.from(toolRegistry['tools'].keys());
+    const toolIds = Array.from(toolRegistry.listToolsWithIds()).map(
+      ([id]) => id
+    );
     console.log('Available tool IDs:', toolIds);
 
     const toolId = toolIds.find((id) => id.startsWith(`${mockTool.name}`));
@@ -63,13 +65,9 @@ describe('DiscoveryServer E2E', () => {
 
     console.log('Executing tool...');
 
-    const result = await discoveryServer['toolExecutor'].executeTool(
-      toolId!,
-      mockTool,
-      {
-        text: 'Hello from test',
-      }
-    );
+    const result = await discoveryServer['toolExecutor'].executeTool(toolId!, {
+      text: 'Hello from test',
+    });
 
     console.log('Execution result:', result);
     expect(result).toBeDefined();

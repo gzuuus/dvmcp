@@ -1,13 +1,14 @@
-import { type Event } from 'nostr-tools';
+import { type Event as NostrEvent } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
-import { PromptRegistry, type PromptDefinition } from './prompt-registry.js';
+import { PromptRegistry, type PromptCapability } from './prompt-registry.js';
+import { BaseExecutor } from './base-executor';
+import type { ExecutionContext } from './base-interfaces';
 import {
   REQUEST_KIND,
   RESPONSE_KIND,
   NOTIFICATION_KIND,
   TAG_PUBKEY,
-  TAG_EVENT_ID,
   TAG_METHOD,
   TAG_SERVER_IDENTIFIER,
   TAG_STATUS,
@@ -15,23 +16,25 @@ import {
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { NWCPaymentHandler } from './nwc-payment';
 import { getConfig } from './config';
-import type { GetPromptRequest } from '@modelcontextprotocol/sdk/types.js';
+import type {
+  GetPromptRequest,
+  GetPromptResult,
+} from '@modelcontextprotocol/sdk/types.js';
 
-interface ExecutionContext {
-  timeoutId: ReturnType<typeof setTimeout>;
-  cleanup: () => void;
-}
-
-export class PromptExecutor {
-  private executionSubscriptions: Map<string, () => void> = new Map();
-  private static readonly EXECUTION_TIMEOUT = 30000;
-  private nwcPaymentHandler: NWCPaymentHandler | null = null;
+export class PromptExecutor extends BaseExecutor<
+  PromptCapability,
+  GetPromptRequest['params']['arguments'],
+  GetPromptResult
+> {
+  protected nwcPaymentHandler: NWCPaymentHandler | null = null;
 
   constructor(
-    private relayHandler: RelayHandler,
-    private keyManager: ReturnType<typeof createKeyManager>,
+    relayHandler: RelayHandler,
+    keyManager: ReturnType<typeof createKeyManager>,
     private promptRegistry: PromptRegistry
   ) {
+    super(relayHandler, keyManager, promptRegistry);
+
     // Initialize the NWC payment handler if NWC is configured
     try {
       if (getConfig().nwc?.connectionString) {
@@ -48,52 +51,32 @@ export class PromptExecutor {
    * @param relayHandler - The updated relay handler
    */
   public updateRelayHandler(relayHandler: RelayHandler): void {
-    this.relayHandler = relayHandler;
-    loggerDiscovery('Updated relay handler in prompt executor');
+    super.updateRelayHandler(relayHandler);
   }
 
+  /**
+   * Execute a prompt with the given ID and parameters
+   * @param promptId - ID of the prompt to execute
+   * @param args - Parameters to pass to the prompt
+   * @returns Prompt execution result
+   */
   public async executePrompt(
     promptId: string,
-    prompt: PromptDefinition,
-    args: Record<string, string>
-  ): Promise<unknown> {
-    // Handle external prompts via Nostr
-    return new Promise((resolve, reject) => {
-      const request = this.createPromptRequest(promptId, prompt, args);
-      const executionId = request.id;
-      const context = this.createExecutionContext(executionId);
+    args: GetPromptRequest['params']['arguments']
+  ): Promise<GetPromptResult> {
+    const promptInfo = this.promptRegistry.getPromptInfo(promptId);
+    if (!promptInfo) {
+      throw new Error(`Prompt ${promptId} not found`);
+    }
 
-      const subscription = this.relayHandler.subscribeToRequests(
-        (event) => {
-          if (
-            event.tags.some(
-              (t) => t[0] === TAG_EVENT_ID && t[1] === executionId
-            )
-          ) {
-            this.handlePromptResponse(event, context, resolve, reject);
-          }
-        },
-        {
-          kinds: [RESPONSE_KIND, NOTIFICATION_KIND],
-          since: Math.floor(Date.now() / 1000),
-        }
-      );
+    const prompt = promptInfo.prompt as PromptCapability;
 
-      this.executionSubscriptions.set(executionId, subscription.close);
-
-      this.relayHandler.publishEvent(request).catch((err) => {
-        clearTimeout(context.timeoutId);
-        context.cleanup();
-        reject(err);
-      });
-    });
+    // Use the base executor's execute method
+    return this.execute(promptId, prompt, args);
   }
 
   public cleanup(): void {
-    for (const sub of this.executionSubscriptions.values()) {
-      sub();
-    }
-    this.executionSubscriptions.clear();
+    super.cleanup();
 
     // Clean up the NWC payment handler if it exists
     if (this.nwcPaymentHandler) {
@@ -101,28 +84,19 @@ export class PromptExecutor {
     }
   }
 
-  private createExecutionContext(executionId: string): ExecutionContext {
-    const timeoutId = setTimeout(() => {
-      loggerDiscovery('Execution timeout for:', executionId);
-      this.cleanupExecution(executionId);
-    }, PromptExecutor.EXECUTION_TIMEOUT);
+  // These methods are now handled by the BaseExecutor class
 
-    const cleanup = () => this.cleanupExecution(executionId);
-    return { timeoutId, cleanup };
-  }
-
-  private cleanupExecution(executionId: string): void {
-    const sub = this.executionSubscriptions.get(executionId);
-    if (sub) {
-      sub();
-      this.executionSubscriptions.delete(executionId);
-    }
-  }
-
-  private async handlePromptResponse(
-    event: Event,
+  /**
+   * Handle a prompt response event
+   * @param event - Nostr event containing the response
+   * @param context - Execution context
+   * @param resolve - Function to resolve the promise
+   * @param reject - Function to reject the promise
+   */
+  protected async handleResponse(
+    event: NostrEvent,
     context: ExecutionContext,
-    resolve: (value: unknown) => void,
+    resolve: (value: GetPromptResult) => void,
     reject: (reason: Error) => void
   ): Promise<void> {
     if (event.kind === RESPONSE_KIND) {
@@ -132,16 +106,14 @@ export class PromptExecutor {
 
         // Check if it's an error response
         if (response.error) {
-          clearTimeout(context.timeoutId);
-          context.cleanup();
+          this.cleanupExecution(context.executionId);
           reject(new Error(response.error.message || 'Unknown error'));
           return;
         }
 
         // Check if it's an execution error (isError flag)
         if (response.isError === true) {
-          clearTimeout(context.timeoutId);
-          context.cleanup();
+          this.cleanupExecution(context.executionId);
           reject(
             new Error(
               typeof response.content === 'string'
@@ -153,8 +125,7 @@ export class PromptExecutor {
         }
 
         // Handle successful response
-        clearTimeout(context.timeoutId);
-        context.cleanup();
+        this.cleanupExecution(context.executionId);
 
         // Process the response according to the MCP specification
         if (
@@ -170,8 +141,7 @@ export class PromptExecutor {
           resolve(response);
         }
       } catch (error) {
-        clearTimeout(context.timeoutId);
-        context.cleanup();
+        this.cleanupExecution(context.executionId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     } else if (event.kind === NOTIFICATION_KIND) {
@@ -181,8 +151,7 @@ export class PromptExecutor {
 
       // Handle error notifications
       if (status === 'error' || method === 'error') {
-        clearTimeout(context.timeoutId);
-        context.cleanup();
+        this.cleanupExecution(context.executionId);
         reject(new Error(event.content || 'Error notification received'));
         return;
       }
@@ -206,8 +175,7 @@ export class PromptExecutor {
             loggerDiscovery(
               'NWC payment handler not configured. Cannot process payment automatically.'
             );
-            clearTimeout(context.timeoutId);
-            context.cleanup();
+            this.cleanupExecution(context.executionId);
             reject(
               new Error(
                 'Prompt requires payment but NWC is not configured. Please add NWC configuration to use paid prompts.'
@@ -229,30 +197,36 @@ export class PromptExecutor {
           }
         } catch (error) {
           loggerDiscovery('Payment error:', error);
-          clearTimeout(context.timeoutId);
-          context.cleanup();
+          this.cleanupExecution(context.executionId);
           reject(error instanceof Error ? error : new Error(String(error)));
         }
       }
     }
   }
 
-  private createPromptRequest(
-    promptId: string,
-    prompt: PromptDefinition,
-    args: Record<string, string>
-  ): Event {
+  /**
+   * Create a prompt request event
+   * @param id - ID of the prompt
+   * @param item - Prompt capability
+   * @param args - Prompt arguments
+   * @returns Nostr event for the request
+   */
+  protected createRequest(
+    id: string,
+    item: PromptCapability,
+    args: GetPromptRequest['params']['arguments']
+  ): NostrEvent {
     // Use the new request kind
     const request = this.keyManager.createEventTemplate(REQUEST_KIND); // 25910
 
-    const promptInfo = this.promptRegistry.getPromptInfo(promptId);
-    if (!promptInfo) throw new Error(`Prompt ${promptId} not found`);
+    const promptInfo = this.promptRegistry.getPromptInfo(id);
+    if (!promptInfo) throw new Error(`Prompt ${id} not found`);
 
     // Create a JSON-RPC request object according to the DVMCP specification
     const requestContent: GetPromptRequest = {
       method: 'prompts/get',
       params: {
-        name: prompt.name,
+        name: item.name,
         arguments: args,
       },
     };
@@ -266,7 +240,7 @@ export class PromptExecutor {
     }
 
     // Add method tag according to the DVMCP specification
-    request.tags.push([TAG_METHOD, 'prompts/get']);
+    request.tags.push([TAG_METHOD, requestContent.method]);
 
     // Add server ID tag if available
     if (promptInfo.serverId) {

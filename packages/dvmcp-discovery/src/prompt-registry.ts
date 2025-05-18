@@ -2,6 +2,8 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { z } from 'zod';
 import { createCapabilityId } from './utils/capabilities';
+import { BaseRegistry } from './base-registry';
+import type { Capability } from './base-interfaces';
 
 export interface PromptArgument {
   name: string;
@@ -17,21 +19,18 @@ export interface PromptDefinition {
   arguments: PromptArgument[];
 }
 
-export class PromptRegistry {
-  // Store all prompts with their source information
-  private prompts: Map<
-    string,
-    {
-      prompt: PromptDefinition;
-      providerPubkey?: string;
-      serverId?: string;
-    }
-  > = new Map();
+// Extend PromptDefinition interface to include Capability properties
+export interface PromptCapability extends PromptDefinition, Capability {
+  type: 'prompt';
+}
 
+export class PromptRegistry extends BaseRegistry<PromptCapability> {
   // Store server prompts by server ID
   private serverPrompts: Map<string, PromptDefinition[]> = new Map();
 
-  constructor(private mcpServer: McpServer) {}
+  constructor(mcpServer: McpServer) {
+    super(mcpServer);
+  }
 
   /**
    * Register a prompt with the registry
@@ -47,11 +46,21 @@ export class PromptRegistry {
     serverId?: string
   ): void {
     try {
-      this.prompts.set(promptId, { prompt, providerPubkey, serverId });
-      this.registerWithMcp(promptId, prompt);
-      loggerDiscovery(`Registered prompt: ${promptId}`);
+      // Convert PromptDefinition to PromptCapability
+      const promptCapability: PromptCapability = {
+        ...prompt,
+        id: promptId,
+        type: 'prompt',
+      };
+
+      // Use the base class method to store the item
+      this.items.set(promptId, {
+        item: promptCapability,
+        providerPubkey,
+        serverId,
+      });
+      this.registerWithMcp(promptId, promptCapability);
     } catch (error) {
-      console.error(`Error registering prompt ${promptId}:`, error);
       throw error;
     }
   }
@@ -62,7 +71,15 @@ export class PromptRegistry {
    * @returns Prompt information or undefined if not found
    */
   public getPromptInfo(promptId: string) {
-    return this.prompts.get(promptId);
+    const info = this.getItemInfo(promptId);
+    if (!info) return undefined;
+
+    // Convert back to the expected format for backward compatibility
+    return {
+      prompt: info.item,
+      providerPubkey: info.providerPubkey,
+      serverId: info.serverId,
+    };
   }
 
   /**
@@ -71,7 +88,7 @@ export class PromptRegistry {
    * @returns Prompt or undefined if not found
    */
   public getPrompt(promptId: string): PromptDefinition | undefined {
-    return this.prompts.get(promptId)?.prompt;
+    return this.getItem(promptId);
   }
 
   /**
@@ -79,7 +96,7 @@ export class PromptRegistry {
    * @returns Array of prompts
    */
   public listPrompts(): PromptDefinition[] {
-    return Array.from(this.prompts.values()).map(({ prompt }) => prompt);
+    return this.listItems();
   }
 
   /**
@@ -87,17 +104,14 @@ export class PromptRegistry {
    * @returns Array of [promptId, prompt] pairs
    */
   public listPromptsWithIds(): [string, PromptDefinition][] {
-    return Array.from(this.prompts.entries()).map(([id, info]) => [
-      id,
-      info.prompt,
-    ]);
+    return this.listItemsWithIds();
   }
 
   /**
    * Clear all prompts from the registry
    */
   public clear(): void {
-    this.prompts.clear();
+    super.clear();
     this.serverPrompts.clear();
   }
 
@@ -107,7 +121,7 @@ export class PromptRegistry {
    * @returns true if the prompt was removed, false if it wasn't found
    */
   public removePrompt(promptId: string): boolean {
-    const promptInfo = this.prompts.get(promptId);
+    const promptInfo = this.getItemInfo(promptId);
 
     // If prompt doesn't exist, return false
     if (!promptInfo) {
@@ -115,13 +129,15 @@ export class PromptRegistry {
       return false;
     }
 
-    // Remove the prompt from the registry
-    this.prompts.delete(promptId);
-    loggerDiscovery(`Prompt removed from registry: ${promptId}`);
+    // Use the base class method to remove the item
+    const result = this.removeItem(promptId);
+    if (result) {
+      loggerDiscovery(`Prompt removed from registry: ${promptId}`);
+    }
 
     // Note: The MCP server doesn't have a direct method to remove prompts
     // The prompt list changed notification will be handled by the discovery server
-    return true;
+    return result;
   }
 
   /**
@@ -130,20 +146,8 @@ export class PromptRegistry {
    * @returns Array of removed prompt IDs
    */
   public removePromptsByProvider(providerPubkey: string): string[] {
-    const removedPromptIds: string[] = [];
-
-    // Find all prompts from this provider
-    for (const [id, info] of this.prompts.entries()) {
-      // Check if this prompt belongs to the specified provider
-      if (info.providerPubkey === providerPubkey) {
-        // Remove the prompt
-        this.prompts.delete(id);
-        removedPromptIds.push(id);
-        loggerDiscovery(`Removed prompt ${id} from provider ${providerPubkey}`);
-      }
-    }
-
-    return removedPromptIds;
+    // Use the base class method
+    return this.removeItemsByProvider(providerPubkey);
   }
 
   /**
@@ -152,20 +156,8 @@ export class PromptRegistry {
    * @returns Array of removed prompt IDs
    */
   public removePromptsByPattern(pattern: RegExp): string[] {
-    const removedPromptIds: string[] = [];
-
-    // Find all prompts matching the pattern
-    for (const [id, info] of this.prompts.entries()) {
-      // Check if this prompt ID matches the pattern
-      if (pattern.test(id)) {
-        // Remove the prompt
-        this.prompts.delete(id);
-        removedPromptIds.push(id);
-        loggerDiscovery(`Removed prompt ${id} matching pattern ${pattern}`);
-      }
-    }
-
-    return removedPromptIds;
+    // Use the base class method
+    return this.removeItemsByPattern(pattern);
   }
 
   /**
@@ -207,11 +199,7 @@ export class PromptRegistry {
     return Array.from(this.serverPrompts.entries());
   }
 
-  private createPromptId(promptName: string, serverId: string): string {
-    return `${serverId}_${promptName}`;
-  }
-
-  private registerWithMcp(promptId: string, prompt: PromptDefinition): void {
+  protected registerWithMcp(promptId: string, prompt: PromptCapability): void {
     try {
       // Create a zod schema for the prompt arguments according to the MCP specification
       const zodSchema: z.ZodRawShape = {};
@@ -244,58 +232,7 @@ export class PromptRegistry {
               args as Record<string, string>
             );
 
-            // Handle different result types
-            if (typeof result === 'object' && result !== null) {
-              // If the result is already in the expected format, return it directly
-              if ('messages' in result) {
-                return result as any;
-              }
-            }
-
-            // Determine the content type based on the result
-            let content: any;
-
-            if (typeof result === 'string') {
-              // If it's a string, use it as text content
-              content = {
-                type: 'text',
-                text: result,
-              };
-            } else if (result === null || result === undefined) {
-              // If it's null or undefined, use an empty string
-              content = {
-                type: 'text',
-                text: '',
-              };
-            } else if (typeof result === 'object') {
-              // If it's an object, check for specific content types
-              if ('type' in result && typeof result.type === 'string') {
-                // If it already has a type field, use it directly
-                content = result;
-              } else {
-                // Otherwise, stringify the object
-                content = {
-                  type: 'text',
-                  text: JSON.stringify(result),
-                };
-              }
-            } else {
-              // For any other type, convert to string
-              content = {
-                type: 'text',
-                text: String(result),
-              };
-            }
-
-            // Create the message with the appropriate content
-            return {
-              messages: [
-                {
-                  role: 'user',
-                  content,
-                },
-              ],
-            };
+            return result;
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);

@@ -42,7 +42,11 @@ describe('Tool Schema Validation', () => {
 
       registry.registerTool('test:test-tool', validTool, 'test-pubkey');
       const retrievedTool = registry.getTool('test:test-tool');
-      expect(retrievedTool).toEqual(validTool);
+
+      // Extract only the original properties for comparison
+      // since the BaseRegistry now adds id and type properties
+      const { id, type, ...toolWithoutIdAndType } = retrievedTool as any;
+      expect(toolWithoutIdAndType).toEqual(validTool);
     });
 
     test('should reject invalid tool schema', () => {

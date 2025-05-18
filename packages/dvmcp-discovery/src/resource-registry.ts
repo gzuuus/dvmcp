@@ -1,24 +1,26 @@
-import { type Resource } from '@modelcontextprotocol/sdk/types.js';
+import {
+  type Resource,
+  type ResourceContents,
+} from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { createCapabilityId } from './utils/capabilities';
+import { BaseRegistry } from './base-registry';
+import type { Capability } from './base-interfaces';
 
-export class ResourceRegistry {
-  // Store all resources with their source information
-  private resources: Map<
-    string,
-    {
-      resource: Resource;
-      providerPubkey?: string;
-      serverId?: string;
-    }
-  > = new Map();
+// Extend Resource interface to include Capability properties
+export interface ResourceCapability extends Resource, Capability {
+  type: 'resource';
+}
 
+export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
   // Store server resources by server ID
   private serverResources: Map<string, Resource[]> = new Map();
 
-  constructor(private mcpServer: McpServer) {}
+  constructor(mcpServer: McpServer) {
+    super(mcpServer);
+  }
 
   /**
    * Register a resource with the registry
@@ -34,11 +36,21 @@ export class ResourceRegistry {
     serverId?: string
   ): void {
     try {
-      this.resources.set(resourceId, { resource, providerPubkey, serverId });
-      this.registerWithMcp(resourceId, resource);
-      loggerDiscovery(`Registered resource: ${resourceId}`);
+      // Convert Resource to ResourceCapability
+      const resourceCapability: ResourceCapability = {
+        ...resource,
+        id: resourceId,
+        type: 'resource',
+      };
+
+      // Use the base class method to store the item
+      this.items.set(resourceId, {
+        item: resourceCapability,
+        providerPubkey,
+        serverId,
+      });
+      this.registerWithMcp(resourceId, resourceCapability);
     } catch (error) {
-      console.error(`Error registering resource ${resourceId}:`, error);
       throw error;
     }
   }
@@ -49,7 +61,15 @@ export class ResourceRegistry {
    * @returns Resource information or undefined if not found
    */
   public getResourceInfo(resourceId: string) {
-    return this.resources.get(resourceId);
+    const info = this.getItemInfo(resourceId);
+    if (!info) return undefined;
+
+    // Convert back to the expected format for backward compatibility
+    return {
+      resource: info.item,
+      providerPubkey: info.providerPubkey,
+      serverId: info.serverId,
+    };
   }
 
   /**
@@ -58,7 +78,7 @@ export class ResourceRegistry {
    * @returns Resource or undefined if not found
    */
   public getResource(resourceId: string): Resource | undefined {
-    return this.resources.get(resourceId)?.resource;
+    return this.getItem(resourceId);
   }
 
   /**
@@ -66,7 +86,7 @@ export class ResourceRegistry {
    * @returns Array of resources
    */
   public listResources(): Resource[] {
-    return Array.from(this.resources.values()).map(({ resource }) => resource);
+    return this.listItems();
   }
 
   /**
@@ -74,17 +94,14 @@ export class ResourceRegistry {
    * @returns Array of [resourceId, resource] pairs
    */
   public listResourcesWithIds(): [string, Resource][] {
-    return Array.from(this.resources.entries()).map(([id, info]) => [
-      id,
-      info.resource,
-    ]);
+    return this.listItemsWithIds();
   }
 
   /**
    * Clear all resources from the registry
    */
   public clear(): void {
-    this.resources.clear();
+    super.clear();
     this.serverResources.clear();
   }
 
@@ -94,7 +111,7 @@ export class ResourceRegistry {
    * @returns true if the resource was removed, false if it wasn't found
    */
   public removeResource(resourceId: string): boolean {
-    const resourceInfo = this.resources.get(resourceId);
+    const resourceInfo = this.getItemInfo(resourceId);
 
     // If resource doesn't exist, return false
     if (!resourceInfo) {
@@ -102,13 +119,15 @@ export class ResourceRegistry {
       return false;
     }
 
-    // Remove the resource from the registry
-    this.resources.delete(resourceId);
-    loggerDiscovery(`Resource removed from registry: ${resourceId}`);
+    // Use the base class method to remove the item
+    const result = this.removeItem(resourceId);
+    if (result) {
+      loggerDiscovery(`Resource removed from registry: ${resourceId}`);
+    }
 
     // Note: The MCP server doesn't have a direct method to remove resources
     // The resource list changed notification will be handled by the discovery server
-    return true;
+    return result;
   }
 
   /**
@@ -117,22 +136,8 @@ export class ResourceRegistry {
    * @returns Array of removed resource IDs
    */
   public removeResourcesByProvider(providerPubkey: string): string[] {
-    const removedResourceIds: string[] = [];
-
-    // Find all resources from this provider
-    for (const [id, info] of this.resources.entries()) {
-      // Check if this resource belongs to the specified provider
-      if (info.providerPubkey === providerPubkey) {
-        // Remove the resource
-        this.resources.delete(id);
-        removedResourceIds.push(id);
-        loggerDiscovery(
-          `Removed resource ${id} from provider ${providerPubkey}`
-        );
-      }
-    }
-
-    return removedResourceIds;
+    // Use the base class method
+    return this.removeItemsByProvider(providerPubkey);
   }
 
   /**
@@ -141,20 +146,8 @@ export class ResourceRegistry {
    * @returns Array of removed resource IDs
    */
   public removeResourcesByPattern(pattern: RegExp): string[] {
-    const removedResourceIds: string[] = [];
-
-    // Find all resources matching the pattern
-    for (const [id, info] of this.resources.entries()) {
-      // Check if this resource ID matches the pattern
-      if (pattern.test(id)) {
-        // Remove the resource
-        this.resources.delete(id);
-        removedResourceIds.push(id);
-        loggerDiscovery(`Removed resource ${id} matching pattern ${pattern}`);
-      }
-    }
-
-    return removedResourceIds;
+    // Use the base class method
+    return this.removeItemsByPattern(pattern);
   }
 
   /**
@@ -201,80 +194,20 @@ export class ResourceRegistry {
     return Array.from(this.serverResources.entries());
   }
 
-  private registerWithMcp(resourceId: string, resource: Resource): void {
+  protected registerWithMcp(
+    resourceId: string,
+    resource: ResourceCapability
+  ): void {
     try {
       // Ensure we have a valid MIME type
       const mimeType = resource.mimeType || 'text/plain';
 
-      // Check if this is a collection resource (URI ends with '/')
-      const isCollection = resource.uri.endsWith('/');
-
-      if (isCollection) {
-        // For collection resources, register with list capability
-        this.registerCollectionResource(resourceId, resource, mimeType);
-      } else {
-        // For individual resources, register as a simple resource
-        this.registerIndividualResource(resourceId, resource, mimeType);
-      }
+      this.registerIndividualResource(resourceId, resource, mimeType);
 
       loggerDiscovery('Resource registered successfully:', resourceId);
     } catch (error) {
       console.error('Error registering resource:', resourceId, error);
     }
-  }
-
-  /**
-   * Register a collection resource (a resource that can list child resources)
-   * @param resourceId - ID of the resource
-   * @param resource - Resource definition
-   * @param mimeType - MIME type of the resource
-   */
-  private registerCollectionResource(
-    resourceId: string,
-    resource: Resource,
-    mimeType: string
-  ): void {
-    // Create a list callback that returns an empty list by default
-    // This can be extended in the future to return actual child resources
-    const listCallback = async () => {
-      return { resources: [] };
-    };
-
-    // Create a resource template with the collection URI pattern
-    const template = new ResourceTemplate(resource.uri, { list: listCallback });
-
-    // Register the resource with the MCP server
-    this.mcpServer.resource(resourceId, template, async (uri, params) => {
-      try {
-        // Convert params to a simple Record<string, string> for the callback
-        const simpleParams: Record<string, string> = {};
-        for (const [key, value] of Object.entries(params)) {
-          if (typeof value === 'string') {
-            simpleParams[key] = value;
-          } else if (Array.isArray(value)) {
-            simpleParams[key] = value.join(',');
-          }
-        }
-
-        // Call the execution callback if set
-        const result = await this.executionCallback?.(
-          resourceId,
-          uri,
-          simpleParams
-        );
-
-        // Prepare the response based on the result type
-        return this.createResourceResponse(uri.href, result, mimeType);
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error(
-          `Error executing collection resource ${resourceId}:`,
-          errorMessage
-        );
-        throw error;
-      }
-    });
   }
 
   /**
@@ -289,37 +222,41 @@ export class ResourceRegistry {
     mimeType: string
   ): void {
     // Register the resource directly with the MCP server (no template)
-    this.mcpServer.resource(resourceId, resource.uri, async (uri, params) => {
-      try {
-        // Convert params to a simple Record<string, string> for the callback
-        const simpleParams: Record<string, string> = {};
-        for (const [key, value] of Object.entries(params)) {
-          if (typeof value === 'string') {
-            simpleParams[key] = value;
-          } else if (Array.isArray(value)) {
-            simpleParams[key] = value.join(',');
+    this.mcpServer.resource(
+      resourceId,
+      resource.uri,
+      async (uri: string, params: Record<string, unknown>) => {
+        try {
+          // Convert params to a simple Record<string, string> for the callback
+          const simpleParams: Record<string, string> = {};
+          for (const [key, value] of Object.entries(params)) {
+            if (typeof value === 'string') {
+              simpleParams[key] = value;
+            } else if (Array.isArray(value)) {
+              simpleParams[key] = value.join(',');
+            }
           }
+
+          // Call the execution callback if set
+          const result = await this.executionCallback?.(
+            resourceId,
+            uri,
+            simpleParams
+          );
+
+          // Prepare the response based on the result type
+          return this.createResourceResponse(uri, result, mimeType);
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          console.error(
+            `Error executing individual resource ${resourceId}:`,
+            errorMessage
+          );
+          throw error;
         }
-
-        // Call the execution callback if set
-        const result = await this.executionCallback?.(
-          resourceId,
-          uri,
-          simpleParams
-        );
-
-        // Prepare the response based on the result type
-        return this.createResourceResponse(uri.href, result, mimeType);
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        console.error(
-          `Error executing individual resource ${resourceId}:`,
-          errorMessage
-        );
-        throw error;
       }
-    });
+    );
   }
 
   /**
@@ -333,7 +270,7 @@ export class ResourceRegistry {
     uri: string,
     result: unknown,
     mimeType: string
-  ): { contents: Array<any> } {
+  ): { contents: Array<ResourceContents> } {
     // Determine if this is a binary resource based on the MIME type
     const isBinary =
       mimeType.startsWith('image/') ||
@@ -369,8 +306,8 @@ export class ResourceRegistry {
 
   private executionCallback?: (
     resourceId: string,
-    uri: URL,
-    params: Record<string, string>
+    uri: string,
+    params: unknown
   ) => Promise<unknown>;
 
   /**
@@ -380,8 +317,8 @@ export class ResourceRegistry {
   public setExecutionCallback(
     callback: (
       resourceId: string,
-      uri: URL,
-      params: Record<string, string>
+      uri: string,
+      params: unknown
     ) => Promise<unknown>
   ): void {
     this.executionCallback = callback;

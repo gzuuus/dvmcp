@@ -1,22 +1,22 @@
-import { type Tool, type Resource } from '@modelcontextprotocol/sdk/types.js';
+import {
+  type Tool,
+  type Resource,
+  type CallToolResult,
+} from '@modelcontextprotocol/sdk/types.js';
 import { ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { builtInToolRegistry } from './built-in-tools';
+import { BaseRegistry } from './base-registry';
+import type { Capability } from './base-interfaces';
 
-export class ToolRegistry {
-  // Store all tools with their source information
-  private tools: Map<
-    string,
-    {
-      tool: Tool;
-      providerPubkey?: string;
-      isBuiltIn?: boolean;
-      serverId?: string;
-    }
-  > = new Map();
+// Extend Tool interface to include Capability properties
+export interface ToolCapability extends Tool, Capability {
+  type: 'tool';
+}
 
+export class ToolRegistry extends BaseRegistry<ToolCapability> {
   // Store server information
   private servers: Map<
     string,
@@ -27,10 +27,9 @@ export class ToolRegistry {
     }
   > = new Map();
 
-  // Store resources by server ID
-  private resources: Map<string, Resource[]> = new Map();
-
-  constructor(private mcpServer: McpServer) {}
+  constructor(mcpServer: McpServer) {
+    super(mcpServer);
+  }
 
   public registerTool(
     toolId: string,
@@ -40,54 +39,66 @@ export class ToolRegistry {
   ): void {
     try {
       ToolSchema.parse(tool);
-      this.tools.set(toolId, { tool, providerPubkey, serverId });
-      this.registerWithMcp(toolId, tool);
+      // Convert Tool to ToolCapability
+      const toolCapability: ToolCapability = {
+        ...tool,
+        id: toolId,
+        type: 'tool',
+      };
+
+      // Use the base class method to store the item
+      this.items.set(toolId, {
+        item: toolCapability,
+        providerPubkey,
+        serverId,
+      });
+      this.registerWithMcp(toolId, toolCapability);
     } catch (error) {
-      console.error(`Invalid MCP tool format for ${toolId}:`, error);
       throw error;
     }
   }
 
   public getToolInfo(toolId: string) {
-    return this.tools.get(toolId);
+    const info = this.getItemInfo(toolId);
+    if (!info) return undefined;
+
+    // Convert back to the expected format for backward compatibility
+    return {
+      tool: info.item,
+      providerPubkey: info.providerPubkey,
+      serverId: info.serverId,
+      isBuiltIn: info.item.isBuiltIn,
+    };
   }
 
   public getTool(toolId: string): Tool | undefined {
-    return this.tools.get(toolId)?.tool;
+    return this.getItem(toolId);
   }
 
   public listTools(): Tool[] {
-    return Array.from(this.tools.values()).map(({ tool }) => tool);
+    return this.listItems();
   }
 
   public listToolsWithIds(): [string, Tool][] {
-    return Array.from(this.tools.entries()).map(([id, info]) => [
-      id,
-      info.tool,
-    ]);
+    return this.listItemsWithIds();
   }
 
   public clear(): void {
     // Remove all tools except built-in tools
-    for (const [id, info] of this.tools.entries()) {
-      if (!info.isBuiltIn) {
-        this.tools.delete(id);
+    for (const [id, info] of this.items.entries()) {
+      if (!info.item.isBuiltIn) {
+        this.items.delete(id);
       }
     }
   }
 
-  /**
-   * Remove a tool from the registry
-   * @param toolId - ID of the tool to remove
-   * @returns true if the tool was removed, false if it wasn't found
-   */
   /**
    * Remove a tool from the registry by its ID
    * @param toolId - ID of the tool to remove
    * @returns true if the tool was removed, false if it wasn't found
    */
   public removeTool(toolId: string): boolean {
-    const toolInfo = this.tools.get(toolId);
+    const toolInfo = this.getItemInfo(toolId);
 
     // If tool doesn't exist, return false
     if (!toolInfo) {
@@ -95,13 +106,15 @@ export class ToolRegistry {
       return false;
     }
 
-    // Remove the tool from the registry
-    this.tools.delete(toolId);
-    loggerDiscovery(`Tool removed from registry: ${toolId}`);
+    // Use the base class method to remove the item
+    const result = this.removeItem(toolId);
+    if (result) {
+      loggerDiscovery(`Tool removed from registry: ${toolId}`);
+    }
 
     // Note: The MCP server doesn't have a direct method to remove tools
     // The tool list changed notification will be handled by the discovery server
-    return true;
+    return result;
   }
 
   /**
@@ -114,19 +127,24 @@ export class ToolRegistry {
     providerPubkey: string,
     excludeBuiltIn: boolean = true
   ): string[] {
+    if (!excludeBuiltIn) {
+      // Use the base class method if we don't need to exclude built-in tools
+      return this.removeItemsByProvider(providerPubkey);
+    }
+
     const removedToolIds: string[] = [];
 
     // Find all tools from this provider
-    for (const [id, info] of this.tools.entries()) {
+    for (const [id, info] of this.items.entries()) {
       // Skip built-in tools if excludeBuiltIn is true
-      if (excludeBuiltIn && info.isBuiltIn) {
+      if (excludeBuiltIn && info.item.isBuiltIn) {
         continue;
       }
 
       // Check if this tool belongs to the specified provider
       if (info.providerPubkey === providerPubkey) {
         // Remove the tool
-        this.tools.delete(id);
+        this.items.delete(id);
         removedToolIds.push(id);
         loggerDiscovery(`Removed tool ${id} from provider ${providerPubkey}`);
       }
@@ -145,19 +163,24 @@ export class ToolRegistry {
     pattern: RegExp,
     excludeBuiltIn: boolean = true
   ): string[] {
+    if (!excludeBuiltIn) {
+      // Use the base class method if we don't need to exclude built-in tools
+      return this.removeItemsByPattern(pattern);
+    }
+
     const removedToolIds: string[] = [];
 
     // Find all tools matching the pattern
-    for (const [id, info] of this.tools.entries()) {
+    for (const [id, info] of this.items.entries()) {
       // Skip built-in tools if excludeBuiltIn is true
-      if (excludeBuiltIn && info.isBuiltIn) {
+      if (excludeBuiltIn && info.item.isBuiltIn) {
         continue;
       }
 
       // Check if this tool ID matches the pattern
       if (pattern.test(id)) {
         // Remove the tool
-        this.tools.delete(id);
+        this.items.delete(id);
         removedToolIds.push(id);
         loggerDiscovery(`Removed tool ${id} matching pattern ${pattern}`);
       }
@@ -166,7 +189,7 @@ export class ToolRegistry {
     return removedToolIds;
   }
 
-  private registerWithMcp(toolId: string, tool: Tool, isBuiltIn = false): void {
+  protected registerWithMcp(toolId: string, tool: ToolCapability): void {
     try {
       this.mcpServer.tool(
         toolId,
@@ -176,10 +199,10 @@ export class ToolRegistry {
           try {
             let result;
 
-            const toolInfo = this.tools.get(toolId);
+            const toolInfo = this.getItemInfo(toolId);
 
             // Handle built-in tools directly, otherwise use the execution callback
-            if (toolInfo?.isBuiltIn) {
+            if (toolInfo?.item.isBuiltIn) {
               result = await this.executeBuiltInTool(toolId, args);
             } else {
               result = await this.executionCallback?.(toolId, args);
@@ -223,8 +246,16 @@ export class ToolRegistry {
   public registerBuiltInTool(toolId: string, tool: Tool): void {
     try {
       ToolSchema.parse(tool);
-      this.tools.set(toolId, { tool, isBuiltIn: true });
-      this.registerWithMcp(toolId, tool, true);
+      // Convert to ToolCapability and add isBuiltIn flag
+      const toolCapability: ToolCapability & { isBuiltIn: boolean } = {
+        ...tool,
+        id: toolId,
+        type: 'tool',
+        isBuiltIn: true,
+      };
+
+      this.items.set(toolId, { item: toolCapability });
+      this.registerWithMcp(toolId, toolCapability);
     } catch (error) {
       console.error(`Invalid MCP built-in tool format for ${toolId}:`, error);
       throw error;
@@ -240,22 +271,22 @@ export class ToolRegistry {
   public async executeBuiltInTool(
     toolId: string,
     args: unknown
-  ): Promise<unknown> {
+  ): Promise<CallToolResult> {
     const builtInTool = builtInToolRegistry.getTool(toolId);
     if (!builtInTool) {
       throw new Error(`Built-in tool ${toolId} not found`);
     }
 
-    return builtInTool.execute(args);
+    return builtInTool.execute(args) as Promise<CallToolResult>;
   }
 
   private executionCallback?: (
     toolId: string,
     args: unknown
-  ) => Promise<unknown>;
+  ) => Promise<CallToolResult>;
 
   public setExecutionCallback(
-    callback: (toolId: string, args: unknown) => Promise<unknown>
+    callback: (toolId: string, args: unknown) => Promise<CallToolResult>
   ): void {
     this.executionCallback = callback;
   }
@@ -275,57 +306,6 @@ export class ToolRegistry {
   ): void {
     this.servers.set(serverId, { pubkey, content, metadata });
     loggerDiscovery(`Registered server ${serverId} from ${pubkey}`);
-  }
-
-  /**
-   * Get server information by ID
-   * @param serverId - Server's unique identifier
-   * @returns Server information or undefined if not found
-   */
-  public getServer(
-    serverId: string
-  ): { pubkey: string; content: string; metadata?: any } | undefined {
-    return this.servers.get(serverId);
-  }
-
-  /**
-   * List all registered servers
-   * @returns Array of [serverId, serverInfo] pairs
-   */
-  public listServers(): [
-    string,
-    { pubkey: string; content: string; metadata?: any },
-  ][] {
-    return Array.from(this.servers.entries());
-  }
-
-  /**
-   * Register resources for a server
-   * @param serverId - Server's unique identifier
-   * @param resources - Array of resources to register
-   */
-  public registerResources(serverId: string, resources: Resource[]): void {
-    this.resources.set(serverId, resources);
-    loggerDiscovery(
-      `Registered ${resources.length} resources for server ${serverId}`
-    );
-  }
-
-  /**
-   * Get resources for a server
-   * @param serverId - Server's unique identifier
-   * @returns Array of resources or undefined if not found
-   */
-  public getResources(serverId: string): Resource[] | undefined {
-    return this.resources.get(serverId);
-  }
-
-  /**
-   * List all registered resources
-   * @returns Array of [serverId, resources] pairs
-   */
-  public listResources(): [string, Resource[]][] {
-    return Array.from(this.resources.entries());
   }
 
   private mapJsonSchemaToZod(schema: Tool['inputSchema']): z.ZodRawShape {

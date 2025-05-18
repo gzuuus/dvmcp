@@ -16,15 +16,6 @@ export interface ToolCapability extends Tool, Capability {
 }
 
 export class ToolRegistry extends BaseRegistry<ToolCapability> {
-  private servers: Map<
-    string,
-    {
-      pubkey: string;
-      content: string;
-      metadata?: any;
-    }
-  > = new Map();
-
   constructor(mcpServer: McpServer) {
     super(mcpServer);
   }
@@ -256,23 +247,6 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
     ) => Promise<CallToolResult>
   ): void {
     this.executionCallback = callback;
-  }
-
-  /**
-   * Register a server with the registry
-   * @param serverId - Server's unique identifier
-   * @param pubkey - Provider's public key
-   * @param content - Server announcement content
-   * @param metadata - Optional metadata about the server
-   */
-  public registerServer(
-    serverId: string,
-    pubkey: string,
-    content: string,
-    metadata?: any
-  ): void {
-    this.servers.set(serverId, { pubkey, content, metadata });
-    loggerDiscovery(`Registered server ${serverId} from ${pubkey}`);
   }
 
   private mapJsonSchemaToZod(schema: Tool['inputSchema']): z.ZodRawShape {

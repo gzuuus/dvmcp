@@ -151,7 +151,7 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     );
 
     resources.forEach((resource) => {
-      const resourceId = createCapabilityId(resource.uri, providerPubkey);
+      const resourceId = createCapabilityId(resource.name, providerPubkey);
       this.registerResource(
         resourceId,
         resource,
@@ -184,7 +184,7 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
   ): void {
     try {
       this.mcpServer.resource(
-        resource.name,
+        resourceId,
         resource.uri,
         async (params: ReadResourceRequest['params']) => {
           try {

@@ -26,6 +26,7 @@ import { ResourceRegistry } from './resource-registry';
 import { ResourceExecutor } from './resource-executor';
 import { PromptRegistry } from './prompt-registry';
 import { PromptExecutor } from './prompt-executor';
+import { ServerRegistry } from './server-registry';
 import type { DVMAnnouncement } from './direct-discovery';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import {
@@ -45,6 +46,7 @@ export class DiscoveryServer {
   private resourceExecutor: ResourceExecutor;
   private promptRegistry: PromptRegistry;
   private promptExecutor: PromptExecutor;
+  private serverRegistry: ServerRegistry;
 
   private config: Config;
   private integratedRelays: Set<string> = new Set();
@@ -57,6 +59,8 @@ export class DiscoveryServer {
       name: config.mcp.name,
       version: config.mcp.version,
     });
+
+    this.serverRegistry = new ServerRegistry(this.mcpServer);
 
     this.toolRegistry = new ToolRegistry(this.mcpServer);
     this.toolExecutor = new ToolExecutor(
@@ -285,8 +289,7 @@ export class DiscoveryServer {
         loggerDiscovery('Server announcement missing server ID');
         return;
       }
-      // TODO: Move server registration to a separate method
-      this.toolRegistry.registerServer(serverId, event.pubkey, event.content);
+      this.serverRegistry.registerServer(serverId, event.pubkey, event.content);
       loggerDiscovery(`Registered server: ${serverId} from ${event.pubkey}`);
     } catch (error) {
       console.error('Error processing server announcement:', error);
@@ -699,6 +702,14 @@ export class DiscoveryServer {
     } else {
       loggerDiscovery('No built-in tools were registered');
     }
+  }
+
+  /**
+   * Get the server registry instance
+   * @returns The server registry
+   */
+  public getServerRegistry(): ServerRegistry {
+    return this.serverRegistry;
   }
 
   public cleanup(): void {

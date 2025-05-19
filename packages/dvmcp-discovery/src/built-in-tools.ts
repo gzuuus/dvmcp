@@ -6,7 +6,7 @@ import type { DVMAnnouncement } from './direct-discovery';
 import type { DiscoveryServer } from './discovery-server';
 import { DEFAULT_VALUES } from './constants';
 import { NWCPaymentHandler } from './nwc-payment';
-import { getConfig } from './config';
+import type { DvmcpDiscoveryConfig } from './config-schema';
 import {
   SERVER_ANNOUNCEMENT_KIND,
   TOOLS_LIST_KIND,
@@ -87,11 +87,14 @@ export const builtInToolRegistry = new BuiltInToolRegistry();
 let discoveryServerRef: DiscoveryServer | null = null;
 
 /**
- * Set the discovery server reference for the tool
+ * Set the discovery server reference for the tool and register NWC-dependent tools
  * @param server - Discovery server instance
  */
-export function setDiscoveryServerReference(server: any): void {
+export function setDiscoveryServerReference(server: DiscoveryServer): void {
   discoveryServerRef = server;
+
+  // Register the pay_invoice tool if NWC is configured
+  registerPayInvoiceTool(server.getConfig());
 }
 
 // Define the discover_and_integrate tool ("I'm feeling lucky")
@@ -640,9 +643,8 @@ const listToolsTool: Tool = {
 /**
  * Register the pay_invoice tool if NWC is configured
  */
-function registerPayInvoiceTool(): void {
+function registerPayInvoiceTool(config: DvmcpDiscoveryConfig): void {
   // Check if NWC is configured
-  const config = getConfig();
   if (!config.nwc?.connectionString) {
     loggerDiscovery(
       'NWC connection string not configured. Skipping pay_invoice tool registration.'
@@ -681,8 +683,15 @@ function registerPayInvoiceTool(): void {
       }
 
       try {
-        // Create a new NWC payment handler
-        const paymentHandler = new NWCPaymentHandler();
+        // Get the configuration from the discovery server
+        if (!discoveryServerRef) {
+          throw new Error('Discovery server reference not set');
+        }
+
+        // Create a new NWC payment handler with the config
+        const paymentHandler = new NWCPaymentHandler(
+          discoveryServerRef.getConfig()
+        );
 
         // Attempt to pay the invoice
         loggerDiscovery(
@@ -707,8 +716,8 @@ function registerPayInvoiceTool(): void {
   loggerDiscovery('Registered pay_invoice tool successfully');
 }
 
-// Call the function to register the pay_invoice tool if NWC is configured
-registerPayInvoiceTool();
+// The pay_invoice tool will be registered when setDiscoveryServerReference is called
+// if NWC is configured
 
 builtInToolRegistry.registerTool(
   'list_tools',

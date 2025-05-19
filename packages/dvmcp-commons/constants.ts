@@ -21,7 +21,6 @@ export const TAG_STATUS = 'status'; // Nostr-specific notification status (e.g.,
 export const TAG_AMOUNT = 'amount'; // Nostr-specific notification amount/invoice
 
 // DEPRECATED - Keep temporarily for backward compatibility
-// TODO: Remove in future versions
 export const DVM_ANNOUNCEMENT_KIND = 31990;
 export const DVM_NOTICE_KIND = 7000;
 export const TOOL_REQUEST_KIND = 5910;

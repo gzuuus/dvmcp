@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/commons",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Shared utilities for DVMCP packages",
   "type": "module",
   "exports": {
@@ -15,14 +15,16 @@
   ],
   "scripts": {
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "peerDependencies": {
     "typescript": "^5.0.0",
     "@types/debug": "^4.1.12"
   },
   "dependencies": {
-    "debug": "^4.4.0"
+    "debug": "^4.4.0",
+    "yaml": "^2.3.4"
   },
   "publishConfig": {
     "access": "public"

@@ -1,6 +1,6 @@
 import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
 import { DiscoveryServer } from './discovery-server';
-import { getConfig } from './config';
+import { loadDiscoveryConfig } from './config-loader';
 import {
   server as mockRelay,
   stop as stopRelay,
@@ -22,12 +22,19 @@ describe('DiscoveryServer E2E', () => {
     mockRelay;
     relayConnected = true;
 
-    const config = getConfig();
     const testConfig = {
-      ...config,
       nostr: {
-        ...config.nostr,
+        privateKey:
+          'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
         relayUrls: ['ws://localhost:3334'],
+      },
+      mcp: {
+        name: 'test-discovery',
+        version: '0.0.1',
+        about: 'Test discovery server',
+      },
+      featureFlags: {
+        interactive: true,
       },
     };
 

@@ -31,7 +31,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@dvmcp/commons": "^0.2.0",
+    "@dvmcp/commons": "workspace:*",
     "@getalby/lightning-tools": "^5.1.2",
     "@modelcontextprotocol/sdk": "^1.11.1",
     "@types/yargs": "^17.0.33",

@@ -7,7 +7,7 @@ import { NWCWalletRequest, NWCWalletResponse } from 'nostr-tools/kinds';
 import { hexToBytes } from '@noble/hashes/utils';
 import { encrypt, decrypt } from 'nostr-tools/nip04';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
-import { getConfig } from './config';
+import type { DvmcpDiscoveryConfig } from './config-schema';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 // TODO: We can abstract this payment handler and the one in the bridge package to @commons
 interface NWCConnection {
@@ -133,11 +133,10 @@ export class NWCPaymentHandler {
 
   /**
    * Create a new NWCPaymentHandler instance
+   * @param config - The discovery configuration
    * @throws Error if NWC is not configured
    */
-  constructor() {
-    const config = getConfig();
-
+  constructor(config: DvmcpDiscoveryConfig) {
     if (!config.nwc?.connectionString) {
       throw new Error('NWC connection string not configured');
     }

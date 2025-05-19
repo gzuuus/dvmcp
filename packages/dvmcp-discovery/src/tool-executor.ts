@@ -5,8 +5,8 @@ import type {
   CallToolRequest,
   CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
-import { ToolRegistry } from './tool-registry.js';
-import type { ToolCapability } from './tool-registry.js';
+import { ToolRegistry } from './tool-registry';
+import type { ToolCapability } from './tool-registry';
 import {
   REQUEST_KIND,
   RESPONSE_KIND,
@@ -18,7 +18,7 @@ import {
 } from '@dvmcp/commons/constants';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { NWCPaymentHandler } from './nwc-payment';
-import { getConfig } from './config';
+import type { DvmcpDiscoveryConfig } from './config-schema';
 import { BaseExecutor } from './base-executor';
 import type { ExecutionContext } from './base-interfaces';
 
@@ -32,13 +32,23 @@ export class ToolExecutor extends BaseExecutor<
   constructor(
     relayHandler: RelayHandler,
     keyManager: ReturnType<typeof createKeyManager>,
-    private toolRegistry: ToolRegistry
+    private toolRegistry: ToolRegistry,
+    private config: DvmcpDiscoveryConfig
   ) {
     super(relayHandler, keyManager, toolRegistry);
 
+    // Initialize NWC payment handler if needed
+    this.initializeNWCPaymentHandler();
+  }
+
+  /**
+   * Initialize the NWC payment handler
+   * @private
+   */
+  private initializeNWCPaymentHandler(): void {
     try {
-      if (getConfig().nwc?.connectionString) {
-        this.nwcPaymentHandler = new NWCPaymentHandler();
+      if (this.config.nwc?.connectionString) {
+        this.nwcPaymentHandler = new NWCPaymentHandler(this.config);
       }
     } catch (error) {
       loggerDiscovery('Failed to initialize NWC payment handler:', error);

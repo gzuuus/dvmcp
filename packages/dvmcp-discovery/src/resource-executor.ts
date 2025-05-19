@@ -7,10 +7,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { BaseExecutor } from './base-executor';
 import type { ExecutionContext } from './base-interfaces';
-import {
-  ResourceRegistry,
-  type ResourceCapability,
-} from './resource-registry.js';
+import { ResourceRegistry, type ResourceCapability } from './resource-registry';
 import {
   REQUEST_KIND,
   RESPONSE_KIND,
@@ -22,7 +19,7 @@ import {
 } from '@dvmcp/commons/constants';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { NWCPaymentHandler } from './nwc-payment';
-import { getConfig } from './config';
+import type { DvmcpDiscoveryConfig } from './config-schema';
 
 export class ResourceExecutor extends BaseExecutor<
   ResourceCapability,
@@ -34,13 +31,14 @@ export class ResourceExecutor extends BaseExecutor<
   constructor(
     relayHandler: RelayHandler,
     keyManager: KeyManager,
-    private resourceRegistry: ResourceRegistry
+    private resourceRegistry: ResourceRegistry,
+    private config: DvmcpDiscoveryConfig
   ) {
     super(relayHandler, keyManager, resourceRegistry);
 
     try {
-      if (getConfig().nwc?.connectionString) {
-        this.nwcPaymentHandler = new NWCPaymentHandler();
+      if (this.config.nwc?.connectionString) {
+        this.nwcPaymentHandler = new NWCPaymentHandler(this.config);
       }
     } catch (error) {
       loggerDiscovery('Failed to initialize NWC payment handler:', error);

@@ -10,61 +10,11 @@ import {
   loadDvmcpConfig,
 } from './index.js';
 import { CONFIG_EMOJIS } from '@dvmcp/commons/config-generator';
-
-type AnySchema = { [k: string]: unknown } | { fields?: Record<string, any> };
-function buildYargsOptions(
-  schema: AnySchema,
-  path: string[] = []
-): {
-  opts: Record<string, any>;
-} {
-  const opts: Record<string, any> = {};
-
-  const fields = ('fields' in schema ? schema.fields : schema) as Record<
-    string,
-    any
-  >;
-
-  for (const [key, meta] of Object.entries(fields)) {
-    const optionKey = [...path, key].join('.');
-    if (meta?.type === 'object') {
-      // Recurse for nested objects
-      const { opts: childOpts } = buildYargsOptions(meta, [...path, key]);
-      Object.assign(opts, childOpts);
-    } else if (meta?.type === 'array') {
-      opts[optionKey] = {
-        describe: meta.doc,
-        type: 'string',
-        coerce: (val: unknown) => {
-          if (val === undefined) return undefined;
-          try {
-            const parsed = JSON.parse(val as string);
-            if (Array.isArray(parsed)) return parsed;
-          } catch {}
-          return ('' + val)
-            .split(',')
-            .map((v: string) => v.trim())
-            .filter(Boolean);
-        },
-        demandOption: false,
-      };
-    } else {
-      const typemap: Record<string, string> = {
-        string: 'string',
-        number: 'number',
-        boolean: 'boolean',
-      };
-      opts[optionKey] = {
-        describe: meta.doc,
-        type: typemap[meta.type] || 'string',
-        demandOption: false,
-      };
-    }
-  }
-  return { opts };
-}
-
-const { opts: yargsOptions } = buildYargsOptions(dvmcpBridgeConfigSchema);
+import {
+  buildYargsOptions,
+  extractConfigOverrides,
+} from '@dvmcp/commons/config/cli';
+import type { ConfigFieldMeta } from '@dvmcp/commons/config';
 
 const reservedFlags = [
   'configure',
@@ -74,6 +24,10 @@ const reservedFlags = [
   'config-path',
   'help',
 ];
+
+const { opts: yargsOptions } = buildYargsOptions(dvmcpBridgeConfigSchema, {
+  reservedFlags,
+});
 
 const cli = yargs(hideBin(process.argv))
   .usage(
@@ -111,31 +65,6 @@ const cli = yargs(hideBin(process.argv))
   ])
   .wrap(Math.min(110, process.stdout.columns || 100));
 const args = cli.parseSync();
-
-function extractConfigOverrides(
-  argsObj: Record<string, unknown>
-): Record<string, unknown> {
-  const configOverrides: Record<string, unknown> = {};
-  for (const key of Object.keys(argsObj)) {
-    if (reservedFlags.includes(key)) continue;
-    setDeepProp(configOverrides, key, argsObj[key]);
-  }
-  return configOverrides;
-}
-
-function setDeepProp(
-  obj: Record<string, unknown>,
-  path: string,
-  value: unknown
-): void {
-  const keys = path.split('.');
-  let o: Record<string, unknown> = obj;
-  for (let i = 0; i < keys.length - 1; ++i) {
-    if (!(keys[i] in o)) o[keys[i]] = {};
-    o = o[keys[i]] as Record<string, unknown>;
-  }
-  o[keys[keys.length - 1]] = value;
-}
 
 const configPath = args['config-path']
   ? resolve(args['config-path'])
@@ -187,7 +116,9 @@ const cliMain = async () => {
   if (args['help']) {
     cli.showHelp();
     console.log('\n---\nConfig schema options:');
-    Object.entries(dvmcpBridgeConfigSchema).forEach(([section, meta]) => {
+    Object.entries(
+      dvmcpBridgeConfigSchema as Record<string, ConfigFieldMeta>
+    ).forEach(([section, meta]) => {
       console.log(`  --${section}.* : ${meta.doc}`);
       if (meta.fields) {
         Object.entries(meta.fields).forEach(([sub, submeta]) => {
@@ -205,7 +136,7 @@ const cliMain = async () => {
     return;
   }
 
-  const cliFlagsConfig = extractConfigOverrides(args);
+  const cliFlagsConfig = extractConfigOverrides(args, reservedFlags);
 
   let config;
   try {

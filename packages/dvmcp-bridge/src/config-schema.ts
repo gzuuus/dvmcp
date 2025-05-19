@@ -4,6 +4,8 @@
  * This file defines the single source of truth for all configuration options
  */
 
+import type { ConfigSchema } from '@dvmcp/commons/config';
+
 /**
  * Nostr protocol configuration.
  */
@@ -194,7 +196,7 @@ export interface DvmcpBridgeConfig {
  * Unified config schema: includes all fields/types/defaults/docs for use in yargs and validation.
  * Each field is defined with metadata for required, default, type, and documentation.
  */
-export const dvmcpBridgeConfigSchema = {
+export const dvmcpBridgeConfigSchema: ConfigSchema = {
   nostr: {
     type: 'object',
     required: true,

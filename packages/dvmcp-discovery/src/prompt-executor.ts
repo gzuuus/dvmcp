@@ -1,7 +1,7 @@
 import { type Event as NostrEvent } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
-import { PromptRegistry, type PromptCapability } from './prompt-registry.js';
+import { PromptRegistry, type PromptCapability } from './prompt-registry';
 import { BaseExecutor } from './base-executor';
 import type { ExecutionContext } from './base-interfaces';
 import {
@@ -15,12 +15,12 @@ import {
 } from '@dvmcp/commons/constants';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { NWCPaymentHandler } from './nwc-payment';
-import { getConfig } from './config';
+import type { DvmcpDiscoveryConfig } from './config-schema';
 import type {
   GetPromptRequest,
   GetPromptResult,
 } from '@modelcontextprotocol/sdk/types.js';
-
+// TODO: add completion feature
 export class PromptExecutor extends BaseExecutor<
   PromptCapability,
   GetPromptRequest['params']['arguments'],
@@ -31,13 +31,14 @@ export class PromptExecutor extends BaseExecutor<
   constructor(
     relayHandler: RelayHandler,
     keyManager: ReturnType<typeof createKeyManager>,
-    private promptRegistry: PromptRegistry
+    private promptRegistry: PromptRegistry,
+    private config: DvmcpDiscoveryConfig
   ) {
     super(relayHandler, keyManager, promptRegistry);
 
     try {
-      if (getConfig().nwc?.connectionString) {
-        this.nwcPaymentHandler = new NWCPaymentHandler();
+      if (this.config.nwc?.connectionString) {
+        this.nwcPaymentHandler = new NWCPaymentHandler(this.config);
       }
     } catch (error) {
       loggerDiscovery('Failed to initialize NWC payment handler:', error);

@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { type Event, type Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
-import { getConfig, type Config } from './config';
+import type { DvmcpDiscoveryConfig } from './config-schema';
 import {
   SERVER_ANNOUNCEMENT_KIND,
   TOOLS_LIST_KIND,
@@ -48,10 +48,10 @@ export class DiscoveryServer {
   private promptExecutor: PromptExecutor;
   private serverRegistry: ServerRegistry;
 
-  private config: Config;
+  private config: DvmcpDiscoveryConfig;
   private integratedRelays: Set<string> = new Set();
 
-  constructor(config: Config) {
+  constructor(config: DvmcpDiscoveryConfig) {
     this.config = config;
     this.relayHandler = new RelayHandler(config.nostr.relayUrls);
     this.keyManager = createKeyManager(config.nostr.privateKey);
@@ -66,21 +66,24 @@ export class DiscoveryServer {
     this.toolExecutor = new ToolExecutor(
       this.relayHandler,
       this.keyManager,
-      this.toolRegistry
+      this.toolRegistry,
+      this.config
     );
 
     this.resourceRegistry = new ResourceRegistry(this.mcpServer);
     this.resourceExecutor = new ResourceExecutor(
       this.relayHandler,
       this.keyManager,
-      this.resourceRegistry
+      this.resourceRegistry,
+      this.config
     );
 
     this.promptRegistry = new PromptRegistry(this.mcpServer);
     this.promptExecutor = new PromptExecutor(
       this.relayHandler,
       this.keyManager,
-      this.promptRegistry
+      this.promptRegistry,
+      this.config
     );
 
     this.toolRegistry.setExecutionCallback(async (toolId, args) => {
@@ -451,15 +454,22 @@ export class DiscoveryServer {
     }
   }
 
+  /**
+   * Get the current configuration
+   * @returns The current configuration
+   */
+  public getConfig(): DvmcpDiscoveryConfig {
+    return this.config;
+  }
+
   private isAllowedDVM(pubkey: string): boolean {
-    const config = getConfig();
-    if (
-      !config.whitelist?.allowedDVMs ||
-      config.whitelist.allowedDVMs.size == 0
-    ) {
-      return true;
+    // If whitelist is defined and has entries, check if the pubkey is in the list
+    const allowedDVMs = this.config.whitelist?.allowedDVMs;
+    if (allowedDVMs && allowedDVMs.length > 0) {
+      return allowedDVMs.includes(pubkey);
     }
-    return config.whitelist.allowedDVMs.has(pubkey);
+    // If no whitelist or empty whitelist, allow all
+    return true;
   }
 
   /**
@@ -622,20 +632,17 @@ export class DiscoveryServer {
   }
 
   public async start() {
-    const config = getConfig();
-    this.config = config;
-
-    const isInteractive = config.featureFlags?.interactive === true;
+    const isInteractive = this.config.featureFlags?.interactive === true;
     loggerDiscovery(
       `Starting discovery server with interactive mode: ${isInteractive ? 'enabled' : 'disabled'}`
     );
     loggerDiscovery(
-      `Relay URLs: ${config.nostr.relayUrls.length > 0 ? config.nostr.relayUrls.join(', ') : 'none'}`
+      `Relay URLs: ${this.config.nostr.relayUrls.length > 0 ? this.config.nostr.relayUrls.join(', ') : 'none'}`
     );
 
     this.registerBuiltInCapabilities();
 
-    if (config.nostr.relayUrls.length > 0 || !isInteractive) {
+    if (this.config.nostr.relayUrls.length > 0 || !isInteractive) {
       await this.startDiscovery();
       loggerDiscovery(
         `Discovery complete: ${this.toolRegistry.listTools().length} tools, ` +
@@ -661,8 +668,7 @@ export class DiscoveryServer {
    */
   private registerBuiltInCapabilities(): void {
     // Check if interactive mode is enabled in the configuration
-    const config = getConfig();
-    const isInteractiveMode = config.featureFlags?.interactive === true;
+    const isInteractiveMode = this.config.featureFlags?.interactive === true;
 
     if (!isInteractiveMode) {
       loggerDiscovery(

@@ -1,4 +1,4 @@
-import { getConfig } from './src/config';
+import { loadDiscoveryConfig } from './src/config-loader';
 import { DiscoveryServer } from './src/discovery-server';
 import type { DVMAnnouncement } from './src/direct-discovery';
 import { loggerDiscovery as logger } from '@dvmcp/commons/logger';
@@ -10,7 +10,7 @@ export interface DirectServerInfo {
 
 async function main(directServerInfo?: DirectServerInfo | null) {
   try {
-    const config = getConfig();
+    const config = await loadDiscoveryConfig();
     const server = new DiscoveryServer(config);
 
     if (directServerInfo) {

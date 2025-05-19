@@ -153,7 +153,6 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
 
     return removedToolIds;
   }
-
   protected registerWithMcp(toolId: string, tool: ToolCapability): void {
     try {
       this.mcpServer.tool(

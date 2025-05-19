@@ -9,6 +9,7 @@ import {
   TAG_UNIQUE_IDENTIFIER,
   TAG_CAPABILITY,
   TAG_SERVER_IDENTIFIER,
+  TAG_KIND,
 } from '@dvmcp/commons/constants';
 
 describe('Tool Schema Validation', () => {
@@ -127,7 +128,7 @@ describe('Tool Schema Validation', () => {
         created_at: Math.floor(Date.now() / 1000),
         tags: [
           [TAG_UNIQUE_IDENTIFIER, 'server-123'],
-          ['k', `${REQUEST_KIND}`],
+          [TAG_KIND, `${REQUEST_KIND}`],
           [TAG_CAPABILITY, 'tools'],
           [TAG_CAPABILITY, 'resources'],
         ],
@@ -221,7 +222,7 @@ describe('Tool Schema Validation', () => {
         created_at: Math.floor(Date.now() / 1000),
         tags: [
           [TAG_UNIQUE_IDENTIFIER, 'server-123'],
-          ['k', `${REQUEST_KIND}`],
+          [TAG_KIND, `${REQUEST_KIND}`],
           [TAG_CAPABILITY, 'tools'],
           [TAG_CAPABILITY, 'resources'],
         ],
@@ -234,7 +235,7 @@ describe('Tool Schema Validation', () => {
       expect(hasUniqueIdTag).toBe(true);
 
       const hasKindTag = mockServerAnnouncement.tags.some(
-        ([key, value]) => key === 'k' && value === `${REQUEST_KIND}`
+        ([key, value]) => key === TAG_KIND && value === `${REQUEST_KIND}`
       );
       expect(hasKindTag).toBe(true);
 

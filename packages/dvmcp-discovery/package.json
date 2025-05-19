@@ -31,9 +31,9 @@
     "@types/debug": "^4.1.12"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.10.2",
-    "nostr-tools": "^2.12.0",
-    "yaml": "^2.7.1",
+    "@modelcontextprotocol/sdk": "^1.11.4",
+    "nostr-tools": "^2.13.0",
+    "yaml": "^2.8.0",
     "@dvmcp/commons": "workspace:*"
   },
   "publishConfig": {

@@ -22,6 +22,7 @@ This document defines how Nostr and Data Vending Machines can be used to expose 
   - [Tools](#tools)
   - [Resources](#resources)
   - [Prompts](#prompts)
+- [Completions](#completions)
 - [Notifications](#notifications)
   - [MCP Notifications](#mcp-notifications)
   - [Nostr-Specific Notifications](#nostr-specific-notifications)
@@ -645,6 +646,173 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
     ["e", "<request-event-id>"]        // Required: Reference to the request event
   ]
 }
+```
+
+### Completions
+
+This section describes the DVMCP-native implementation for the completions capability, defining discovery, message formats, and workflow for argument autocompletion related to prompts and resources. The completions protocol brings IDE-like contextual suggestions into DVMCP while remaining fully interoperable with JSON-RPC/MCP.
+
+#### Overview
+
+Completions in DVMCP enable servers to deliver argument and URI autocompletion for prompts and resources. This improves end-user experience by providing interactive, responsive suggestions as users type parameters or select options. Clients can leverage this support to offer dropdown suggestion UIs, command auto-fill, or automated argument validation.
+
+#### Capability Announcement
+
+To advertise completion support, servers must include the `"completions"` capability in both announcement and initialization response events.
+
+- **Server Announcement Event Example (public servers, kind 31316):**
+    ```json
+    {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {
+        "tools": { "listChanged": true },
+        "resources": { "subscribe": true, "listChanged": true },
+        "prompts": { "listChanged": true },
+        "completions": {}        // Announce completions support
+      },
+      "serverInfo": { "name": "ExampleServer", "version": "1.0.0" }
+    }
+    ```
+
+Be sure to always signal the completions capability if the server supports it, so clients know to offer dynamic argument suggestions.
+
+#### Requesting Completions
+
+Clients use the `completion/complete` method to obtain autocompletion suggestions. All request/response pairs use the standard DVMCP pattern with simplified JSON-RPC content fields.
+
+- **Completion Request Event (kind 25910):**
+    ```json
+    {
+      "kind": 25910,
+      "pubkey": "<client-pubkey>",
+      "content": "{\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/prompt\",\"name\":\"code_review\"},\"argument\":{\"name\":\"language\",\"value\":\"py\"}}}",
+      "tags": [
+        ["method", "completion/complete"],
+        ["p", "<provider-pubkey>"],
+        ["s", "<server-identifier>"]
+      ]
+    }
+    ```
+  - The `ref` field identifies the target (either prompt or resource).
+  - The `argument` object contains `name` (argument key being completed) and the partial `value` (the current, possibly incomplete, user input).
+  - All tag requirements and event fields mirror core DVMCP conventions.
+
+- **Completion Response Event (kind 26910):**
+    ```json
+    {
+      "kind": 26910,
+      "pubkey": "<provider-pubkey>",
+      "content": "{\"completion\":{\"values\":[\"python\",\"pytorch\",\"pyside\"],\"total\":10,\"hasMore\":true}}",
+      "tags": [
+        ["e", "<request-event-id>"]
+      ]
+    }
+    ```
+  - The response includes a `completion` object with an array of suggestion values, the optional total number of matches, and a `hasMore` flag for paging or indicating more results exist.
+
+##### Reference Types
+
+The protocol distinguishes two reference types:
+
+| Type           | Description                 | Example                                             |
+| -------------- | -------------------------- | --------------------------------------------------- |
+| `ref/prompt`   | Reference a prompt by name  | `{"type": "ref/prompt", "name": "code_review"}`     |
+| `ref/resource` | Reference a resource URI    | `{"type": "ref/resource", "uri": "file:///readme"}` |
+
+##### Completion Results
+
+- Servers return up to 100 suggestions per response, sorted by relevance.
+- If there are additional results, set `hasMore: true` and optionally provide `total`.
+
+#### Workflow and Integration Guidance
+
+The lifecycle for completions in DVMCP includes:
+
+1. **Capability Discovery**
+   - Client detects completion support via server capabilities in announcement (31316) or initialization (26910).
+2. **Completion Request**
+   - Client sends a `completion/complete` event (25910) with the target ref, argument name, and (in-progress) argument value.
+3. **Server Suggestion Logic**
+   - Server matches/filters autocompletion candidates for the prompt/resource and argument, sorts by relevance or fuzzy similarity, and rates limits requests as needed.
+4. **Response Return**
+   - Server responds with suggested values, total matches (if calculated), and `hasMore` for result paging.
+5. **Iterative Interaction**
+   - User continues typing, client sends incremental `completion/complete` events and receives refined suggestions each time.
+6. **Client Integration**
+   - UI shows dropdown, popup, or inline suggestions per business logic. Clients are expected to debounce rapid requests.
+
+#### End-to-End Example
+
+**Scenario:** A client is completing the `language` argument for a prompt called "code_review".
+
+1. **Client initiates completion:**
+    ```json
+    {
+      "kind": 25910,
+      "pubkey": "abc...",
+      "content": "{\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/prompt\",\"name\":\"code_review\"},\"argument\":{\"name\":\"language\",\"value\":\"py\"}}}",
+      "tags": [
+        ["method", "completion/complete"],
+        ["p", "provider123"],
+        ["s", "server456"]
+      ]
+    }
+    ```
+
+2. **Server responds:**
+    ```json
+    {
+      "kind": 26910,
+      "pubkey": "provider123",
+      "content": "{\"completion\":{\"values\":[\"python\",\"pytorch\",\"pyside\"],\"total\":12,\"hasMore\":true}}",
+      "tags": [
+        ["e", "<client-request-event-id>"]
+      ]
+    }
+    ```
+   The client displays `"python"`, `"pytorch"`, `"pyside"` as suggested completions for the `language` argument.
+
+#### Error Handling
+
+All completion/complete requests and responses use DVMCP error conventions:
+
+- Protocol errors (e.g., unsupported method, invalid params) use the `error` object at the root of the response.
+- Tooling errors can use `content: [...]` with `isError: true`.
+- Error codes:
+  - `-32601`: Method not found (completions not supported by server)
+  - `-32602`: Invalid parameter or missing argument
+  - `-32603`: Internal server error
+
+**Example error response:**
+```json
+{
+  "kind": 26910,
+  "pubkey": "<provider-pubkey>",
+  "content": {
+    "error": {
+      "code": -32601,
+      "message": "Completion capability not supported"
+    }
+  },
+  "tags": [
+    ["e", "<request-event-id>"]
+  ]
+}
+```
+
+#### Message Flow Diagram
+
+```mermaid
+sequenceDiagram
+    participant Client as DVMCP Client
+    participant Server as DVMCP Server
+
+    Client->>Server: completion/complete (argument in progress)
+    Server-->>Client: Return suggestions (values)
+
+    Note over Client,Server: User continues typing/refines argument
+    Client->>Server: completion/complete (refined value)
+    Server-->>Client: Updated suggestions
 ```
 
 ## Notifications

@@ -23,6 +23,7 @@ import {
   TAG_PUBKEY,
   TAG_CAPABILITY,
   TAG_UNIQUE_IDENTIFIER,
+  TAG_KIND,
 } from '../constants';
 
 const relayPort = 3334;
@@ -52,7 +53,7 @@ const mockServerAnnouncement = {
   created_at: Math.floor(Date.now() / 1000),
   tags: [
     [TAG_UNIQUE_IDENTIFIER, 'test-server-id'],
-    ['k', `${REQUEST_KIND}`],
+    [TAG_KIND, `${REQUEST_KIND}`],
     ['name', 'Test DVM'],
     ['about', 'A test DVM for DVMCP testing'],
   ],

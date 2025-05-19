@@ -9,7 +9,7 @@ import { encrypt, decrypt } from 'nostr-tools/nip04';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import type { DvmcpDiscoveryConfig } from './config-schema';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-// TODO: We can abstract this payment handler and the one in the bridge package to @commons
+
 interface NWCConnection {
   pubkey: string;
   relay: string;

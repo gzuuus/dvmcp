@@ -8,6 +8,8 @@ import type {
   ReadResourceResult,
   Resource,
   Tool,
+  CompleteRequest,
+  CompleteResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { MCPClientHandler } from './mcp-client';
 import {
@@ -22,6 +24,7 @@ export class MCPPool {
   private toolRegistry: Map<string, MCPClientHandler> = new Map();
   private resourceRegistry: Map<string, MCPClientHandler> = new Map();
   private promptRegistry: Map<string, MCPClientHandler> = new Map();
+  private completionCapableServers: Map<string, MCPClientHandler> = new Map();
   private toolPricing: Map<string, { price?: string; unit?: string }> =
     new Map();
   private promptPricing: Map<string, { price?: string; unit?: string }> =
@@ -37,7 +40,7 @@ export class MCPPool {
     // Handle both full config objects and direct server config arrays (for testing)
     let servers: DvmcpBridgeConfig['mcp']['servers'];
 
-    const defaultName = dvmcpBridgeConfigSchema.mcp.fields.name
+    const defaultName = dvmcpBridgeConfigSchema.mcp.fields?.name
       .default as string;
 
     let name = defaultName;
@@ -103,6 +106,15 @@ export class MCPPool {
     await Promise.all(
       Array.from(this.clients.values()).map((client) => client.connect())
     );
+
+    // Identify servers that support completions
+    for (const [clientId, client] of this.clients.entries()) {
+      const caps = client.getServerCapabilities();
+      if (caps && caps.completions) {
+        this.completionCapableServers.set(clientId, client);
+        loggerBridge(`Server ${clientId} supports completions capability`);
+      }
+    }
   }
 
   async listTools(): Promise<ListToolsResult> {
@@ -333,6 +345,65 @@ export class MCPPool {
           },
         },
       };
+    }
+  }
+
+  /**
+   * Handle a completion request for a prompt or resource argument
+   * @param params - Completion request parameters
+   * @returns Completion result with suggested values or undefined if not supported
+   */
+  async complete(
+    params: CompleteRequest['params']
+  ): Promise<CompleteResult | undefined> {
+    const { ref } = params;
+    let handler: MCPClientHandler | undefined;
+
+    // Find the appropriate handler based on the reference type
+    if (ref.type === 'ref/prompt') {
+      handler = await this.ensureHandler(this.promptRegistry, ref.name, () =>
+        this.listPrompts()
+      );
+
+      if (!handler) {
+        loggerBridge(`[complete] Prompt handler not found for: ${ref.name}`);
+        return undefined;
+      }
+    } else if (ref.type === 'ref/resource') {
+      handler = await this.ensureHandler(this.resourceRegistry, ref.uri, () =>
+        this.listResources()
+      );
+
+      if (!handler) {
+        loggerBridge(`[complete] Resource handler not found for: ${ref.uri}`);
+        return undefined;
+      }
+    } else {
+      loggerBridge(`[complete] Unsupported reference type`);
+      return undefined;
+    }
+
+    // Check if the handler supports completions
+    const caps = handler.getServerCapabilities();
+    if (!caps.completions) {
+      loggerBridge(
+        `[complete] Server does not support completions for ${ref.type === 'ref/prompt' ? ref.name : ref.uri}`
+      );
+      return undefined;
+    }
+
+    try {
+      // Call the completion method on the handler
+      loggerBridge(
+        `[complete] Result for ${ref.type === 'ref/prompt' ? ref.name : ref.uri}`
+      );
+      return await handler.complete(params);
+    } catch (err: any) {
+      loggerBridge(
+        `[complete] Failed to get completions:`,
+        err && (err.message || err)
+      );
+      return undefined;
     }
   }
 

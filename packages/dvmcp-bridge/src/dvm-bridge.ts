@@ -25,6 +25,7 @@ import {
   handlePromptsList,
   handlePromptsGet,
   handleNotificationsCancel,
+  handleCompletionComplete,
 } from './handlers';
 
 export class DVMBridge {
@@ -249,6 +250,15 @@ export class DVMBridge {
               this.relayHandler,
               this.config
             );
+            break;
+          case 'completion/complete':
+            const completionResponse = await handleCompletionComplete(
+              event,
+              this.mcpPool,
+              this.keyManager
+            );
+            if (!completionResponse) break;
+            await this.relayHandler.publishEvent(completionResponse);
             break;
           default:
             const notImpl = this.keyManager.signEvent({

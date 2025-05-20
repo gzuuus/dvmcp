@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { type Event, type Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
 import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { CompletionExecutor } from './completion-executor';
 import type { DvmcpDiscoveryConfig } from './config-schema';
 import {
   SERVER_ANNOUNCEMENT_KIND,
@@ -12,13 +13,16 @@ import {
   TAG_SERVER_IDENTIFIER,
   TAG_UNIQUE_IDENTIFIER,
 } from '@dvmcp/commons/constants';
-import type {
-  Tool,
-  Resource,
-  ListToolsResult,
-  ListPromptsResult,
-  Prompt,
-  ListResourcesResult,
+import {
+  type Tool,
+  type Resource,
+  type ListToolsResult,
+  type ListPromptsResult,
+  type Prompt,
+  type ListResourcesResult,
+  type CompleteRequest,
+  type CompleteResult,
+  CompleteRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
@@ -47,7 +51,7 @@ export class DiscoveryServer {
   private promptRegistry: PromptRegistry;
   private promptExecutor: PromptExecutor;
   private serverRegistry: ServerRegistry;
-
+  private completionExecutor: CompletionExecutor;
   private config: DvmcpDiscoveryConfig;
   private integratedRelays: Set<string> = new Set();
 
@@ -84,6 +88,14 @@ export class DiscoveryServer {
       this.keyManager,
       this.promptRegistry,
       this.config
+    );
+
+    this.completionExecutor = new CompletionExecutor(
+      this.relayHandler,
+      this.keyManager,
+      this.promptRegistry,
+      this.resourceRegistry,
+      this.serverRegistry
     );
 
     this.toolRegistry.setExecutionCallback(async (toolId, args) => {
@@ -654,6 +666,10 @@ export class DiscoveryServer {
         'Skipping discovery as no relay URLs are configured and running in interactive mode'
       );
     }
+    // Set up the completion request handler if any servers support completions
+    this.serverRegistry.setupCompletionHandler(this.mcpServer, (params) =>
+      this.getCompletions(params)
+    );
 
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
@@ -718,11 +734,23 @@ export class DiscoveryServer {
     return this.serverRegistry;
   }
 
+  /**
+   * Get completions for a prompt or resource argument
+   * @param params - Completion request parameters
+   * @returns Completion result with suggested values
+   */
+  public async getCompletions(
+    params: CompleteRequest['params']
+  ): Promise<CompleteResult> {
+    return this.completionExecutor.getCompletions(params);
+  }
+
   public cleanup(): void {
     this.relayHandler.cleanup();
     this.toolExecutor.cleanup();
     this.resourceExecutor.cleanup();
     this.promptExecutor.cleanup();
+    this.completionExecutor.cleanup();
 
     loggerDiscovery('DVMCP Discovery Server cleaned up');
   }

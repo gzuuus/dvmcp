@@ -1,10 +1,18 @@
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { BaseRegistry } from './base-registry';
 import type { DVMCPBridgeServer } from './base-interfaces';
+import {
+  CompleteRequestSchema,
+  type ServerCapabilities,
+  type CompleteRequest,
+  type CompleteResult,
+} from '@modelcontextprotocol/sdk/types.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 export interface ServerInfo {
   pubkey: string;
   content: string;
+  capabilities?: ServerCapabilities;
 }
 
 export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
@@ -21,7 +29,17 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
     pubkey: string,
     content: string
   ): void {
-    const serverInfo: ServerInfo = { pubkey, content };
+    let capabilities: ServerCapabilities | undefined;
+    try {
+      const announcement = JSON.parse(content);
+      if (announcement.capabilities) {
+        capabilities = announcement.capabilities;
+      }
+    } catch (error) {
+      loggerDiscovery(`Error parsing server announcement: ${error}`);
+    }
+
+    const serverInfo: ServerInfo = { pubkey, content, capabilities };
     this.servers.set(serverId, serverInfo);
 
     const serverCapability: DVMCPBridgeServer = {
@@ -102,7 +120,54 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
     this.servers.clear();
     this.items.clear();
   }
+
+  /**
+   * Check if a server supports completions
+   * @param serverId - Server's unique identifier
+   * @returns true if the server supports completions, false otherwise
+   */
+  public supportsCompletions(serverId: string): boolean {
+    const server = this.servers.get(serverId);
+    return !!server?.capabilities?.completions;
+  }
+
   protected registerWithMcp(): void {
     // No-op for server registry as servers are not registered with MCP directly
+  }
+
+  /**
+   * Set up the completion request handler in the MCP server if any registered servers support completions
+   * @param mcpServer - The MCP server instance
+   * @param completionHandler - Function to handle completion requests
+   */
+  public setupCompletionHandler(
+    mcpServer: McpServer,
+    completionHandler: (
+      params: CompleteRequest['params']
+    ) => Promise<CompleteResult>
+  ): void {
+    // Check if any registered servers support completions
+    const hasCompletionsSupport = Array.from(this.servers.keys()).some(
+      (serverId) => this.supportsCompletions(serverId)
+    );
+
+    if (hasCompletionsSupport) {
+      loggerDiscovery('Setting up completion request handler');
+      mcpServer.server.setRequestHandler(
+        CompleteRequestSchema,
+        async (request) => {
+          try {
+            return await completionHandler(request.params);
+          } catch (error) {
+            loggerDiscovery(`Error handling completion request: ${error}`);
+            throw error;
+          }
+        }
+      );
+    } else {
+      loggerDiscovery(
+        'No servers with completions capability found, skipping handler setup'
+      );
+    }
   }
 }

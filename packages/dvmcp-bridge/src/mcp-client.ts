@@ -2,15 +2,18 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import type { DvmcpBridgeConfig } from './config-schema';
 import { loggerBridge } from '@dvmcp/commons/logger';
-import type {
-  CallToolResult,
-  GetPromptResult,
-  ListPromptsResult,
-  ListResourcesResult,
-  ListToolsResult,
-  ReadResourceResult,
-  Implementation,
-  ServerCapabilities,
+import {
+  type CallToolResult,
+  type GetPromptResult,
+  type ListPromptsResult,
+  type ListResourcesResult,
+  type ListToolsResult,
+  type ReadResourceResult,
+  type Implementation,
+  type ServerCapabilities,
+  type CompleteRequest,
+  type CompleteResult,
+  CompleteResultSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
 export class MCPClientHandler {
@@ -96,6 +99,26 @@ export class MCPClientHandler {
     return result;
   }
 
+  async complete(
+    params: CompleteRequest['params']
+  ): Promise<CompleteResult | undefined> {
+    const capabilities = this.getServerCapabilities();
+    if (!capabilities.completions) {
+      loggerBridge('Completions not supported by MCP server');
+      return undefined;
+    }
+
+    try {
+      return await this.client.request(
+        { method: 'completion/complete', params },
+        CompleteResultSchema
+      );
+    } catch (error) {
+      loggerBridge('Error calling completion/complete:', error);
+      throw error;
+    }
+  }
+
   async disconnect() {
     await this.transport.close();
   }
@@ -129,3 +152,8 @@ export const callTool = (
   name: string,
   args: Record<string, any>
 ): Promise<CallToolResult | undefined> => handler.callTool(name, args);
+
+export const complete = (
+  handler: MCPClientHandler,
+  params: CompleteRequest['params']
+): Promise<CompleteResult | undefined> => handler.complete(params);

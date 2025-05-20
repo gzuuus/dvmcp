@@ -1,6 +1,6 @@
 export interface Capability {
   id: string;
-  type: 'prompt' | 'tool' | 'resource' | 'server';
+  type: 'prompt' | 'tool' | 'resource' | 'server' | 'completion';
 }
 
 export interface DVMCPBridgeServer extends Capability {

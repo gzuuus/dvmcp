@@ -12,7 +12,7 @@ import {
   TOOLS_LIST_KIND,
 } from '@dvmcp/commons/constants';
 import { createCapabilityId } from './utils';
-
+// TODO: remove built in tools and make a mcp server out of it, then add support to connect to local mcp servers
 /**
  * Built-in tool definition with execution function
  */

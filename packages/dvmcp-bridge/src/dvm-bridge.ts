@@ -28,6 +28,7 @@ import {
   handleCompletionComplete,
 } from './handlers';
 
+// TODO: add ping utility handler
 export class DVMBridge {
   private mcpPool: MCPPool;
   private nostrAnnouncer: NostrAnnouncer;

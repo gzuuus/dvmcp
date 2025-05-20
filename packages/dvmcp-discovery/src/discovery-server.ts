@@ -22,7 +22,6 @@ import {
   type ListResourcesResult,
   type CompleteRequest,
   type CompleteResult,
-  CompleteRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
@@ -124,11 +123,17 @@ export class DiscoveryServer {
       ],
     };
 
-    if (this.config.discovery?.limit !== undefined) {
-      filter.limit = this.config.discovery.limit;
-      loggerDiscovery(
-        `Limiting DVM discovery to ${this.config.discovery.limit}`
-      );
+    if (this.config.discovery?.limit) {
+      const limitValue = parseInt(String(this.config.discovery.limit), 10);
+
+      if (!isNaN(limitValue)) {
+        filter.limit = limitValue;
+        loggerDiscovery(`Limiting DVM discovery to ${limitValue}`);
+      } else {
+        loggerDiscovery(
+          `Invalid discovery limit value: ${this.config.discovery.limit}, ignoring limit`
+        );
+      }
     }
 
     loggerDiscovery('Querying Nostr relays for capability announcements...');

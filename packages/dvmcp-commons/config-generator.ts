@@ -3,7 +3,6 @@ import { parse, stringify } from 'yaml';
 import { writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { HEX_KEYS_REGEX } from './constants';
-// TODO: Review this is not working good, currently it overrides the config file
 export const CONFIG_EMOJIS = {
   NOSTR: '🔑',
   RELAY: '🔄',
@@ -93,23 +92,81 @@ export class ConfigGenerator<T extends Record<string, any>> {
   }
 
   private async handleObjectArrayItem(
-    fields: Record<string, FieldConfig>
+    fields: Record<string, FieldConfig>,
+    arrayName: string
   ): Promise<Record<string, any> | null> {
-    const item: Record<string, any> = { name: '' };
+    const item: Record<string, any> = {};
 
-    const name = await this.prompt(
-      `${CONFIG_EMOJIS.SERVER} Name (empty to finish):`
-    );
-    if (!name) return null;
+    if (arrayName === 'servers') {
+      console.log(`\n${CONFIG_EMOJIS.SERVER} Adding a new MCP server`);
 
-    item.name = name;
+      const command = await this.prompt(
+        `${CONFIG_EMOJIS.SERVER} Command to run the server (e.g., node, python, npx):`
+      );
+      if (!command) return null;
+      item.command = command;
 
-    for (const [fieldName, fieldConfig] of Object.entries(fields)) {
-      if (fieldName === 'name') continue;
+      const args: string[] = [];
+      console.log(`${CONFIG_EMOJIS.SERVER} Add command arguments:`);
+      while (true) {
+        const arg = await this.prompt(
+          `${CONFIG_EMOJIS.SERVER} Argument (empty to finish):`
+        );
+        if (!arg) break;
+        args.push(arg);
+      }
+      item.args = args;
 
-      const value = await this.handleField(fieldName, fieldConfig, false);
-      if (value === null) return null;
-      item[fieldName] = value;
+      for (const [fieldName, fieldConfig] of Object.entries(fields)) {
+        if (['command', 'args'].includes(fieldName)) continue;
+
+        if (fieldConfig.type === 'object-array') {
+          if (
+            await this.promptYesNo(
+              `${CONFIG_EMOJIS.SERVER} Add ${fieldName} price?`,
+              false
+            )
+          ) {
+            const value = await this.handleField(fieldName, fieldConfig, false);
+            if (value !== null) item[fieldName] = value;
+          }
+        } else if (fieldConfig.type === 'nested' && fieldName === 'env') {
+          if (
+            await this.promptYesNo(
+              `${CONFIG_EMOJIS.SERVER} Add environment variables?`,
+              false
+            )
+          ) {
+            const env: Record<string, string> = {};
+            while (true) {
+              const key = await this.prompt(
+                `${CONFIG_EMOJIS.SERVER} Environment variable name (empty to finish):`
+              );
+              if (!key) break;
+              const value = await this.prompt(
+                `${CONFIG_EMOJIS.SERVER} Value for ${key}:`
+              );
+              env[key] = value;
+            }
+            item.env = env;
+          }
+        }
+      }
+    } else {
+      const name = await this.prompt(
+        `${CONFIG_EMOJIS.PROMPT} Name (empty to finish):`
+      );
+      if (!name) return null;
+
+      item.name = name;
+
+      for (const [fieldName, fieldConfig] of Object.entries(fields)) {
+        if (fieldName === 'name') continue;
+
+        const value = await this.handleField(fieldName, fieldConfig, false);
+        if (value === null) return null;
+        item[fieldName] = value;
+      }
     }
 
     return item;
@@ -122,11 +179,12 @@ export class ConfigGenerator<T extends Record<string, any>> {
     currentValue?: any
   ): Promise<any> {
     const emoji = config.emoji || CONFIG_EMOJIS.PROMPT;
+    const description = config.description || fieldName;
 
     if (currentValue !== undefined) {
       if (config.type !== 'nested' && config.type !== 'object-array') {
         console.log(
-          `${CONFIG_EMOJIS.INFO} Current value: ${
+          `${CONFIG_EMOJIS.INFO} ${fieldName}: ${
             typeof currentValue === 'object'
               ? JSON.stringify(currentValue)
               : currentValue
@@ -135,7 +193,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
       }
 
       const keepCurrent = await this.promptYesNo(
-        `${emoji} Keep current ${fieldName}?`,
+        `${emoji} Keep current ${description}?`,
         true
       );
 
@@ -145,13 +203,13 @@ export class ConfigGenerator<T extends Record<string, any>> {
     }
 
     if (config.type === 'nested') {
-      console.log(`\n${emoji} ${config.description || fieldName}`);
+      console.log(`\n${emoji} ${description}`);
     }
 
     const handlers: Record<FieldType, () => Promise<any>> = {
       string: async () =>
         this.promptWithValidation(
-          `${emoji} ${config.description || (showFieldName ? fieldName : '')}:`,
+          `${emoji} ${description}:`,
           config,
           currentValue || config.default
         ),
@@ -159,7 +217,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
       hex: async () => {
         if (
           config.generator &&
-          (await this.promptYesNo(`${emoji} Generate new ${fieldName}?`))
+          (await this.promptYesNo(`${emoji} Generate new ${description}?`))
         ) {
           const value = config.generator();
           console.log(`${CONFIG_EMOJIS.PROMPT} ${value}`);
@@ -170,7 +228,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
         existingValue &&
           console.log(`${CONFIG_EMOJIS.PROMPT} ${existingValue}`);
         return this.promptWithValidation(
-          `${emoji} Enter ${fieldName}:`,
+          `${emoji} Enter ${description}:`,
           config,
           existingValue
         );
@@ -181,7 +239,9 @@ export class ConfigGenerator<T extends Record<string, any>> {
         if (array.length > 0) {
           console.log('\nCurrent items:');
           array.forEach((item: string, index: number) => {
-            console.log(`${CONFIG_EMOJIS.INFO} ${index + 1}. ${item}`);
+            console.log(
+              `${CONFIG_EMOJIS.INFO} ${index + 1}. ${JSON.stringify(item)}`
+            );
           });
 
           if (await this.promptYesNo(`${emoji} Remove any items?`, false)) {
@@ -199,10 +259,10 @@ export class ConfigGenerator<T extends Record<string, any>> {
           }
         }
 
-        if (await this.promptYesNo(`${emoji} Add ${fieldName}?`, true)) {
+        if (await this.promptYesNo(`${emoji} Add ${description}?`, true)) {
           while (true) {
             const item = await this.promptWithValidation(
-              `${emoji} Value (empty to finish):`,
+              `${emoji} Enter value for ${description} (empty to finish):`,
               config,
               '',
               true
@@ -234,11 +294,19 @@ export class ConfigGenerator<T extends Record<string, any>> {
       'object-array': async () => {
         let array: ArrayItem[] = currentValue || [];
         if (array.length > 0) {
-          console.log('\nCurrent servers:');
+          console.log(`\nCurrent ${fieldName}:`);
           array.forEach((item: ArrayItem, index: number) => {
-            console.log(
-              `${CONFIG_EMOJIS.INFO} ${index + 1}. ${item.name} (${item.command} ${item.args.join(' ')})`
-            );
+            if (fieldName === 'servers') {
+              console.log(
+                `${CONFIG_EMOJIS.INFO} ${index + 1}. ${item.name} (${item.command} ${item.args?.join(' ') || ''})`
+              );
+            } else if (item.name) {
+              console.log(`${CONFIG_EMOJIS.INFO} ${index + 1}. ${item.name}`);
+            } else {
+              console.log(
+                `${CONFIG_EMOJIS.INFO} ${index + 1}. ${JSON.stringify(item)}`
+              );
+            }
           });
           console.log('');
           const keepCurrent = await this.promptYesNo(
@@ -247,11 +315,11 @@ export class ConfigGenerator<T extends Record<string, any>> {
           );
           if (!keepCurrent) {
             array = [];
-            console.log(`${CONFIG_EMOJIS.INFO} Cleared existing servers.`);
+            console.log(`${CONFIG_EMOJIS.INFO} Cleared existing ${fieldName}.`);
           } else {
             if (
               await this.promptYesNo(
-                `${emoji} Remove any existing servers?`,
+                `${emoji} Remove any existing ${fieldName}?`,
                 false
               )
             ) {
@@ -259,13 +327,14 @@ export class ConfigGenerator<T extends Record<string, any>> {
                 const index =
                   parseInt(
                     await this.prompt(
-                      'Enter server number to remove (0 to finish):'
+                      `Enter ${fieldName} number to remove (0 to finish):`
                     )
                   ) - 1;
                 if (isNaN(index) || index < 0) break;
                 if (index < array.length) {
+                  const itemName = array[index].name || 'item';
                   console.log(
-                    `${CONFIG_EMOJIS.INFO} Removed server: ${array[index].name}`
+                    `${CONFIG_EMOJIS.INFO} Removed ${fieldName}: ${itemName}`
                   );
                   array.splice(index, 1);
                 }
@@ -276,10 +345,16 @@ export class ConfigGenerator<T extends Record<string, any>> {
 
         if (await this.promptYesNo(`${emoji} Add new ${fieldName}?`, true)) {
           while (true) {
-            const item = await this.handleObjectArrayItem(config.fields!);
+            const item = await this.handleObjectArrayItem(
+              config.fields!,
+              fieldName
+            );
             if (!item) break;
             array.push(item as ArrayItem);
-            console.log(`${CONFIG_EMOJIS.INFO} Added new server: ${item.name}`);
+            const itemName = item.name || 'item';
+            console.log(
+              `${CONFIG_EMOJIS.INFO} Added new ${fieldName}: ${itemName}`
+            );
             console.log('');
           }
         }
@@ -343,6 +418,36 @@ export class ConfigGenerator<T extends Record<string, any>> {
     }
   }
 
+  /**
+   * Remove empty values from an object recursively
+   *
+   * @param obj The object to clean
+   * @returns The cleaned object with empty values removed
+   */
+  private cleanEmptyValues(obj: Record<string, any>): Record<string, any> {
+    const result: Record<string, any> = {};
+
+    for (const [key, value] of Object.entries(obj)) {
+      if (value === '') continue;
+      if (Array.isArray(value) && value.length === 0) continue;
+
+      if (
+        value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value)
+      ) {
+        const cleaned = this.cleanEmptyValues(value);
+        if (Object.keys(cleaned).length > 0) {
+          result[key] = cleaned;
+        }
+      } else {
+        result[key] = value;
+      }
+    }
+
+    return result;
+  }
+
   async generate(): Promise<T> {
     const config: Record<string, any> = {};
     for (const [fieldName, fieldConfig] of Object.entries(this.fields)) {
@@ -355,10 +460,12 @@ export class ConfigGenerator<T extends Record<string, any>> {
       );
     }
 
-    writeFileSync(this.configPath, stringify(config));
+    const cleanedConfig = this.cleanEmptyValues(config);
+
+    writeFileSync(this.configPath, stringify(cleanedConfig));
     console.log(`\n${CONFIG_EMOJIS.SUCCESS} Configuration saved successfully!`);
 
-    return config as T;
+    return cleanedConfig as T;
   }
 }
 

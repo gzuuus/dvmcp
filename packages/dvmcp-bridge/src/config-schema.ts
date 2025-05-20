@@ -311,6 +311,54 @@ export const dvmcpBridgeConfigSchema: ConfigSchema = {
               },
             },
           },
+          prompts: {
+            type: 'array',
+            itemType: 'object',
+            required: false,
+            doc: 'Prompts and per-prompt pricing exposed by this server.',
+            fields: {
+              name: {
+                type: 'string',
+                required: true,
+                doc: 'Prompt name.',
+              },
+              price: {
+                type: 'string',
+                required: false,
+                doc: 'Prompt price (string integer, e.g. in sats).',
+              },
+              unit: {
+                type: 'string',
+                required: false,
+                default: 'sats',
+                doc: 'Prompt price unit (e.g. "sats")',
+              },
+            },
+          },
+          resources: {
+            type: 'array',
+            itemType: 'object',
+            required: false,
+            doc: 'Resources and per-resource pricing exposed by this server.',
+            fields: {
+              uri: {
+                type: 'string',
+                required: true,
+                doc: 'Resource URI.',
+              },
+              price: {
+                type: 'string',
+                required: false,
+                doc: 'Resource price (string integer, e.g. in sats).',
+              },
+              unit: {
+                type: 'string',
+                required: false,
+                default: 'sats',
+                doc: 'Resource price unit (e.g. "sats")',
+              },
+            },
+          },
         },
       },
     },

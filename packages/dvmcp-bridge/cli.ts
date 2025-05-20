@@ -14,7 +14,7 @@ import {
   buildYargsOptions,
   extractConfigOverrides,
 } from '@dvmcp/commons/config/cli';
-import type { ConfigFieldMeta } from '@dvmcp/commons/config';
+import type { DvmcpBridgeConfig } from './src/config-schema.js';
 
 const reservedFlags = [
   'configure',
@@ -63,22 +63,32 @@ const cli = yargs(hideBin(process.argv))
     ['$0 --config-path ./bridge.yml --help', 'Show help with docs'],
     ['$0 --configure', 'Run config wizard'],
   ])
-  .wrap(Math.min(110, process.stdout.columns || 100));
+  .wrap(Math.min(110, process.stdout.columns || 100))
+  .version(require('./package.json').version);
 const args = cli.parseSync();
 
 const configPath = args['config-path']
   ? resolve(args['config-path'])
   : join(process.cwd(), 'config.dvmcp.yml');
 
-// FIXME: fix this, right now its simply overwritting the config file empty
 const configure = async (): Promise<void> => {
   const { ConfigGenerator } = await import('@dvmcp/commons/config-generator');
+  const { configSchemaToFieldConfig } = await import(
+    '@dvmcp/commons/config/adapter'
+  );
+  const { dvmcpBridgeConfigSchema } = await import('./src/config-schema');
 
   console.log(
     `${CONFIG_EMOJIS.SETUP} DVMCP Bridge Configuration Setup ${CONFIG_EMOJIS.SETUP}`
   );
 
-  const generator = new ConfigGenerator(configPath, {});
+  // Convert the config schema to field config format
+  const fieldConfig = configSchemaToFieldConfig(dvmcpBridgeConfigSchema);
+
+  const generator = new ConfigGenerator<DvmcpBridgeConfig>(
+    configPath,
+    fieldConfig
+  );
   await generator.generate();
 };
 
@@ -92,7 +102,7 @@ const runApp = async (config: any) => {
   }
 };
 
-const deleteAnnouncement = async (config: any) => {
+const deleteAnnouncement = async (config: DvmcpBridgeConfig) => {
   const reason =
     typeof args['reason'] === 'string' ? args['reason'] : undefined;
   try {
@@ -113,25 +123,7 @@ const deleteAnnouncement = async (config: any) => {
 };
 
 const cliMain = async () => {
-  if (args['help']) {
-    cli.showHelp();
-    console.log('\n---\nConfig schema options:');
-    Object.entries(
-      dvmcpBridgeConfigSchema as Record<string, ConfigFieldMeta>
-    ).forEach(([section, meta]) => {
-      console.log(`  --${section}.* : ${meta.doc}`);
-      if (meta.fields) {
-        Object.entries(meta.fields).forEach(([sub, submeta]) => {
-          console.log(
-            `    --${section}.${sub} : ${submeta.doc}${submeta.required ? ' (required)' : ''}`
-          );
-        });
-      }
-    });
-    process.exit(0);
-  }
-
-  if (args['configure']) {
+  if (args.configure) {
     await configure();
     return;
   }
@@ -182,7 +174,7 @@ const cliMain = async () => {
     process.exit(1);
   }
 
-  if (args['delete-announcement']) {
+  if (args.deleteAnnouncement) {
     if (!existsSync(configPath)) {
       console.error(
         `${CONFIG_EMOJIS.INFO} No configuration file found at ${configPath}`
@@ -200,7 +192,7 @@ const cliMain = async () => {
     await configure();
   }
 
-  if (args['verbose']) {
+  if (args.verbose) {
     const { default: yaml } = await import('yaml');
     console.log('\n📋 DVMCP Bridge Configuration:');
     console.log(yaml.stringify(config));

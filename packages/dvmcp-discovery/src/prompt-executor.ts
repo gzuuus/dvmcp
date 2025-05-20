@@ -20,7 +20,7 @@ import type {
   GetPromptRequest,
   GetPromptResult,
 } from '@modelcontextprotocol/sdk/types.js';
-// TODO: add completion feature
+
 export class PromptExecutor extends BaseExecutor<
   PromptCapability,
   GetPromptRequest['params']['arguments'],

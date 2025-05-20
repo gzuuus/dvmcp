@@ -6,16 +6,12 @@ import { hideBin } from 'yargs/helpers';
 import {
   CONFIG_EMOJIS,
   ConfigGenerator,
-  generateHexKey,
-  validateHexKey,
-  validateRelayUrl,
-  type FieldConfig,
 } from '@dvmcp/commons/config-generator';
 import {
   buildYargsOptions,
   extractConfigOverrides,
 } from '@dvmcp/commons/config';
-import { loggerDiscovery as logger } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { decodeNaddr, decodeNprofile } from './src/utils';
 import {
   fetchProviderAnnouncement,
@@ -88,8 +84,8 @@ const cli = yargs(hideBin(process.argv))
     ['$0 --server <naddr>', 'Connect to a specific server'],
     ['$0 --verbose', 'Show verbose output'],
   ])
-  .wrap(Math.min(110, process.stdout.columns || 100));
-
+  .wrap(Math.min(110, process.stdout.columns || 100))
+  .version(require('./package.json').version);
 const args = cli.parseSync();
 
 const configPath = args['config-path']
@@ -128,77 +124,29 @@ function setupInMemoryConfig(relays: string[], pubkey: string): void {
   inMemoryConfig = config;
 }
 
-const configFields: Record<string, FieldConfig> = {
-  nostr: {
-    type: 'nested',
-    description: 'Nostr Configuration',
-    emoji: CONFIG_EMOJIS.NOSTR,
-    fields: {
-      privateKey: {
-        type: 'hex',
-        description: 'Private key for Nostr identity',
-        generator: generateHexKey,
-        validation: validateHexKey,
-        required: true,
-      },
-      relayUrls: {
-        type: 'array',
-        description: 'List of relay URLs to connect to',
-        validation: validateRelayUrl,
-        required: true,
-      },
-    },
-  },
-  mcp: {
-    type: 'nested',
-    description: 'Service Configuration',
-    emoji: CONFIG_EMOJIS.SERVICE,
-    fields: {
-      name: {
-        type: 'string',
-        description: 'Name of the service',
-        default: DEFAULT_VALUES.DEFAULT_MCP_NAME,
-      },
-      version: {
-        type: 'string',
-        description: 'Version of the service',
-        default: DEFAULT_VALUES.DEFAULT_MCP_VERSION,
-        required: true,
-      },
-      about: {
-        type: 'string',
-        description: 'Description of the service',
-        default: DEFAULT_VALUES.DEFAULT_MCP_ABOUT,
-      },
-    },
-  },
-  whitelist: {
-    type: 'nested',
-    description: 'DVM Whitelist Configuration',
-    emoji: CONFIG_EMOJIS.WHITELIST,
-    fields: {
-      allowedDVMs: {
-        type: 'set',
-        description: 'List of allowed DVM public keys',
-        validation: validateHexKey,
-      },
-    },
-  },
-};
-
 const configure = async (): Promise<void> => {
-  logger(
+  const { configSchemaToFieldConfig } = await import(
+    '@dvmcp/commons/config/adapter'
+  );
+  const { dvmcpDiscoveryConfigSchema } = await import('./src/config-schema');
+
+  console.log(
     `${CONFIG_EMOJIS.SETUP} DVMCP Discovery Configuration Setup ${CONFIG_EMOJIS.SETUP}`
   );
+
+  const fieldConfig = configSchemaToFieldConfig(dvmcpDiscoveryConfigSchema);
+
   const generator = new ConfigGenerator<DvmcpDiscoveryConfig>(
     configPath,
-    configFields
+    fieldConfig
   );
   await generator.generate();
 };
 
 async function setupFromProvider(nprofileEntity: string): Promise<void> {
-  logger(`${CONFIG_EMOJIS.INFO} Setting up from provider: ${nprofileEntity}`);
+  loggerDiscovery(
+    `${CONFIG_EMOJIS.INFO} Setting up from provider: ${nprofileEntity}`
+  );
 
   const providerData = decodeNprofile(nprofileEntity);
   if (!providerData) {
@@ -214,7 +162,9 @@ async function setupFromProvider(nprofileEntity: string): Promise<void> {
     }
 
     setupInMemoryConfig(providerData.relays, providerData.pubkey);
-    logger(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from provider`);
+    loggerDiscovery(
+      `${CONFIG_EMOJIS.SUCCESS} Successfully set up from provider`
+    );
   } catch (error) {
     console.error(`Error: ${error}`);
     process.exit(1);
@@ -222,7 +172,9 @@ async function setupFromProvider(nprofileEntity: string): Promise<void> {
 }
 
 async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
-  logger(`${CONFIG_EMOJIS.INFO} Setting up from server: ${naddrEntity}`);
+  loggerDiscovery(
+    `${CONFIG_EMOJIS.INFO} Setting up from server: ${naddrEntity}`
+  );
 
   const addrData = decodeNaddr(naddrEntity);
   if (!addrData) {
@@ -244,7 +196,7 @@ async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
     }
 
     setupInMemoryConfig(addrData.relays, addrData.pubkey);
-    logger(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from server`);
+    loggerDiscovery(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from server`);
 
     return {
       pubkey: addrData.pubkey,
@@ -298,28 +250,6 @@ const runApp = async (directServerInfo?: DirectServerInfo): Promise<void> => {
 };
 
 const cliMain = async (): Promise<void> => {
-  if (args.help) {
-    cli.showHelp();
-    console.log('\n---\nConfig schema options:');
-    Object.entries(dvmcpDiscoveryConfigSchema as Record<string, any>).forEach(
-      ([section, meta]) => {
-        console.log(`  --${section}.* : ${meta.doc || ''}`);
-        if (meta.fields) {
-          Object.entries(meta.fields).forEach(([sub, submeta]) => {
-            const typedSubmeta = submeta as {
-              doc?: string;
-              required?: boolean;
-            };
-            console.log(
-              `    --${section}.${sub} : ${typedSubmeta.doc || ''}${typedSubmeta.required ? ' (required)' : ''}`
-            );
-          });
-        }
-      }
-    );
-    process.exit(0);
-  }
-
   if (args.configure) {
     await configure();
     return;

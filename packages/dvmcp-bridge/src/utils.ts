@@ -1,16 +1,6 @@
 import { TAG_EVENT_ID, TAG_PUBKEY } from '@dvmcp/commons/constants';
 import { type KeyManager } from '@dvmcp/commons/nostr/key-manager';
-
-export function slugify(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^\w\s-]/g, '')
-    .replace(/[\s_-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
+import { slugify } from '@dvmcp/commons/utils';
 
 export function getServerId(
   serverName: string,

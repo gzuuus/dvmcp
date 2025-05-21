@@ -32,11 +32,8 @@ import { PromptExecutor } from './prompt-executor';
 import { ServerRegistry } from './server-registry';
 import type { DVMAnnouncement } from './direct-discovery';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
-import {
-  builtInToolRegistry,
-  setDiscoveryServerReference,
-} from './built-in-tools';
-import { createCapabilityId } from './utils';
+import { initBuiltInTools } from './built-in-tools';
+import { createCapabilityId } from '@dvmcp/commons/utils';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;
@@ -109,8 +106,13 @@ export class DiscoveryServer {
       return this.promptExecutor.executePrompt(promptId, args);
     });
 
-    setDiscoveryServerReference(this);
+    // Initialize built-in tools if interactive mode is enabled
+    if (this.config.featureFlags?.interactive) {
+      loggerDiscovery('Interactive mode enabled: Registering built-in tools.');
+      initBuiltInTools(this.mcpServer, this.toolRegistry, this);
+    }
   }
+
   private async startDiscovery() {
     loggerDiscovery('Starting discovery of MCP capabilities...');
 
@@ -217,7 +219,11 @@ export class DiscoveryServer {
     return this.toolRegistry.getTool(toolId) !== undefined;
   }
 
-  public registerToolFromAnnouncement(pubkey: string, tool: Tool): string {
+  public registerToolFromAnnouncement(
+    pubkey: string,
+    tool: Tool,
+    serverId: string
+  ): string {
     const toolId = createCapabilityId(tool.name, pubkey);
 
     if (this.isToolRegistered(tool.name, pubkey)) {
@@ -227,7 +233,7 @@ export class DiscoveryServer {
       return toolId;
     }
 
-    this.toolRegistry.registerTool(toolId, tool, pubkey);
+    this.toolRegistry.registerTool(toolId, tool, pubkey, serverId);
     loggerDiscovery(`Registered tool from announcement: ${toolId}`);
 
     return toolId;
@@ -549,17 +555,11 @@ export class DiscoveryServer {
   /**
    * Remove all tools from a specific provider
    * @param providerPubkey - Public key of the provider whose tools should be removed
-   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
    * @returns Array of removed tool IDs
    */
-  public removeToolsByProvider(
-    providerPubkey: string,
-    excludeBuiltIn: boolean = true
-  ): string[] {
-    const removedTools = this.toolRegistry.removeToolsByProvider(
-      providerPubkey,
-      excludeBuiltIn
-    );
+  public removeToolsByProvider(providerPubkey: string): string[] {
+    const removedTools =
+      this.toolRegistry.removeToolsByProvider(providerPubkey);
     if (removedTools.length > 0) {
       this.notifyToolListChanged();
       loggerDiscovery(
@@ -572,17 +572,10 @@ export class DiscoveryServer {
   /**
    * Remove tools matching a regex pattern
    * @param pattern - Regex pattern to match against tool IDs
-   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
    * @returns Array of removed tool IDs
    */
-  public removeToolsByPattern(
-    pattern: RegExp,
-    excludeBuiltIn: boolean = true
-  ): string[] {
-    const removedTools = this.toolRegistry.removeToolsByPattern(
-      pattern,
-      excludeBuiltIn
-    );
+  public removeToolsByPattern(pattern: RegExp): string[] {
+    const removedTools = this.toolRegistry.removeToolsByPattern(pattern);
     if (removedTools.length > 0) {
       this.notifyToolListChanged();
       loggerDiscovery(
@@ -599,8 +592,6 @@ export class DiscoveryServer {
     loggerDiscovery(
       'Starting discovery server with direct server capabilities...'
     );
-
-    this.registerBuiltInCapabilities();
 
     if (announcement?.tools && announcement.tools.length > 0) {
       this.registerToolsFromAnnouncement(pubkey, announcement.tools);
@@ -657,8 +648,6 @@ export class DiscoveryServer {
       `Relay URLs: ${this.config.nostr.relayUrls.length > 0 ? this.config.nostr.relayUrls.join(', ') : 'none'}`
     );
 
-    this.registerBuiltInCapabilities();
-
     if (this.config.nostr.relayUrls.length > 0 || !isInteractive) {
       await this.startDiscovery();
       loggerDiscovery(
@@ -681,54 +670,6 @@ export class DiscoveryServer {
     loggerDiscovery('MCP server connected');
 
     loggerDiscovery('DVMCP Discovery Server started');
-  }
-
-  /**
-   * Register all built-in capabilities (tools, resources, prompts) with their respective registries
-   * @private
-   */
-  private registerBuiltInCapabilities(): void {
-    // Check if interactive mode is enabled in the configuration
-    const isInteractiveMode = this.config.featureFlags?.interactive === true;
-
-    if (!isInteractiveMode) {
-      loggerDiscovery(
-        'Interactive mode is disabled. Skipping built-in capabilities registration.'
-      );
-      return;
-    }
-
-    loggerDiscovery(
-      'Interactive mode is enabled. Registering built-in capabilities...'
-    );
-
-    this.registerBuiltInTools();
-  }
-
-  /**
-   * Register built-in tools with the tool registry
-   * @private
-   */
-  private registerBuiltInTools(): void {
-    // Get all built-in tools and register them
-    const builtInTools = builtInToolRegistry.getAllTools();
-    let registeredCount = 0;
-
-    for (const [toolId, builtInTool] of builtInTools) {
-      try {
-        this.toolRegistry.registerBuiltInTool(toolId, builtInTool.tool);
-        loggerDiscovery(`Registered built-in tool: ${toolId}`);
-        registeredCount++;
-      } catch (error) {
-        console.error(`Failed to register built-in tool ${toolId}:`, error);
-      }
-    }
-
-    if (registeredCount > 0) {
-      loggerDiscovery(`Registered ${registeredCount} built-in tools`);
-    } else {
-      loggerDiscovery('No built-in tools were registered');
-    }
   }
 
   /**

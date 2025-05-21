@@ -1,7 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
 import { z } from 'zod';
-import { createCapabilityId } from './utils';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
 import type {
@@ -9,6 +8,7 @@ import type {
   GetPromptResult,
   Prompt,
 } from '@modelcontextprotocol/sdk/types.js';
+import { createCapabilityId } from '@dvmcp/commons/utils';
 
 export interface PromptArgument {
   name: string;
@@ -218,23 +218,48 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
         loggerDiscovery(`Warning: Prompt ${promptId} has no arguments defined`);
       }
 
-      this.mcpServer.prompt(
+      const registeredPrompt = this.mcpServer.prompt(
         promptId,
         prompt.description || `Prompt: ${promptId}`,
         zodSchema,
-        async (args: GetPromptRequest['params']['arguments']) => {
+        async (args) => {
           try {
             const result = await this.executionCallback?.(promptId, args);
 
-            return result;
+            return (
+              result || {
+                messages: [
+                  {
+                    role: 'assistant',
+                    content: {
+                      type: 'text',
+                      text: 'No result returned from prompt execution',
+                    },
+                  },
+                ],
+              }
+            );
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
             console.error(`Error executing prompt ${promptId}:`, errorMessage);
-            throw error;
+            return {
+              messages: [
+                {
+                  role: 'assistant',
+                  content: {
+                    type: 'text',
+                    text: `Error: ${errorMessage}`,
+                  },
+                },
+              ],
+            };
           }
         }
       );
+
+      // Store the reference to the registered prompt
+      this.storeRegisteredRef(promptId, registeredPrompt);
 
       loggerDiscovery('Prompt registered successfully:', promptId);
     } catch (error) {

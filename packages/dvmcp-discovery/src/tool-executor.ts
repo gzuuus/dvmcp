@@ -81,15 +81,6 @@ export class ToolExecutor extends BaseExecutor<
 
     const tool = toolInfo.item as ToolCapability;
 
-    if (tool.isBuiltIn) {
-      try {
-        return await this.toolRegistry.executeBuiltInTool(toolId, params);
-      } catch (error) {
-        loggerDiscovery(`Error executing built-in tool ${toolId}:`, error);
-        throw error;
-      }
-    }
-
     return this.execute(toolId, tool, params);
   }
 

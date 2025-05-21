@@ -2,15 +2,19 @@ import { loadDiscoveryConfig } from './src/config-loader';
 import { DiscoveryServer } from './src/discovery-server';
 import type { DVMAnnouncement } from './src/direct-discovery';
 import { loggerDiscovery as logger } from '@dvmcp/commons/logger';
+import type { DvmcpDiscoveryConfig } from './src/config-schema';
 
 export interface DirectServerInfo {
   pubkey: string;
   announcement: DVMAnnouncement;
 }
 
-async function main(directServerInfo?: DirectServerInfo | null) {
+async function main(
+  directServerInfo?: DirectServerInfo | null,
+  preloadedConfig?: DvmcpDiscoveryConfig
+) {
   try {
-    const config = await loadDiscoveryConfig();
+    const config = preloadedConfig || (await loadDiscoveryConfig());
     const server = new DiscoveryServer(config);
 
     if (directServerInfo) {

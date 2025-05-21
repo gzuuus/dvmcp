@@ -1,28 +1,13 @@
 import { nip19 } from 'nostr-tools';
 import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
-
-// Default fallback relay when no relay hints are provided
-export const DEFAULT_FALLBACK_RELAY = 'wss://relay.dvmcp.fun';
-
-export interface NprofileData {
-  pubkey: string;
-  relays: string[];
-}
-
-export interface NaddrData {
-  identifier: string;
-  pubkey: string;
-  kind: number;
-  relays: string[];
-}
+import type { AddressPointer, ProfilePointer } from 'nostr-tools/nip19';
 
 /**
  * Decodes an nprofile NIP-19 entity
  * @param nprofileEntity The bech32-encoded nprofile string
  * @returns The decoded nprofile data or null if invalid
  */
-export function decodeNprofile(nprofileEntity: string): NprofileData | null {
+export function decodeNprofile(nprofileEntity: string): ProfilePointer | null {
   try {
     const { type, data } = nip19.decode(nprofileEntity);
     if (type !== 'nprofile') {
@@ -30,15 +15,7 @@ export function decodeNprofile(nprofileEntity: string): NprofileData | null {
       return null;
     }
 
-    // Ensure we have at least one relay by using the fallback if necessary
-    const profileData = data as NprofileData;
-    if (!profileData.relays || profileData.relays.length === 0) {
-      loggerDiscovery(
-        `No relay hints in nprofile, using fallback relay: ${DEFAULT_FALLBACK_RELAY}`
-      );
-      profileData.relays = [DEFAULT_FALLBACK_RELAY];
-    }
-
+    const profileData = data as ProfilePointer;
     return profileData;
   } catch (error) {
     console.error(`Failed to decode nprofile: ${error}`);
@@ -51,7 +28,7 @@ export function decodeNprofile(nprofileEntity: string): NprofileData | null {
  * @param naddrEntity The bech32-encoded naddr string
  * @returns The decoded naddr data or null if invalid
  */
-export function decodeNaddr(naddrEntity: string): NaddrData | null {
+export function decodeNaddr(naddrEntity: string): AddressPointer | null {
   try {
     const { type, data } = nip19.decode(naddrEntity);
     if (type !== 'naddr') {
@@ -59,7 +36,6 @@ export function decodeNaddr(naddrEntity: string): NaddrData | null {
       return null;
     }
 
-    // Validate that the kind is a server announcement or other valid DVMCP kind
     if (data.kind !== SERVER_ANNOUNCEMENT_KIND) {
       console.error(
         `Expected kind ${SERVER_ANNOUNCEMENT_KIND}, got ${data.kind}`
@@ -67,15 +43,7 @@ export function decodeNaddr(naddrEntity: string): NaddrData | null {
       return null;
     }
 
-    // Ensure we have at least one relay by using the fallback if necessary
-    const addrData = data as NaddrData;
-    if (!addrData.relays || addrData.relays.length === 0) {
-      loggerDiscovery(
-        `No relay hints in naddr, using fallback relay: ${DEFAULT_FALLBACK_RELAY}`
-      );
-      addrData.relays = [DEFAULT_FALLBACK_RELAY];
-    }
-
+    const addrData = data as AddressPointer;
     return addrData;
   } catch (error) {
     console.error(`Failed to decode naddr: ${error}`);
@@ -83,9 +51,31 @@ export function decodeNaddr(naddrEntity: string): NaddrData | null {
   }
 }
 
+/**
+ * Creates a unique identifier for a capability based on its name and provider's public key
+ * @param capabilityName - The name of the capability
+ * @param pubkey - The public key of the provider
+ * @returns A unique identifier for the capability
+ */
 export function createCapabilityId(
   capabilityName: string,
   pubkey: string
 ): string {
   return `${capabilityName}_${pubkey.slice(0, 4)}`;
+}
+
+/**
+ * Converts a string to a URL-friendly slug
+ * @param input - The string to convert
+ * @returns A URL-friendly slug
+ */
+export function slugify(input: string): string {
+  return input
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s-]/g, '')
+    .replace(/[\s_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }

@@ -7,7 +7,6 @@ import { ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
-import { builtInToolRegistry } from './built-in-tools';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
 
@@ -65,11 +64,7 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
   }
 
   public clear(): void {
-    for (const [id, info] of this.items.entries()) {
-      if (!info.item.isBuiltIn) {
-        this.items.delete(id);
-      }
-    }
+    super.clear();
   }
 
   /**
@@ -79,7 +74,6 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
    */
   public removeTool(toolId: string): boolean {
     const toolInfo = this.getItemInfo(toolId);
-
     if (!toolInfo) {
       loggerDiscovery(`Tool not found for removal: ${toolId}`);
       return false;
@@ -95,26 +89,14 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
   /**
    * Remove all tools from a specific provider
    * @param providerPubkey - Public key of the provider whose tools should be removed
-   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
    * @returns Array of removed tool IDs
    */
-  public removeToolsByProvider(
-    providerPubkey: string,
-    excludeBuiltIn: boolean = true
-  ): string[] {
-    if (!excludeBuiltIn) {
-      return this.removeItemsByProvider(providerPubkey);
-    }
-
+  public removeToolsByProvider(providerPubkey: string): string[] {
     const removedToolIds: string[] = [];
 
     for (const [id, info] of this.items.entries()) {
-      if (excludeBuiltIn && info.item.isBuiltIn) {
-        continue;
-      }
-
       if (info.providerPubkey === providerPubkey) {
-        this.items.delete(id);
+        this.removeItem(id);
         removedToolIds.push(id);
         loggerDiscovery(`Removed tool ${id} from provider ${providerPubkey}`);
       }
@@ -126,26 +108,14 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
   /**
    * Remove tools matching a regex pattern
    * @param pattern - Regex pattern to match against tool IDs
-   * @param excludeBuiltIn - Whether to exclude built-in tools from removal (default: true)
    * @returns Array of removed tool IDs
    */
-  public removeToolsByPattern(
-    pattern: RegExp,
-    excludeBuiltIn: boolean = true
-  ): string[] {
-    if (!excludeBuiltIn) {
-      return this.removeItemsByPattern(pattern);
-    }
-
+  public removeToolsByPattern(pattern: RegExp): string[] {
     const removedToolIds: string[] = [];
 
-    for (const [id, info] of this.items.entries()) {
-      if (excludeBuiltIn && info.item.isBuiltIn) {
-        continue;
-      }
-
+    for (const [id] of this.items.entries()) {
       if (pattern.test(id)) {
-        this.items.delete(id);
+        this.removeItem(id);
         removedToolIds.push(id);
         loggerDiscovery(`Removed tool ${id} matching pattern ${pattern}`);
       }
@@ -155,29 +125,32 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
   }
   protected registerWithMcp(toolId: string, tool: ToolCapability): void {
     try {
-      this.mcpServer.tool(
+      const registeredTool = this.mcpServer.tool(
         toolId,
         tool.description ?? '',
         this.mapJsonSchemaToZod(tool.inputSchema),
-        async (params: CallToolRequest['params']) => {
+        async (args) => {
           try {
-            let result: CallToolResult | undefined;
-
-            const toolInfo = this.getItemInfo(toolId);
-
-            if (toolInfo?.item.isBuiltIn) {
-              result = await this.executeBuiltInTool(toolId, params);
-            } else {
-              result = await this.executionCallback?.(toolId, params);
-            }
-            return result;
+            const params = { ...args, name: toolId };
+            const result = await this.executionCallback?.(toolId, params);
+            return (
+              result || {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'No result returned from tool execution',
+                  },
+                ],
+                isError: true,
+              }
+            );
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
             return {
               content: [
                 {
-                  type: 'text' as const,
+                  type: 'text',
                   text: `Error: ${errorMessage}`,
                 },
               ],
@@ -186,52 +159,14 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
           }
         }
       );
+
+      this.storeRegisteredRef(toolId, registeredTool);
+
       loggerDiscovery('Tool registered successfully:', toolId);
     } catch (error) {
       // TODO: Handle collisions more intelligently
       console.error('Error registering tool:', toolId, error);
     }
-  }
-
-  /**
-   * Register a built-in tool with the registry
-   * @param toolId - ID of the tool
-   * @param tool - Tool definition
-   */
-  public registerBuiltInTool(toolId: string, tool: Tool): void {
-    try {
-      ToolSchema.parse(tool);
-      const toolCapability: ToolCapability & { isBuiltIn: boolean } = {
-        ...tool,
-        id: toolId,
-        type: 'tool',
-        isBuiltIn: true,
-      };
-
-      this.items.set(toolId, { item: toolCapability });
-      this.registerWithMcp(toolId, toolCapability);
-    } catch (error) {
-      console.error(`Invalid MCP built-in tool format for ${toolId}:`, error);
-      throw error;
-    }
-  }
-
-  /**
-   * Execute a built-in tool
-   * @param toolId - ID of the tool
-   * @param args - Tool arguments
-   * @returns Tool execution result
-   */
-  public async executeBuiltInTool(
-    toolId: string,
-    args: unknown
-  ): Promise<CallToolResult> {
-    const builtInTool = builtInToolRegistry.getTool(toolId);
-    if (!builtInTool) {
-      throw new Error(`Built-in tool ${toolId} not found`);
-    }
-
-    return builtInTool.execute(args) as Promise<CallToolResult>;
   }
 
   private executionCallback?: (

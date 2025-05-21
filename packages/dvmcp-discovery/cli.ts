@@ -10,9 +10,9 @@ import {
 import {
   buildYargsOptions,
   extractConfigOverrides,
+  deepMerge,
 } from '@dvmcp/commons/config';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
-import { decodeNaddr, decodeNprofile } from './src/utils';
 import {
   fetchProviderAnnouncement,
   fetchServerAnnouncement,
@@ -25,6 +25,7 @@ import type { DvmcpDiscoveryConfig } from './src/config-schema';
 import type { DirectServerInfo } from './index';
 import { generateSecretKey } from 'nostr-tools/pure';
 import { bytesToHex } from '@noble/hashes/utils';
+import { decodeNaddr, decodeNprofile } from '@dvmcp/commons/utils';
 
 const reservedFlags = [
   'help',
@@ -32,8 +33,8 @@ const reservedFlags = [
   'provider',
   'server',
   'verbose',
-  'interactive',
   'config-path',
+  'interactive',
 ];
 
 const { opts: yargsOptions } = buildYargsOptions(dvmcpDiscoveryConfigSchema, {
@@ -93,21 +94,22 @@ const configPath = args['config-path']
   : join(process.cwd(), 'config.dvmcp.yml');
 
 let inMemoryConfig: DvmcpDiscoveryConfig | null = null;
-function createMinimalConfig(relayUrls: string[]): DvmcpDiscoveryConfig {
+function createMinimalConfig(relayUrls?: string[]): DvmcpDiscoveryConfig {
+  const relays =
+    relayUrls && relayUrls.length > 0
+      ? relayUrls
+      : [DEFAULT_VALUES.DEFAULT_RELAY_URL];
   const privateKey = bytesToHex(generateSecretKey());
 
   return {
     nostr: {
       privateKey,
-      relayUrls,
+      relayUrls: relays,
     },
     mcp: {
       name: DEFAULT_VALUES.DEFAULT_MCP_NAME,
       version: DEFAULT_VALUES.DEFAULT_MCP_VERSION,
       about: DEFAULT_VALUES.DEFAULT_MCP_ABOUT,
-    },
-    featureFlags: {
-      interactive: false,
     },
   };
 }
@@ -161,7 +163,10 @@ async function setupFromProvider(nprofileEntity: string): Promise<void> {
       process.exit(1);
     }
 
-    setupInMemoryConfig(providerData.relays, providerData.pubkey);
+    setupInMemoryConfig(
+      providerData.relays || [DEFAULT_VALUES.DEFAULT_RELAY_URL],
+      providerData.pubkey
+    );
     loggerDiscovery(
       `${CONFIG_EMOJIS.SUCCESS} Successfully set up from provider`
     );
@@ -195,7 +200,10 @@ async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
       process.exit(1);
     }
 
-    setupInMemoryConfig(addrData.relays, addrData.pubkey);
+    setupInMemoryConfig(
+      addrData.relays || [DEFAULT_VALUES.DEFAULT_RELAY_URL],
+      addrData.pubkey
+    );
     loggerDiscovery(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from server`);
 
     return {
@@ -211,14 +219,36 @@ async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
 const runApp = async (directServerInfo?: DirectServerInfo): Promise<void> => {
   const main = await import('./index');
 
-  const configOverrides = extractConfigOverrides(args, reservedFlags);
+  const configOverrides = extractConfigOverrides(
+    args,
+    reservedFlags
+  ) as Partial<DvmcpDiscoveryConfig>;
 
-  const config =
-    inMemoryConfig ||
-    (await loadDiscoveryConfig({
+  if (args.interactive) {
+    if (!configOverrides.featureFlags) {
+      configOverrides.featureFlags = {};
+    }
+    configOverrides.featureFlags.interactive = true;
+    loggerDiscovery('Interactive mode enabled via CLI flag');
+    if (!inMemoryConfig) {
+      inMemoryConfig = createMinimalConfig();
+      loggerDiscovery('Created minimal configuration for interactive mode');
+    }
+  }
+
+  let config: DvmcpDiscoveryConfig;
+
+  if (inMemoryConfig) {
+    config = inMemoryConfig;
+    if (Object.keys(configOverrides).length > 0) {
+      config = deepMerge(config, configOverrides);
+    }
+  } else {
+    config = await loadDiscoveryConfig({
       configPath: process.env.DVMCP_CONFIG_PATH || configPath,
       cliFlags: configOverrides,
-    }));
+    });
+  }
 
   if (args.verbose) {
     console.log('\n📋 Current Configuration:');
@@ -246,7 +276,7 @@ const runApp = async (directServerInfo?: DirectServerInfo): Promise<void> => {
     console.log(JSON.stringify(config, null, 2));
   }
 
-  await main.default(directServerInfo);
+  await main.default(directServerInfo, config);
 };
 
 const cliMain = async (): Promise<void> => {

@@ -5,9 +5,9 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { loggerDiscovery } from '@dvmcp/commons/logger';
-import { createCapabilityId } from './utils';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
+import { createCapabilityId } from '@dvmcp/commons/utils';
 
 export interface ResourceCapability extends Resource, Capability {
   type: 'resource';
@@ -183,12 +183,26 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     resource: ResourceCapability
   ): void {
     try {
-      this.mcpServer.resource(
+      const registeredResource = this.mcpServer.resource(
         resourceId,
         resource.uri,
-        async (params: ReadResourceRequest['params']) => {
+        async (uri) => {
           try {
-            return await this.executionCallback?.(resourceId, params);
+            const uriString = typeof uri === 'string' ? uri : uri.toString();
+            const params = { uri: uriString };
+            const result = await this.executionCallback?.(resourceId, params);
+
+            return (
+              result || {
+                contents: [
+                  {
+                    text: `Resource not found: ${uriString}`,
+                    uri: uriString,
+                    mimeType: 'text/plain',
+                  },
+                ],
+              }
+            );
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
@@ -196,10 +210,21 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
               `Error executing resource ${resourceId}:`,
               errorMessage
             );
-            throw error;
+            const uriString = typeof uri === 'string' ? uri : uri.toString();
+            return {
+              contents: [
+                {
+                  text: `Error: ${errorMessage}`,
+                  uri: uriString,
+                  mimeType: 'text/plain',
+                },
+              ],
+            };
           }
         }
       );
+
+      this.storeRegisteredRef(resourceId, registeredResource);
 
       loggerDiscovery('Resource registered successfully:', resourceId);
     } catch (error) {

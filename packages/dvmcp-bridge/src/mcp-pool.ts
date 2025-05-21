@@ -16,8 +16,8 @@ import {
   dvmcpBridgeConfigSchema,
   type DvmcpBridgeConfig,
 } from './config-schema';
-import { slugify } from './utils';
 import { loggerBridge } from '@dvmcp/commons/logger';
+import { slugify } from '@dvmcp/commons/utils';
 
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();

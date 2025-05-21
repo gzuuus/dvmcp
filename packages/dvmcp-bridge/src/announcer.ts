@@ -22,7 +22,7 @@ import {
   type ListResourcesResult,
   type ListPromptsResult,
 } from '@modelcontextprotocol/sdk/types.js';
-import { slugify } from './utils.js';
+import { slugify } from '@dvmcp/commons/utils';
 
 function getNip89Tags(cfg: DvmcpBridgeConfig['mcp']): string[][] {
   const keys = ['name', 'about', 'picture', 'website', 'banner'] as const;

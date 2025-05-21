@@ -86,7 +86,7 @@ describe('MCPPool', () => {
     const result = (await mcpPool.callTool('server1-echo', {
       text: 'test message',
     })) as CallToolResult;
-    expect(result.content[0].text).toBe('[server1] test message');
+    expect(result.content?.[0].text).toBe('[server1] test message');
   });
 
   test('should list resources from all servers', async () => {

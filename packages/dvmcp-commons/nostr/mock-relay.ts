@@ -6,20 +6,63 @@ import {
   type NostrEvent,
   type UnsignedEvent,
 } from 'nostr-tools';
+import type {
+  CallToolResult,
+  ReadResourceResult,
+  GetPromptResult,
+} from '@modelcontextprotocol/sdk/types.js';
 import {
-  DVM_ANNOUNCEMENT_KIND,
-  TOOL_REQUEST_KIND,
-  TOOL_RESPONSE_KIND,
+  SERVER_ANNOUNCEMENT_KIND,
+  TOOLS_LIST_KIND,
+  RESOURCES_LIST_KIND,
+  PROMPTS_LIST_KIND,
+  REQUEST_KIND,
+  RESPONSE_KIND,
+  TAG_METHOD,
+  TAG_EVENT_ID,
+  TAG_PUBKEY,
+  TAG_CAPABILITY,
+  TAG_UNIQUE_IDENTIFIER,
+  TAG_KIND,
 } from '../constants';
 
 const relayPort = 3334;
 let mockEvents: NostrEvent[] = [];
 
-const mockDVMAnnouncement = {
-  kind: DVM_ANNOUNCEMENT_KIND,
+// Server announcement event according to DVMCP 2025-03-26
+const mockServerAnnouncement = {
+  kind: SERVER_ANNOUNCEMENT_KIND,
   content: JSON.stringify({
-    name: 'Test DVM',
-    about: 'A test DVM instance',
+    protocolVersion: '2025-03-26',
+    capabilities: {
+      tools: {
+        listChanged: true,
+      },
+      resources: {
+        listChanged: true,
+      },
+      prompts: {
+        listChanged: true,
+      },
+    },
+    serverInfo: {
+      name: 'Test DVM',
+      version: '1.0.0',
+    },
+  }),
+  created_at: Math.floor(Date.now() / 1000),
+  tags: [
+    [TAG_UNIQUE_IDENTIFIER, 'test-server-id'],
+    [TAG_KIND, `${REQUEST_KIND}`],
+    ['name', 'Test DVM'],
+    ['about', 'A test DVM for DVMCP testing'],
+  ],
+} as UnsignedEvent;
+
+// Tools list event according to DVMCP 2025-03-26
+const mockToolsList = {
+  kind: TOOLS_LIST_KIND,
+  content: JSON.stringify({
     tools: [
       {
         name: 'test-echo',
@@ -36,49 +79,197 @@ const mockDVMAnnouncement = {
   }),
   created_at: Math.floor(Date.now() / 1000),
   tags: [
-    ['d', 'dvm-announcement'],
-    ['k', `${TOOL_REQUEST_KIND}`],
-    ['capabilities', 'mcp-1.0'],
-    ['t', 'mcp'],
-    ['t', 'test-echo'],
+    [TAG_UNIQUE_IDENTIFIER, 'tools-list-id'],
+    ['s', 'test-server-id'],
+    [TAG_CAPABILITY, 'test-echo'],
   ],
 } as UnsignedEvent;
 
-const finalizedEvent = finalizeEvent(mockDVMAnnouncement, generateSecretKey());
-mockEvents.push(finalizedEvent);
+// Resources list event according to DVMCP 2025-03-26
+const mockResourcesList = {
+  kind: RESOURCES_LIST_KIND,
+  content: JSON.stringify({
+    resources: [
+      {
+        name: 'test-resource',
+        uri: 'test://resource',
+        description: 'Test resource for unit tests',
+        mimeType: 'text/plain',
+      },
+    ],
+  }),
+  created_at: Math.floor(Date.now() / 1000),
+  tags: [
+    [TAG_UNIQUE_IDENTIFIER, 'resources-list-id'],
+    ['s', 'test-server-id'],
+    [TAG_CAPABILITY, 'test-resource'],
+  ],
+} as UnsignedEvent;
 
-const handleToolExecution = (event: NostrEvent) => {
-  if (event.kind === TOOL_REQUEST_KIND) {
-    const commandTag = event.tags.find((tag) => tag[0] === 'c');
-    if (commandTag && commandTag[1] === 'execute-tool') {
+// Prompts list event according to DVMCP 2025-03-26
+const mockPromptsList = {
+  kind: PROMPTS_LIST_KIND,
+  content: JSON.stringify({
+    prompts: [
+      {
+        name: 'test-prompt',
+        description: 'Test prompt for unit tests',
+        arguments: [
+          {
+            name: 'input',
+            description: 'Input text for the prompt',
+            type: 'string',
+            required: true,
+          },
+        ],
+      },
+    ],
+  }),
+  created_at: Math.floor(Date.now() / 1000),
+  tags: [
+    [TAG_UNIQUE_IDENTIFIER, 'prompts-list-id'],
+    ['s', 'test-server-id'],
+    [TAG_CAPABILITY, 'test-prompt'],
+  ],
+} as UnsignedEvent;
+
+// Generate and add the server announcement event
+const serverSecretKey = generateSecretKey();
+const finalizedServerEvent = finalizeEvent(
+  mockServerAnnouncement,
+  serverSecretKey
+);
+mockEvents.push(finalizedServerEvent);
+
+// Generate and add the tools list event
+const finalizedToolsEvent = finalizeEvent(mockToolsList, serverSecretKey);
+mockEvents.push(finalizedToolsEvent);
+
+// Generate and add the resources list event
+const finalizedResourcesEvent = finalizeEvent(
+  mockResourcesList,
+  serverSecretKey
+);
+mockEvents.push(finalizedResourcesEvent);
+
+// Generate and add the prompts list event
+const finalizedPromptsEvent = finalizeEvent(mockPromptsList, serverSecretKey);
+mockEvents.push(finalizedPromptsEvent);
+
+const handleRequest = (event: NostrEvent) => {
+  if (event.kind === REQUEST_KIND) {
+    // Check for method tag
+    const methodTag = event.tags.find((tag) => tag[0] === TAG_METHOD);
+    if (!methodTag) return null;
+
+    try {
       const request = JSON.parse(event.content);
       console.log('Processing execution request:', request);
 
-      const responseEvent = {
-        kind: TOOL_RESPONSE_KIND,
-        content: JSON.stringify({
+      // Handle tools/call method
+      if (methodTag[1] === 'tools/call') {
+        // Extract the parameters from the request
+        const params = request.params || {};
+        const args = params.arguments || {};
+
+        // Create a properly typed tool response
+        const toolResponse: CallToolResult = {
           content: [
             {
               type: 'text',
-              text: `[test] ${request.parameters.text}`,
+              text: `[test] ${args.text}`,
             },
           ],
-        }),
-        created_at: Math.floor(Date.now() / 1000),
-        tags: [
-          ['e', event.id],
-          ['p', event.pubkey],
-          ['c', 'execute-tool-response'],
-        ],
-      } as UnsignedEvent;
+        };
 
-      console.log('Created response event:', responseEvent);
-      const finalizedResponse = finalizeEvent(
-        responseEvent,
-        generateSecretKey()
-      );
-      mockEvents.push(finalizedResponse);
-      return finalizedResponse;
+        const responseEvent = {
+          kind: RESPONSE_KIND,
+          content: JSON.stringify(toolResponse),
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            [TAG_EVENT_ID, event.id],
+            [TAG_PUBKEY, event.pubkey],
+          ],
+        } as UnsignedEvent;
+
+        console.log('Created response event:', responseEvent);
+        const finalizedResponse = finalizeEvent(responseEvent, serverSecretKey);
+        mockEvents.push(finalizedResponse);
+        return finalizedResponse;
+      }
+
+      // Handle resources/read method
+      else if (methodTag[1] === 'resources/read') {
+        const params = request.params || {};
+        const uri = params.uri;
+
+        if (uri === 'test://resource') {
+          // Create a properly typed resource response
+          const resourceResponse: ReadResourceResult = {
+            contents: [
+              {
+                text: 'This is a test resource content',
+                uri: 'test-resource',
+                mimeType: 'text/plain',
+              },
+            ],
+          };
+
+          const responseEvent = {
+            kind: RESPONSE_KIND,
+            content: JSON.stringify(resourceResponse),
+            created_at: Math.floor(Date.now() / 1000),
+            tags: [
+              [TAG_EVENT_ID, event.id],
+              [TAG_PUBKEY, event.pubkey],
+            ],
+          } as UnsignedEvent;
+
+          console.log('Created resource response event:', responseEvent);
+          const finalizedResponse = finalizeEvent(
+            responseEvent,
+            serverSecretKey
+          );
+          mockEvents.push(finalizedResponse);
+          return finalizedResponse;
+        }
+      }
+
+      // Handle prompts/get method
+      else if (methodTag[1] === 'prompts/get') {
+        const params = request.params || {};
+        const input = params.input || '';
+
+        // Create a properly typed prompt response based on the schema requirements
+        const promptResponse: GetPromptResult = {
+          messages: [
+            {
+              role: 'assistant',
+              content: {
+                type: 'text',
+                text: `This is a response to your prompt input: ${input}`,
+              },
+            },
+          ],
+        };
+
+        const responseEvent = {
+          kind: RESPONSE_KIND,
+          content: JSON.stringify(promptResponse),
+          created_at: Math.floor(Date.now() / 1000),
+          tags: [
+            [TAG_EVENT_ID, event.id],
+            [TAG_PUBKEY, event.pubkey],
+          ],
+        } as UnsignedEvent;
+
+        console.log('Created prompt response event:', responseEvent);
+        const finalizedResponse = finalizeEvent(responseEvent, serverSecretKey);
+        mockEvents.push(finalizedResponse);
+        return finalizedResponse;
+      }
+    } catch (error) {
+      console.error('Error processing request:', error);
     }
   }
   return null;
@@ -131,7 +322,7 @@ const server = serve({
           const event: NostrEvent = data[1];
           mockEvents.push(event);
 
-          const response = handleToolExecution(event);
+          const response = handleRequest(event);
           if (response) {
             console.log('Created response event:', response);
             mockEvents.push(response);
@@ -190,7 +381,8 @@ const stop = async () => {
     }
   }
   activeSubscriptions.clear();
-  mockEvents = [];
+  // Reset the mockEvents array
+  mockEvents.length = 0;
   server.stop();
 };
 

@@ -10,6 +10,8 @@ import type {
   Tool,
   CompleteRequest,
   CompleteResult,
+  ListResourceTemplatesResult,
+  ResourceTemplate,
 } from '@modelcontextprotocol/sdk/types.js';
 import { MCPClientHandler } from './mcp-client';
 import {
@@ -107,7 +109,6 @@ export class MCPPool {
       Array.from(this.clients.values()).map((client) => client.connect())
     );
 
-    // Identify servers that support completions
     for (const [clientId, client] of this.clients.entries()) {
       const caps = client.getServerCapabilities();
       if (caps && caps.completions) {
@@ -124,18 +125,15 @@ export class MCPPool {
       const caps = client.getServerCapabilities();
       if (caps && caps.tools) {
         try {
-          const toolsResult = await client.listTools();
-          if (toolsResult && Array.isArray(toolsResult.tools)) {
+          const toolsResult: ListToolsResult = await client.listTools();
+          if (toolsResult && toolsResult.tools) {
             for (const tool of toolsResult.tools) {
               this.toolRegistry.set(tool.name, client);
               allTools.push(tool);
             }
           }
         } catch (err) {
-          loggerBridge(
-            `[listTools] Failed for client '${clientName}':`,
-            (err as any)?.message || err
-          );
+          loggerBridge(`[listTools] Failed for client '${clientName}':`, err);
         }
       }
     }
@@ -149,8 +147,8 @@ export class MCPPool {
       const caps = client.getServerCapabilities();
       if (caps && caps.resources) {
         try {
-          const resObj = await client.listResources();
-          if (resObj && Array.isArray(resObj.resources)) {
+          const resObj: ListResourcesResult = await client.listResources();
+          if (resObj && resObj.resources) {
             for (const resource of resObj.resources) {
               if (typeof resource.uri === 'string')
                 this.resourceRegistry.set(resource.uri, client);
@@ -168,6 +166,34 @@ export class MCPPool {
     return { resources: allResources };
   }
 
+  async listResourceTemplates(): Promise<ListResourceTemplatesResult> {
+    const allResourcesTemplates: ResourceTemplate[] = [];
+    this.resourceRegistry.clear();
+    for (const [clientName, client] of this.clients.entries()) {
+      const caps = client.getServerCapabilities();
+      if (caps && caps.resources) {
+        try {
+          const resObj: ListResourceTemplatesResult =
+            await client.listResourceTemplates();
+          if (resObj && resObj.resourceTemplates) {
+            for (const resource of resObj.resourceTemplates) {
+              if (typeof resource.uriTemplate === 'string') {
+                this.resourceRegistry.set(resource.uriTemplate, client);
+              }
+              allResourcesTemplates.push(resource);
+            }
+          }
+        } catch (err) {
+          loggerBridge(
+            `[listResources] Failed for client '${clientName}':`,
+            err
+          );
+        }
+      }
+    }
+    return { resourceTemplates: allResourcesTemplates };
+  }
+
   async listPrompts(): Promise<ListPromptsResult> {
     const allPrompts: Prompt[] = [];
     this.promptRegistry.clear();
@@ -175,8 +201,8 @@ export class MCPPool {
       const caps = client.getServerCapabilities();
       if (caps && caps.prompts) {
         try {
-          const promptResult = await client.listPrompts();
-          if (promptResult && Array.isArray(promptResult.prompts)) {
+          const promptResult: ListPromptsResult = await client.listPrompts();
+          if (promptResult && promptResult.prompts) {
             for (const prompt of promptResult.prompts) {
               if (typeof prompt.name === 'string') {
                 this.promptRegistry.set(prompt.name, client);
@@ -185,10 +211,7 @@ export class MCPPool {
             }
           }
         } catch (err) {
-          loggerBridge(
-            `[listPrompts] Failed for client '${clientName}':`,
-            (err as any)?.message || err
-          );
+          loggerBridge(`[listPrompts] Failed for client '${clientName}':`, err);
         }
       }
     }

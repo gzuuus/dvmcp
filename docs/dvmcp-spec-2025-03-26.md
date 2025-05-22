@@ -212,7 +212,7 @@ After a client discovers a server through these announcements, it can immediatel
 ```
 
 #### Resources List Event
-
+Static resources list event
 ```json
 {
   "kind": 31318,
@@ -230,7 +230,31 @@ After a client discovers a server through these announcements, it can immediatel
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the resources list
     ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
-    ["cap", "main.rs"]                    // Optional: One cap tag per resource name
+    ["cap", "main.rs"]                   // Optional: One cap tag per resource name
+  ]
+}
+
+```
+
+Resource template list event
+```json
+{
+  "kind": 31318,
+  "pubkey": "<provider-pubkey>",
+  "content": {
+        "resourceTemplates": [
+          {
+            "uriTemplate": "file:///{path}",
+            "name": "Project Files",
+            "description": "Access files in the project directory",
+            "mimeType": "application/octet-stream"
+          }
+        ]
+      },
+  "tags": [
+    ["d", "<unique-identifier>"],        // Required: Unique identifier for the resource templates list
+    ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
+    ["cap", "Project Files"]             // Optional: One cap tag per resource template name
   ]
 }
 
@@ -260,7 +284,7 @@ After a client discovers a server through these announcements, it can immediatel
   "tags": [
     ["d", "<unique-identifier>"],        // Required: Unique identifier for the prompts list
     ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
-    ["cap", "code_review"]                // Optional: One cap tag per prompt name
+    ["cap", "code_review"]               // Optional: One cap tag per prompt name
   ]
 }
 ```

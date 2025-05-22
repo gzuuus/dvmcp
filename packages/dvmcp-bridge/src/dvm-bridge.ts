@@ -17,11 +17,13 @@ import { loggerBridge } from '@dvmcp/commons/logger';
 import type { NostrEvent } from 'nostr-tools';
 import { getServerId } from './utils';
 
+import { handleToolsList, handleToolsCall } from './handlers/tool-handlers';
 import {
-  handleToolsList,
-  handleToolsCall,
   handleResourcesList,
   handleResourcesRead,
+  handleResourceTemplatesList,
+} from './handlers/resource-handlers';
+import {
   handlePromptsList,
   handlePromptsGet,
   handleNotificationsCancel,
@@ -233,6 +235,14 @@ export class DVMBridge {
               this.keyManager,
               this.relayHandler,
               this.config
+            );
+            break;
+          case 'resources/templates/list':
+            await handleResourceTemplatesList(
+              event,
+              this.mcpPool,
+              this.keyManager,
+              this.relayHandler
             );
             break;
           case 'prompts/list':

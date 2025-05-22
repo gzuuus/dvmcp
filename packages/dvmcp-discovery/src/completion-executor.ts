@@ -34,6 +34,24 @@ export class CompletionExecutor extends BaseExecutor<
   }
 
   /**
+   * Find a resource template that matches the given URI
+   * @param uri - URI to match against templates
+   * @returns Template ID if found, undefined otherwise
+   */
+  private findResourceTemplateForUri(uri: string): string | undefined {
+    const templates = this.resourceRegistry.listResourceTemplates();
+
+    for (const template of templates) {
+      const basePattern = template.uriTemplate.replace(/\{.*?\}/g, '');
+      if (uri.startsWith(basePattern)) {
+        return template.id;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
    * Get completions for a prompt or resource argument
    * @param params - Completion request parameters
    * @returns Completion result with suggested values
@@ -52,10 +70,24 @@ export class CompletionExecutor extends BaseExecutor<
         serverId = promptInfo.serverId;
       }
     } else if (ref.type === 'ref/resource') {
-      const resourceInfo = this.resourceRegistry.getResourceInfo(ref.uri);
-      if (resourceInfo) {
-        providerPubkey = resourceInfo.providerPubkey;
-        serverId = resourceInfo.serverId;
+      const templateId = this.findResourceTemplateForUri(ref.uri);
+      if (templateId) {
+        const template = this.resourceRegistry.getResourceTemplate(templateId);
+        if (template) {
+          const resourceInfo =
+            this.resourceRegistry.getResourceTemplateInfo(templateId);
+          if (resourceInfo) {
+            providerPubkey = resourceInfo.providerPubkey;
+            serverId = resourceInfo.serverId;
+          }
+        }
+      } else {
+        // If not a template, check regular resources
+        const resourceInfo = this.resourceRegistry.getResourceInfo(ref.uri);
+        if (resourceInfo) {
+          providerPubkey = resourceInfo.providerPubkey;
+          serverId = resourceInfo.serverId;
+        }
       }
     }
 
@@ -101,11 +133,25 @@ export class CompletionExecutor extends BaseExecutor<
         params.ref.name = promptInfo.item.name;
       }
     } else if (ref.type === 'ref/resource') {
-      const resourceInfo = this.resourceRegistry.getResourceInfo(ref.uri);
-      if (resourceInfo) {
-        providerPubkey = resourceInfo.providerPubkey;
-        serverId = resourceInfo.serverId;
-        params.ref.uri = resourceInfo.item.uri;
+      const templateId = this.findResourceTemplateForUri(ref.uri);
+      if (templateId) {
+        const template = this.resourceRegistry.getResourceTemplate(templateId);
+        if (template) {
+          const resourceInfo =
+            this.resourceRegistry.getResourceTemplateInfo(templateId);
+          if (resourceInfo) {
+            providerPubkey = resourceInfo.providerPubkey;
+            serverId = resourceInfo.serverId;
+            params.ref.uri = ref.uri;
+          }
+        }
+      } else {
+        const resourceInfo = this.resourceRegistry.getResourceInfo(ref.uri);
+        if (resourceInfo) {
+          providerPubkey = resourceInfo.providerPubkey;
+          serverId = resourceInfo.serverId;
+          params.ref.uri = resourceInfo.item.uri;
+        }
       }
     }
 

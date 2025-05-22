@@ -16,10 +16,12 @@ import {
 import {
   type Tool,
   type Resource,
+  type ResourceTemplate,
   type ListToolsResult,
   type ListPromptsResult,
   type Prompt,
   type ListResourcesResult,
+  type ListResourceTemplatesResult,
   type CompleteRequest,
   type CompleteResult,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -381,6 +383,14 @@ export class DiscoveryServer {
         return;
       }
 
+      const uniqueId = event.tags.find(
+        (t) => t[0] === TAG_UNIQUE_IDENTIFIER
+      )?.[1];
+      if (uniqueId?.includes('resources/templates/list')) {
+        this.handleResourceTemplatesList(event, serverId);
+        return;
+      }
+
       let resourcesList: Resource[] = [];
       try {
         const content: ListResourcesResult = JSON.parse(event.content);
@@ -405,6 +415,45 @@ export class DiscoveryServer {
       }
     } catch (error) {
       console.error('Error processing resources list:', error);
+    }
+  }
+
+  /**
+   * Handle a resource templates list event
+   * @param event - Resource templates list event
+   * @param serverId - Server identifier
+   */
+  private async handleResourceTemplatesList(event: Event, serverId: string) {
+    try {
+      let resourceTemplatesList: ResourceTemplate[] = [];
+      try {
+        const content: ListResourceTemplatesResult = JSON.parse(event.content);
+        if (!content.resourceTemplates) {
+          loggerDiscovery(
+            'No resource templates found in resource templates list'
+          );
+          return;
+        }
+        resourceTemplatesList = content.resourceTemplates;
+      } catch (error) {
+        console.error('Error parsing resource templates list content:', error);
+      }
+      if (resourceTemplatesList.length > 0) {
+        this.resourceRegistry.registerServerResourceTemplates(
+          serverId,
+          resourceTemplatesList,
+          event.pubkey
+        );
+        loggerDiscovery(
+          `Registered ${resourceTemplatesList.length} resource templates from server ${serverId} (provider: ${event.pubkey})`
+        );
+      } else {
+        loggerDiscovery(
+          `No resource templates found in list from server ${serverId}`
+        );
+      }
+    } catch (error) {
+      console.error('Error processing resource templates list:', error);
     }
   }
   /**

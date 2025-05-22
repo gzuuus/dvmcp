@@ -14,6 +14,7 @@ import {
   type CompleteRequest,
   type CompleteResult,
   CompleteResultSchema,
+  type ListResourceTemplatesResult,
 } from '@modelcontextprotocol/sdk/types.js';
 
 export class MCPClientHandler {
@@ -66,6 +67,10 @@ export class MCPClientHandler {
 
   async listResources(): Promise<ListResourcesResult> {
     return await this.client.listResources();
+  }
+
+  async listResourceTemplates(): Promise<ListResourceTemplatesResult> {
+    return await this.client.listResourceTemplates();
   }
 
   async readResource(

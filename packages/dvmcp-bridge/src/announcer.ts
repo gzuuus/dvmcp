@@ -21,6 +21,7 @@ import {
   type ListToolsResult,
   type ListResourcesResult,
   type ListPromptsResult,
+  type ListResourceTemplatesResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { slugify } from '@dvmcp/commons/utils';
 
@@ -160,6 +161,43 @@ export class NostrAnnouncer {
     loggerBridge('Resources list announced');
   }
 
+  async announceResourceTemplatesList(
+    resourceTemplates?: ListResourceTemplatesResult
+  ) {
+    const resourceTemplatesResult =
+      resourceTemplates || (await this.mcpPool.listResourceTemplates());
+    if (
+      !resourceTemplatesResult.resourceTemplates ||
+      resourceTemplatesResult.resourceTemplates.length === 0
+    ) {
+      loggerBridge('No resource templates to announce');
+      return;
+    }
+
+    const tags: string[][] = [
+      [TAG_UNIQUE_IDENTIFIER, `${this.serverId}/resources/templates/list`],
+      [TAG_SERVER_IDENTIFIER, this.serverId],
+    ];
+
+    // Add capability tags for each resource template name
+    for (const template of resourceTemplatesResult.resourceTemplates) {
+      if (template.name) {
+        tags.push(['cap', template.name]);
+      }
+    }
+
+    const event = this.keyManager.signEvent({
+      ...this.keyManager.createEventTemplate(RESOURCES_LIST_KIND),
+      content: JSON.stringify(resourceTemplatesResult),
+      tags,
+    });
+
+    await this.relayHandler.publishEvent(event);
+    loggerBridge(
+      `Resource templates list announced with ${resourceTemplatesResult.resourceTemplates.length} templates`
+    );
+  }
+
   async announcePromptsList(prompts?: ListPromptsResult) {
     const promptsResult = prompts || (await this.mcpPool.listPrompts());
     const tags: string[][] = [
@@ -199,10 +237,9 @@ export class NostrAnnouncer {
 
     const mainClient = this.mcpPool.getDefaultClient();
     const capabilities = mainClient?.getServerCapabilities() || {};
-
     const announcePromises: Promise<void>[] = [];
 
-    const { tools, resources, prompts } =
+    const { tools, resources, prompts, resourceTemplates } =
       await this.fetchCapabilityData(capabilities);
 
     if (capabilities.tools && tools && tools.tools.length > 0) {
@@ -211,7 +248,12 @@ export class NostrAnnouncer {
 
     if (capabilities.resources && resources && resources.resources.length > 0) {
       announcePromises.push(this.announceResourcesList(resources));
+      if (resourceTemplates && resourceTemplates.resourceTemplates.length > 0)
+        announcePromises.push(
+          this.announceResourceTemplatesList(resourceTemplates)
+        );
     }
+
     if (capabilities.prompts && prompts && prompts.prompts.length > 0) {
       announcePromises.push(this.announcePromptsList(prompts));
     }
@@ -226,6 +268,7 @@ export class NostrAnnouncer {
       tools?: ListToolsResult;
       resources?: ListResourcesResult;
       prompts?: ListPromptsResult;
+      resourceTemplates?: ListResourceTemplatesResult;
     } = {};
 
     const fetchPromises: Promise<void>[] = [];
@@ -242,6 +285,7 @@ export class NostrAnnouncer {
       fetchPromises.push(
         (async () => {
           result.resources = await this.mcpPool.listResources();
+          result.resourceTemplates = await this.mcpPool.listResourceTemplates();
         })()
       );
     }

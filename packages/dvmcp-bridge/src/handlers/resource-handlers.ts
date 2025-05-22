@@ -11,6 +11,7 @@ import type { NostrEvent } from 'nostr-tools';
 import {
   type ReadResourceResult,
   type ListResourcesResult,
+  type ListResourceTemplatesResult,
   ListResourcesRequestSchema,
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
@@ -65,6 +66,49 @@ export async function handleResourcesList(
         error: {
           code: -32000,
           message: 'Failed to list resources',
+          data: err instanceof Error ? err.message : String(err),
+        },
+      }),
+      tags: [
+        [TAG_EVENT_ID, id],
+        [TAG_PUBKEY, pubkey],
+      ],
+    });
+    await relayHandler.publishEvent(errorResp);
+  }
+}
+
+/**
+ * Handles the resources/templates/list method request
+ */
+export async function handleResourceTemplatesList(
+  event: NostrEvent,
+  mcpPool: MCPPool,
+  keyManager: KeyManager,
+  relayHandler: RelayHandler
+): Promise<void> {
+  const id = event.id;
+  const pubkey = event.pubkey;
+
+  try {
+    const resourceTemplatesResult: ListResourceTemplatesResult =
+      await mcpPool.listResourceTemplates();
+    const response = keyManager.signEvent({
+      ...keyManager.createEventTemplate(RESPONSE_KIND),
+      content: JSON.stringify(resourceTemplatesResult),
+      tags: [
+        [TAG_EVENT_ID, id],
+        [TAG_PUBKEY, pubkey],
+      ],
+    });
+    await relayHandler.publishEvent(response);
+  } catch (err) {
+    const errorResp = keyManager.signEvent({
+      ...keyManager.createEventTemplate(RESPONSE_KIND),
+      content: JSON.stringify({
+        error: {
+          code: -32000,
+          message: 'Failed to list resource templates',
           data: err instanceof Error ? err.message : String(err),
         },
       }),

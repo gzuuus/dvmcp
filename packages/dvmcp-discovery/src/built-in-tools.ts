@@ -1,13 +1,10 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ToolRegistry } from './tool-registry';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import { type Event, type Filter } from 'nostr-tools';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
-import {
-  TAG_SERVER_IDENTIFIER,
-  TOOLS_LIST_KIND,
-} from '@dvmcp/commons/constants';
+import { TAG_SERVER_IDENTIFIER, TOOLS_LIST_KIND } from '@dvmcp/commons/core';
 import type { DiscoveryServer } from './discovery-server';
 
 /**

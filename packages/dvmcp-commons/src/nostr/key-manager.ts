@@ -1,7 +1,13 @@
+/**
+ * Key management utilities for Nostr
+ */
 import { hexToBytes } from '@noble/hashes/utils';
 import { getPublicKey, finalizeEvent } from 'nostr-tools/pure';
 import type { Event, UnsignedEvent } from 'nostr-tools/pure';
 
+/**
+ * Interface for Nostr provider (compatible with NIP-07 extensions)
+ */
 export type NostrProvider = {
   getPublicKey(): Promise<string>;
   signEvent(
@@ -12,6 +18,9 @@ export type NostrProvider = {
   ): Promise<Event>;
 };
 
+/**
+ * Interface for key management operations
+ */
 export type KeyManager = {
   pubkey: string;
   signEvent(event: UnsignedEvent): Event;
@@ -19,6 +28,11 @@ export type KeyManager = {
   getPublicKey(): string;
 };
 
+/**
+ * Creates a key manager from a private key
+ * @param privateKeyHex - The private key in hex format
+ * @returns A key manager instance
+ */
 export const createKeyManager = (privateKeyHex: string): KeyManager => {
   const privateKeyBytes = hexToBytes(privateKeyHex);
   const pubkey = getPublicKey(privateKeyBytes);
@@ -48,6 +62,11 @@ export const createKeyManager = (privateKeyHex: string): KeyManager => {
   return new Manager();
 };
 
+/**
+ * Creates a Nostr provider from a key manager
+ * @param keyManager - The key manager instance
+ * @returns A Nostr provider instance
+ */
 export const createNostrProvider = (keyManager: KeyManager): NostrProvider => {
   return {
     getPublicKey: async (): Promise<string> => {

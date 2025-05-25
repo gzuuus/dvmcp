@@ -1,12 +1,8 @@
-import {
-  TAG_EVENT_ID,
-  TAG_PUBKEY,
-  RESPONSE_KIND,
-} from '@dvmcp/commons/constants';
+import { TAG_EVENT_ID, TAG_PUBKEY, RESPONSE_KIND } from '@dvmcp/commons/core';
 import type { MCPPool } from '../mcp-pool';
 import type { DvmcpBridgeConfig } from '../config-schema.js';
-import type { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+import type { RelayHandler } from '@dvmcp/commons/nostr';
+import type { KeyManager } from '@dvmcp/commons/nostr';
 import type { NostrEvent } from 'nostr-tools';
 import {
   GetPromptRequestSchema,
@@ -15,7 +11,7 @@ import {
   type ListPromptsResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { createProtocolErrorResponse } from '../utils';
-import { loggerBridge } from '@dvmcp/commons/logger';
+import { loggerBridge } from '@dvmcp/commons/core';
 import { PaymentProcessor } from './payment-processor';
 
 /**

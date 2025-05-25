@@ -1,7 +1,7 @@
 import { loadDiscoveryConfig } from './src/config-loader';
 import { DiscoveryServer } from './src/discovery-server';
 import type { DVMAnnouncement } from './src/direct-discovery';
-import { loggerDiscovery as logger } from '@dvmcp/commons/logger';
+import { loggerDiscovery as logger } from '@dvmcp/commons/core';
 import type { DvmcpDiscoveryConfig } from './src/config-schema';
 
 export interface DirectServerInfo {

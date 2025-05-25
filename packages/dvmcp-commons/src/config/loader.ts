@@ -11,7 +11,7 @@ import {
   parseEnvToConfig,
   validateConfig,
 } from './utils';
-import { logger } from '../logger';
+import { logger } from '../core/logger';
 
 /**
  * Create a configuration loader for a specific schema

@@ -1,6 +1,6 @@
 import { type Event as NostrEvent } from 'nostr-tools';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { RelayHandler } from '@dvmcp/commons/nostr';
+import { createKeyManager } from '@dvmcp/commons/nostr';
 import type {
   CallToolRequest,
   CallToolResult,
@@ -15,8 +15,8 @@ import {
   TAG_METHOD,
   TAG_SERVER_IDENTIFIER,
   TAG_STATUS,
-} from '@dvmcp/commons/constants';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+} from '@dvmcp/commons/core';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import { NWCPaymentHandler } from './nwc-payment';
 import type { DvmcpDiscoveryConfig } from './config-schema';
 import { BaseExecutor } from './base-executor';

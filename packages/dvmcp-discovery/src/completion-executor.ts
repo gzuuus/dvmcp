@@ -1,6 +1,6 @@
 import { type Event as NostrEvent } from 'nostr-tools';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { RelayHandler } from '@dvmcp/commons/nostr';
+import { createKeyManager } from '@dvmcp/commons/nostr';
 import { BaseExecutor } from './base-executor';
 import type { ExecutionContext, Capability } from './base-interfaces';
 import {
@@ -9,7 +9,7 @@ import {
   TAG_PUBKEY,
   TAG_METHOD,
   TAG_SERVER_IDENTIFIER,
-} from '@dvmcp/commons/constants';
+} from '@dvmcp/commons/core';
 import { PromptRegistry } from './prompt-registry';
 import { ResourceRegistry } from './resource-registry';
 import { ServerRegistry } from './server-registry';

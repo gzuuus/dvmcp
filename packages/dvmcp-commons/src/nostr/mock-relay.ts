@@ -24,9 +24,10 @@ import {
   TAG_CAPABILITY,
   TAG_UNIQUE_IDENTIFIER,
   TAG_KIND,
-} from '../constants';
+} from '../core/constants';
 
-const relayPort = 3334;
+// Default port for the relay server
+let relayPort = 3334;
 let mockEvents: NostrEvent[] = [];
 
 // Server announcement event according to DVMCP 2025-03-26
@@ -275,94 +276,133 @@ const handleRequest = (event: NostrEvent) => {
   return null;
 };
 
-const server = serve({
-  port: relayPort,
-  fetch(req, server) {
-    if (server.upgrade(req)) {
-      return;
+let server: ReturnType<typeof serve> | null = null;
+
+const createMockServer = (port?: number) => {
+  // Allow configuring the port when creating the server
+  if (port) {
+    relayPort = port;
+  }
+  // If server is already running, stop it first to avoid port conflicts
+  if (server) {
+    try {
+      stop();
+    } catch (e) {
+      console.error('Error stopping existing server:', e);
     }
-    return new Response('Upgrade failed', { status: 500 });
-  },
-  websocket: {
-    message(ws, message: string | Buffer) {
-      try {
-        const data = JSON.parse(message as string);
-        console.log('Received message:', data);
+  }
 
-        if (data[0] === 'REQ') {
-          const subscriptionId = data[1];
-          const filter = data[2] as Filter;
+  server = serve({
+    port: relayPort,
+    fetch(req, server) {
+      if (server.upgrade(req)) {
+        return;
+      }
+      return new Response('Upgrade failed', { status: 500 });
+    },
+    websocket: {
+      message(ws, message: string | Buffer) {
+        try {
+          const data = JSON.parse(message as string);
+          console.log('Received message:', data);
 
-          activeSubscriptions.set(subscriptionId, { ws, filter });
+          if (data[0] === 'REQ') {
+            const subscriptionId = data[1];
+            const filter = data[2] as Filter;
 
-          const filteredEvents = mockEvents.filter((event) => {
-            let matches = true;
+            activeSubscriptions.set(subscriptionId, { ws, filter });
 
-            if (filter.kinds && !filter.kinds.includes(event.kind)) {
-              matches = false;
-            }
+            const filteredEvents = mockEvents.filter((event) => {
+              let matches = true;
 
-            if (filter.since && event.created_at < filter.since) {
-              matches = false;
-            }
+              if (filter.kinds && !filter.kinds.includes(event.kind)) {
+                matches = false;
+              }
 
-            return matches;
-          });
+              if (filter.since && event.created_at < filter.since) {
+                matches = false;
+              }
 
-          console.log(
-            `Sending ${filteredEvents.length} filtered events for subscription ${subscriptionId}`
-          );
+              return matches;
+            });
 
-          filteredEvents.forEach((event) => {
-            ws.send(JSON.stringify(['EVENT', subscriptionId, event]));
-          });
+            console.log(
+              `Sending ${filteredEvents.length} filtered events for subscription ${subscriptionId}`
+            );
 
-          ws.send(JSON.stringify(['EOSE', subscriptionId]));
-        } else if (data[0] === 'EVENT') {
-          const event: NostrEvent = data[1];
-          mockEvents.push(event);
+            filteredEvents.forEach((event) => {
+              ws.send(JSON.stringify(['EVENT', subscriptionId, event]));
+            });
 
-          const response = handleRequest(event);
-          if (response) {
-            console.log('Created response event:', response);
-            mockEvents.push(response);
+            ws.send(JSON.stringify(['EOSE', subscriptionId]));
+          } else if (data[0] === 'EVENT') {
+            const event: NostrEvent = data[1];
+            mockEvents.push(event);
 
-            for (const [subId, sub] of activeSubscriptions) {
-              if (
-                !sub.filter.kinds ||
-                sub.filter.kinds.includes(response.kind)
-              ) {
+            const response = handleRequest(event);
+            if (response) {
+              console.log('Created response event:', response);
+              mockEvents.push(response);
+
+              for (const [subId, sub] of activeSubscriptions) {
                 if (
-                  !sub.filter.since ||
-                  response.created_at >= sub.filter.since
+                  !sub.filter.kinds ||
+                  sub.filter.kinds.includes(response.kind)
                 ) {
-                  console.log(`Sending response to subscription ${subId}`);
-                  sub.ws.send(JSON.stringify(['EVENT', subId, response]));
+                  if (
+                    !sub.filter.since ||
+                    response.created_at >= sub.filter.since
+                  ) {
+                    console.log(`Sending response to subscription ${subId}`);
+                    sub.ws.send(JSON.stringify(['EVENT', subId, response]));
+                  }
                 }
               }
             }
+
+            ws.send(JSON.stringify(['OK', event.id, true, '']));
+          } else if (data[0] === 'CLOSE') {
+            const subscriptionId = data[1];
+            activeSubscriptions.delete(subscriptionId);
+            console.log(`Subscription closed: ${subscriptionId}`);
           }
-
-          ws.send(JSON.stringify(['OK', event.id, true, '']));
-        } else if (data[0] === 'CLOSE') {
-          const subscriptionId = data[1];
-          activeSubscriptions.delete(subscriptionId);
-          console.log(`Subscription closed: ${subscriptionId}`);
+        } catch (error) {
+          console.error('Error processing message:', error);
         }
-      } catch (error) {
-        console.error('Error processing message:', error);
-      }
+      },
+      open() {
+        console.log('Client connected');
+      },
+      close() {
+        console.log('Client disconnected');
+      },
     },
-    open() {
-      console.log('Client connected');
-    },
-    close() {
-      console.log('Client disconnected');
-    },
-  },
-});
+  });
 
-console.log(`Mock Nostr Relay started on port ${relayPort}`);
+  console.log(`Mock Nostr Relay started on port ${relayPort}`);
+  return server;
+};
+
+// Helper functions for testing
+const addMockEvent = (event: NostrEvent) => {
+  mockEvents.push(event);
+};
+
+const clearMockEvents = () => {
+  mockEvents = [];
+};
+
+const stop = () => {
+  try {
+    if (server) {
+      server.stop();
+      server = null;
+      console.log('Mock Nostr Relay stopped');
+    }
+  } catch (e) {
+    console.error('Error stopping relay:', e);
+  }
+};
 
 const activeSubscriptions = new Map<
   string,
@@ -372,18 +412,4 @@ const activeSubscriptions = new Map<
   }
 >();
 
-const stop = async () => {
-  for (const [_, sub] of activeSubscriptions) {
-    try {
-      sub.ws.close();
-    } catch (e) {
-      console.debug('Warning during subscription cleanup:', e);
-    }
-  }
-  activeSubscriptions.clear();
-  // Reset the mockEvents array
-  mockEvents.length = 0;
-  server.stop();
-};
-
-export { server, mockEvents, stop };
+export { createMockServer, mockEvents, stop, addMockEvent, clearMockEvents };

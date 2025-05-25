@@ -1,8 +1,8 @@
 import { NostrAnnouncer } from './announcer';
 import { MCPPool } from './mcp-pool';
 import type { DvmcpBridgeConfig } from './config-schema.js';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { RelayHandler } from '@dvmcp/commons/nostr';
+import { createKeyManager } from '@dvmcp/commons/nostr';
 import {
   REQUEST_KIND,
   RESPONSE_KIND,
@@ -12,8 +12,8 @@ import {
   TAG_EVENT_ID,
   TAG_STATUS,
   TAG_SERVER_IDENTIFIER,
-} from '@dvmcp/commons/constants';
-import { loggerBridge } from '@dvmcp/commons/logger';
+} from '@dvmcp/commons/core';
+import { loggerBridge } from '@dvmcp/commons/core';
 import type { NostrEvent } from 'nostr-tools';
 import { getServerId } from './utils';
 

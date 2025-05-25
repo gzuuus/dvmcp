@@ -8,10 +8,10 @@ import {
   McpServer,
   ResourceTemplate,
 } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import { BaseRegistry } from './base-registry';
 import type { Capability, ProviderServerMeta } from './base-interfaces';
-import { createCapabilityId } from '@dvmcp/commons/utils';
+import { createCapabilityId } from '@dvmcp/commons/core';
 
 export interface ResourceCapability extends Resource, Capability {
   type: 'resource';

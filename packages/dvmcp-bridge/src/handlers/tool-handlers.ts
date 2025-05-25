@@ -1,13 +1,9 @@
-import { loggerBridge } from '@dvmcp/commons/logger';
-import {
-  TAG_EVENT_ID,
-  TAG_PUBKEY,
-  RESPONSE_KIND,
-} from '@dvmcp/commons/constants';
+import { loggerBridge } from '@dvmcp/commons/core';
+import { TAG_EVENT_ID, TAG_PUBKEY, RESPONSE_KIND } from '@dvmcp/commons/core';
 import type { MCPPool } from '../mcp-pool';
 import type { DvmcpBridgeConfig } from '../config-schema.js';
-import type { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+import type { RelayHandler } from '@dvmcp/commons/nostr';
+import type { KeyManager } from '@dvmcp/commons/nostr';
 import type { NostrEvent } from 'nostr-tools';
 import {
   CallToolRequestSchema,

@@ -1,14 +1,14 @@
-import { loggerBridge } from '@dvmcp/commons/logger';
+import { loggerBridge } from '@dvmcp/commons/core';
 import {
   TAG_EVENT_ID,
   TAG_PUBKEY,
   TAG_STATUS,
   TAG_METHOD,
   NOTIFICATION_KIND,
-} from '@dvmcp/commons/constants';
+} from '@dvmcp/commons/core';
 import type { DvmcpBridgeConfig, MCPPricingConfig } from '../config-schema.js';
-import type { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+import type { RelayHandler } from '@dvmcp/commons/nostr';
+import type { KeyManager } from '@dvmcp/commons/nostr';
 import { handlePaymentFlow } from './payment-handler';
 
 const DEFAULT_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;

@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import { z } from 'zod';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
@@ -8,7 +8,7 @@ import type {
   GetPromptResult,
   Prompt,
 } from '@modelcontextprotocol/sdk/types.js';
-import { createCapabilityId } from '@dvmcp/commons/utils';
+import { createCapabilityId } from '@dvmcp/commons/core';
 
 export interface PromptArgument {
   name: string;
@@ -16,12 +16,6 @@ export interface PromptArgument {
   required: boolean;
   type?: 'string' | 'text' | 'number' | 'boolean' | 'select' | 'file';
   options?: string[]; // For 'select' type
-}
-
-export interface PromptDefinition {
-  name: string;
-  description: string;
-  arguments: PromptArgument[];
 }
 
 // Extend PromptDefinition interface to include Capability properties

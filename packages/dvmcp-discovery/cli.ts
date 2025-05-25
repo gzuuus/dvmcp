@@ -6,26 +6,29 @@ import { hideBin } from 'yargs/helpers';
 import {
   CONFIG_EMOJIS,
   ConfigGenerator,
-} from '@dvmcp/commons/config-generator';
+  configSchemaToFieldConfig,
+} from '@dvmcp/commons/config';
 import {
   buildYargsOptions,
   extractConfigOverrides,
   deepMerge,
 } from '@dvmcp/commons/config';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import {
   fetchProviderAnnouncement,
   fetchServerAnnouncement,
   parseAnnouncement,
 } from './src/direct-discovery';
-import { DEFAULT_VALUES } from './src/constants';
 import { loadDiscoveryConfig } from './src/config-loader';
-import { dvmcpDiscoveryConfigSchema } from './src/config-schema';
+import {
+  DEFAULT_VALUES,
+  dvmcpDiscoveryConfigSchema,
+} from './src/config-schema';
 import type { DvmcpDiscoveryConfig } from './src/config-schema';
 import type { DirectServerInfo } from './index';
 import { generateSecretKey } from 'nostr-tools/pure';
 import { bytesToHex } from '@noble/hashes/utils';
-import { decodeNaddr, decodeNprofile } from '@dvmcp/commons/utils';
+import { decodeNaddr, decodeNprofile } from '@dvmcp/commons/core';
 
 const reservedFlags = [
   'help',
@@ -127,9 +130,6 @@ function setupInMemoryConfig(relays: string[], pubkey: string): void {
 }
 
 const configure = async (): Promise<void> => {
-  const { configSchemaToFieldConfig } = await import(
-    '@dvmcp/commons/config/adapter'
-  );
   const { dvmcpDiscoveryConfigSchema } = await import('./src/config-schema');
 
   console.log(

@@ -1,6 +1,6 @@
-import { TAG_EVENT_ID, TAG_PUBKEY } from '@dvmcp/commons/constants';
-import { type KeyManager } from '@dvmcp/commons/nostr/key-manager';
-import { slugify } from '@dvmcp/commons/utils';
+import { TAG_EVENT_ID, TAG_PUBKEY } from '@dvmcp/commons/core';
+import { type KeyManager } from '@dvmcp/commons/nostr';
+import { slugify } from '@dvmcp/commons/core';
 
 export function getServerId(
   serverName: string,

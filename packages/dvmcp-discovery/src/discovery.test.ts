@@ -1,10 +1,7 @@
 import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
 import { DiscoveryServer } from './discovery-server';
 import { loadDiscoveryConfig } from './config-loader';
-import {
-  server as mockRelay,
-  stop as stopRelay,
-} from '@dvmcp/commons/nostr/mock-relay';
+import { createMockServer, stop as stopRelay } from '@dvmcp/commons/nostr';
 import {
   type Tool,
   type Resource,
@@ -12,21 +9,21 @@ import {
   ReadResourceResultSchema,
   CallToolResultSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { PromptDefinition } from './prompt-registry';
 
 describe('DiscoveryServer E2E', () => {
   let discoveryServer: DiscoveryServer;
   let relayConnected = false;
 
   beforeAll(async () => {
-    mockRelay;
+    // Use a different port for this test to avoid conflicts
+    createMockServer(3335);
     relayConnected = true;
 
     const testConfig = {
       nostr: {
         privateKey:
           'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
-        relayUrls: ['ws://localhost:3334'],
+        relayUrls: ['ws://localhost:3335'],
       },
       mcp: {
         name: 'test-discovery',
@@ -155,9 +152,7 @@ describe('DiscoveryServer E2E', () => {
 
   test('should execute discovered prompt', async () => {
     const prompts = await discoveryServer.listPrompts();
-    const mockPrompt = prompts.find(
-      (p) => p.name === 'test-prompt'
-    ) as PromptDefinition;
+    const mockPrompt = prompts.find((p) => p.name === 'test-prompt');
     expect(mockPrompt).toBeDefined();
     console.log('Found prompt:', mockPrompt);
 

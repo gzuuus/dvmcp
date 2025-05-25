@@ -9,11 +9,13 @@ import {
   startBridge,
   loadDvmcpConfig,
 } from './index.js';
-import { CONFIG_EMOJIS } from '@dvmcp/commons/config-generator';
 import {
   buildYargsOptions,
+  CONFIG_EMOJIS,
+  ConfigGenerator,
+  configSchemaToFieldConfig,
   extractConfigOverrides,
-} from '@dvmcp/commons/config/cli';
+} from '@dvmcp/commons/config';
 import type { DvmcpBridgeConfig } from './src/config-schema.js';
 
 const reservedFlags = [
@@ -72,10 +74,6 @@ const configPath = args['config-path']
   : join(process.cwd(), 'config.dvmcp.yml');
 
 const configure = async (): Promise<void> => {
-  const { ConfigGenerator } = await import('@dvmcp/commons/config-generator');
-  const { configSchemaToFieldConfig } = await import(
-    '@dvmcp/commons/config/adapter'
-  );
   const { dvmcpBridgeConfigSchema } = await import('./src/config-schema');
 
   console.log(

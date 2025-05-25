@@ -19,9 +19,3 @@ export const TAG_CAPABILITY = 'cap'; // Capability name (list announcements)
 export const TAG_KIND = 'k'; // Accepted request kind (server announcement)
 export const TAG_STATUS = 'status'; // Nostr-specific notification status (e.g., 'payment-required')
 export const TAG_AMOUNT = 'amount'; // Nostr-specific notification amount/invoice
-
-// DEPRECATED - Keep temporarily for backward compatibility
-export const DVM_ANNOUNCEMENT_KIND = 31990;
-export const DVM_NOTICE_KIND = 7000;
-export const TOOL_REQUEST_KIND = 5910;
-export const TOOL_RESPONSE_KIND = 6910;

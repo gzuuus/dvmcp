@@ -1,12 +1,12 @@
 import { type Event as NostrEvent } from 'nostr-tools';
-import { loggerBridge } from '@dvmcp/commons/logger';
+import { loggerBridge } from '@dvmcp/commons/core';
 import { MCPPool } from '../mcp-pool';
-import { RESPONSE_KIND, TAG_EVENT_ID } from '@dvmcp/commons/constants';
+import { RESPONSE_KIND, TAG_EVENT_ID } from '@dvmcp/commons/core';
 import type {
   CompleteRequest,
   CompleteResult,
 } from '@modelcontextprotocol/sdk/types.js';
-import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+import type { KeyManager } from '@dvmcp/commons/nostr';
 
 /**
  * Create a response event for a request event

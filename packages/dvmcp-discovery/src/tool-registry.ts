@@ -6,7 +6,7 @@ import {
 import { ToolSchema } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import { BaseRegistry } from './base-registry';
 import type { Capability } from './base-interfaces';
 

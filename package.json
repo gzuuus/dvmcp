@@ -2,6 +2,7 @@
   "name": "dvmcp",
   "scripts": {
     "format": "prettier --write \"packages/**/*.{ts,tsx,js,jsx,json,md}\"",
+    "typecheck": "tsc --noEmit",
     "changeset": "changeset",
     "version-packages": "changeset version",
     "publish-packages": "changeset publish"

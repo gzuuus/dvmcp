@@ -2,13 +2,13 @@
  * Adapter functions to convert between ConfigSchema and FieldConfig formats
  */
 import type { ConfigFieldMeta, ConfigSchema } from './types';
-import type { FieldConfig, FieldType } from '../config-generator';
+import type { FieldConfig, FieldType } from './config-generator';
 import {
   CONFIG_EMOJIS,
   generateHexKey,
   validateHexKey,
   validateRelayUrl,
-} from '../config-generator';
+} from './config-generator';
 
 /**
  * Maps ConfigFieldMeta types to FieldConfig types

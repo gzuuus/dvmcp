@@ -3,7 +3,7 @@ export { loadDvmcpConfig } from './src/config-loader';
 export { dvmcpBridgeConfigSchema } from './src/config-schema';
 
 import { DVMBridge } from './src/dvm-bridge';
-import { loggerBridge } from '@dvmcp/commons/logger';
+import { loggerBridge } from '@dvmcp/commons/core';
 import { loadDvmcpConfig } from './src/config-loader';
 
 export interface BridgeStartOptions {

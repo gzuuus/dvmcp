@@ -1,4 +1,4 @@
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import { BaseRegistry } from './base-registry';
 import type { DVMCPBridgeServer } from './base-interfaces';
 import {

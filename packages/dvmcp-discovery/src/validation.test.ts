@@ -10,7 +10,7 @@ import {
   TAG_CAPABILITY,
   TAG_SERVER_IDENTIFIER,
   TAG_KIND,
-} from '@dvmcp/commons/constants';
+} from '@dvmcp/commons/core';
 
 describe('Tool Schema Validation', () => {
   describe('ToolRegistry Validation', () => {

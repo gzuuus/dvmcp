@@ -1,8 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { type Event, type Filter } from 'nostr-tools';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { RelayHandler } from '@dvmcp/commons/nostr';
+import { createKeyManager } from '@dvmcp/commons/nostr';
 import { CompletionExecutor } from './completion-executor';
 import type { DvmcpDiscoveryConfig } from './config-schema';
 import {
@@ -12,7 +12,7 @@ import {
   PROMPTS_LIST_KIND,
   TAG_SERVER_IDENTIFIER,
   TAG_UNIQUE_IDENTIFIER,
-} from '@dvmcp/commons/constants';
+} from '@dvmcp/commons/core';
 import {
   type Tool,
   type Resource,
@@ -33,9 +33,9 @@ import { PromptRegistry } from './prompt-registry';
 import { PromptExecutor } from './prompt-executor';
 import { ServerRegistry } from './server-registry';
 import type { DVMAnnouncement } from './direct-discovery';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import { initBuiltInTools } from './built-in-tools';
-import { createCapabilityId } from '@dvmcp/commons/utils';
+import { createCapabilityId } from '@dvmcp/commons/core';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;

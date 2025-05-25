@@ -1,5 +1,5 @@
-import type { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+import type { RelayHandler } from '@dvmcp/commons/nostr';
+import type { KeyManager } from '@dvmcp/commons/nostr';
 import type { MCPPool } from './mcp-pool';
 import type { DvmcpBridgeConfig } from './config-schema.js';
 import {
@@ -11,9 +11,9 @@ import {
   TAG_UNIQUE_IDENTIFIER,
   TAG_KIND,
   TAG_SERVER_IDENTIFIER,
-} from '@dvmcp/commons/constants';
+} from '@dvmcp/commons/core';
 import type { Event } from 'nostr-tools/pure';
-import { loggerBridge } from '@dvmcp/commons/logger';
+import { loggerBridge } from '@dvmcp/commons/core';
 import {
   type Implementation,
   LATEST_PROTOCOL_VERSION,
@@ -23,7 +23,7 @@ import {
   type ListPromptsResult,
   type ListResourceTemplatesResult,
 } from '@modelcontextprotocol/sdk/types.js';
-import { slugify } from '@dvmcp/commons/utils';
+import { slugify } from '@dvmcp/commons/core';
 
 function getNip89Tags(cfg: DvmcpBridgeConfig['mcp']): string[][] {
   const keys = ['name', 'about', 'picture', 'website', 'banner'] as const;

@@ -1,12 +1,11 @@
-import { loggerBridge } from '@dvmcp/commons/logger';
+import { loggerBridge } from '@dvmcp/commons/core';
 import {
   TAG_EVENT_ID,
   TAG_PUBKEY,
   TAG_STATUS,
   NOTIFICATION_KIND,
-} from '@dvmcp/commons/constants';
-import type { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+} from '@dvmcp/commons/core';
+import type { KeyManager, RelayHandler } from '@dvmcp/commons/nostr';
 import type { NostrEvent } from 'nostr-tools';
 // TODO: actually cancel the job
 /**

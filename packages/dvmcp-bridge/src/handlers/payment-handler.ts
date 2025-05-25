@@ -1,19 +1,19 @@
-import { loggerBridge } from '@dvmcp/commons/logger';
+import { loggerBridge } from '@dvmcp/commons/core';
 import {
   TAG_AMOUNT,
   TAG_EVENT_ID,
   TAG_PUBKEY,
   TAG_STATUS,
   NOTIFICATION_KIND,
-} from '@dvmcp/commons/constants';
+} from '@dvmcp/commons/core';
 import type { DvmcpBridgeConfig } from '../config-schema.js';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { RelayHandler } from '@dvmcp/commons/nostr';
+import type { KeyManager } from '@dvmcp/commons/nostr';
 import { LightningAddress } from '@getalby/lightning-tools';
 import type { Event } from 'nostr-tools/pure';
 import type { SubCloser } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
-import { createNostrProvider } from '@dvmcp/commons/nostr/key-manager';
+import { createNostrProvider } from '@dvmcp/commons/nostr';
 
 /**
  * Handles the payment flow for a capability that requires payment

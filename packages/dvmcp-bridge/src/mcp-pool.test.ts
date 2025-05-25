@@ -5,7 +5,7 @@ import type {
   ReadResourceResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { MCPPool } from './mcp-pool';
-import { createMockServer } from '@dvmcp/commons/mock-server';
+import { createMockServer } from '@dvmcp/commons/core';
 
 describe('MCPPool', () => {
   let mcpPool: MCPPool;
@@ -13,11 +13,6 @@ describe('MCPPool', () => {
   const serverNames = ['server1', 'server2', 'server3', 'server4'];
 
   beforeAll(async () => {
-    const mockServerPath = join(
-      import.meta.dir,
-      '../../dvmcp-commons/mock-server.ts'
-    );
-
     // Create server configs with pricing information for testing
     const serverConfigs = serverNames.map((name, index) => {
       // Add pricing to different capabilities based on server index
@@ -25,7 +20,10 @@ describe('MCPPool', () => {
       const config: any = {
         name,
         command: 'bun',
-        args: ['run', mockServerPath, name],
+        args: [
+          '-e',
+          `import { createMockServer } from '@dvmcp/commons/core'; createMockServer('${name}')`,
+        ],
       };
 
       // Add tool pricing to first server

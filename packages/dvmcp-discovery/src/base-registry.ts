@@ -1,5 +1,5 @@
 import type { Capability, ProviderServerMeta } from './base-interfaces';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 /**

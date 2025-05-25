@@ -18,8 +18,8 @@ import {
   dvmcpBridgeConfigSchema,
   type DvmcpBridgeConfig,
 } from './config-schema';
-import { loggerBridge } from '@dvmcp/commons/logger';
-import { slugify } from '@dvmcp/commons/utils';
+import { loggerBridge } from '@dvmcp/commons/core';
+import { slugify } from '@dvmcp/commons/core';
 
 export class MCPPool {
   private clients: Map<string, MCPClientHandler> = new Map();
@@ -120,7 +120,6 @@ export class MCPPool {
 
   async listTools(): Promise<ListToolsResult> {
     const allTools: Tool[] = [];
-    this.toolRegistry.clear();
     for (const [clientName, client] of this.clients.entries()) {
       const caps = client.getServerCapabilities();
       if (caps && caps.tools) {
@@ -142,7 +141,6 @@ export class MCPPool {
 
   async listResources(): Promise<ListResourcesResult> {
     const allResources: Resource[] = [];
-    this.resourceRegistry.clear();
     for (const [clientName, client] of this.clients.entries()) {
       const caps = client.getServerCapabilities();
       if (caps && caps.resources) {
@@ -168,7 +166,6 @@ export class MCPPool {
 
   async listResourceTemplates(): Promise<ListResourceTemplatesResult> {
     const allResourcesTemplates: ResourceTemplate[] = [];
-    this.resourceRegistry.clear();
     for (const [clientName, client] of this.clients.entries()) {
       const caps = client.getServerCapabilities();
       if (caps && caps.resources) {
@@ -196,7 +193,6 @@ export class MCPPool {
 
   async listPrompts(): Promise<ListPromptsResult> {
     const allPrompts: Prompt[] = [];
-    this.promptRegistry.clear();
     for (const [clientName, client] of this.clients.entries()) {
       const caps = client.getServerCapabilities();
       if (caps && caps.prompts) {
@@ -288,7 +284,6 @@ export class MCPPool {
         promptName,
         args
       );
-      loggerBridge('prompt get result with args:', args, result);
 
       if (!result) {
         loggerBridge(`[getPrompt] Empty result for prompt: ${promptName}`);

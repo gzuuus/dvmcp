@@ -6,9 +6,9 @@ import {
 import { NWCWalletRequest, NWCWalletResponse } from 'nostr-tools/kinds';
 import { hexToBytes } from '@noble/hashes/utils';
 import { encrypt, decrypt } from 'nostr-tools/nip04';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import type { DvmcpDiscoveryConfig } from './config-schema';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
+import { RelayHandler } from '@dvmcp/commons/nostr';
 
 interface NWCConnection {
   pubkey: string;

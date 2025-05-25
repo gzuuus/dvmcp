@@ -1,9 +1,9 @@
 import type { NostrEvent } from 'nostr-tools';
 import type { Capability, ExecutionContext } from './base-interfaces';
 import { BaseRegistry } from './base-registry';
-import { RESPONSE_KIND, NOTIFICATION_KIND } from '@dvmcp/commons/constants';
-import type { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import type { KeyManager } from '@dvmcp/commons/nostr/key-manager';
+import { RESPONSE_KIND, NOTIFICATION_KIND } from '@dvmcp/commons/core';
+import type { RelayHandler } from '@dvmcp/commons/nostr';
+import type { KeyManager } from '@dvmcp/commons/nostr';
 import type { NWCPaymentHandler } from './nwc-payment';
 
 export abstract class BaseExecutor<T extends Capability, P, R> {

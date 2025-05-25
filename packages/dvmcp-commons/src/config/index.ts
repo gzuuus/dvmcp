@@ -7,13 +7,19 @@
  */
 
 // Export types
-export * from './config/types';
+export * from './types';
 
 // Export utilities
-export * from './config/utils';
+export * from './utils';
 
 // Export loader
-export * from './config/loader';
+export * from './loader';
 
 // Export CLI helpers
-export * from './config/cli';
+export * from './cli';
+
+// Export config generator
+export * from './config-generator';
+
+// Export adapter
+export * from './adapter';

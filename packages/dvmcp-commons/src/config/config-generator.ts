@@ -1,8 +1,9 @@
 import { createInterface } from 'node:readline';
 import { parse, stringify } from 'yaml';
 import { writeFileSync, existsSync, readFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
-import { HEX_KEYS_REGEX } from './constants';
+import { HEX_KEYS_REGEX } from '../core/constants';
+import { generateSecretKey } from 'nostr-tools';
+import { bytesToHex } from '@noble/hashes/utils';
 export const CONFIG_EMOJIS = {
   NOSTR: '🔑',
   RELAY: '🔄',
@@ -469,8 +470,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
   }
 }
 
-export const generateHexKey = () =>
-  Buffer.from(randomBytes(32)).toString('hex');
+export const generateHexKey = () => bytesToHex(generateSecretKey());
 
 export const validateHexKey = (value: string) => HEX_KEYS_REGEX.test(value);
 

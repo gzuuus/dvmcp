@@ -1,5 +1,5 @@
 import { nip19 } from 'nostr-tools';
-import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
+import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/core';
 import type { AddressPointer, ProfilePointer } from 'nostr-tools/nip19';
 
 /**

@@ -1,8 +1,8 @@
 import type { Event, Filter } from 'nostr-tools';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
-import type { NaddrData, NprofileData } from './utils';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { RelayHandler } from '@dvmcp/commons/nostr';
+import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/core';
+import { loggerDiscovery } from '@dvmcp/commons/core';
+import type { AddressPointer, ProfilePointer } from 'nostr-tools/nip19';
 
 export interface DVMAnnouncement {
   name: string;
@@ -40,7 +40,7 @@ async function fetchAnnouncement(
 }
 
 export async function fetchProviderAnnouncement(
-  providerData: NprofileData
+  providerData: ProfilePointer
 ): Promise<Event | null> {
   // Query for the provider's server announcement
   const filter: Filter = {
@@ -49,7 +49,7 @@ export async function fetchProviderAnnouncement(
   };
 
   const events = await fetchAnnouncement(
-    providerData.relays,
+    providerData.relays || [],
     filter,
     'No server announcement found for provider'
   );
@@ -66,7 +66,7 @@ export async function fetchProviderAnnouncement(
 }
 
 export async function fetchServerAnnouncement(
-  addrData: NaddrData
+  addrData: AddressPointer
 ): Promise<Event | null> {
   // Query for the specific announcement event
   const filter: Filter = {
@@ -76,7 +76,7 @@ export async function fetchServerAnnouncement(
   };
 
   return fetchAnnouncement(
-    addrData.relays,
+    addrData.relays || [],
     filter,
     'No server announcement found for the specified coordinates'
   );

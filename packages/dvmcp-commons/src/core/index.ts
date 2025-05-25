@@ -12,6 +12,3 @@ export * from './logger';
 
 // Export general utilities
 export * from './utils';
-
-// Export mock server (for testing)
-export * from './mock-server';

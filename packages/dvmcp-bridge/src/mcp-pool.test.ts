@@ -5,7 +5,7 @@ import type {
   ReadResourceResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { MCPPool } from './mcp-pool';
-import { createMockServer } from '@dvmcp/commons/core';
+import { createMockServer } from '@dvmcp/commons/core/mock-server';
 
 describe('MCPPool', () => {
   let mcpPool: MCPPool;
@@ -22,7 +22,7 @@ describe('MCPPool', () => {
         command: 'bun',
         args: [
           '-e',
-          `import { createMockServer } from '@dvmcp/commons/core'; createMockServer('${name}')`,
+          `import { createMockServer } from '@dvmcp/commons/core/mock-server'; createMockServer('${name}')`,
         ],
       };
 

@@ -1,5 +1,11 @@
 # @dvmcp/commons
 
+## 0.2.4
+
+### Patch Changes
+
+- separate export for mock server
+
 ## 0.2.3
 
 ### Patch Changes

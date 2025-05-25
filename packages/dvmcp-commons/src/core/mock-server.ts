@@ -139,5 +139,7 @@ export const createMockServer = async (name: string) => {
 };
 
 if (import.meta.path === Bun.main) {
-  await createMockServer(process.argv[2] || 'default');
+  (async () => {
+    await createMockServer(process.argv[2] || 'default');
+  })();
 }

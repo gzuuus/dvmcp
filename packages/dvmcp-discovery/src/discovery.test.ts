@@ -1,6 +1,9 @@
 import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
 import { DiscoveryServer } from './discovery-server';
-import { createMockServer, stop as stopRelay } from '@dvmcp/commons/nostr/mock-relay';
+import {
+  createMockServer,
+  stop as stopRelay,
+} from '@dvmcp/commons/nostr/mock-relay';
 import {
   type Tool,
   type Resource,

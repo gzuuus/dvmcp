@@ -1,5 +1,11 @@
 # @dvmcp/commons
 
+## 0.2.2
+
+### Patch Changes
+
+- reorganize package with core, config and nostr modules, tree shackable
+
 ## 0.2.0
 
 ### Minor Changes

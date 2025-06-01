@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/bridge",
-  "version": "0.1.29",
+  "version": "0.2.0",
   "description": "Bridge connecting MCP servers to Nostr's DVM ecosystem",
   "module": "index.ts",
   "type": "module",

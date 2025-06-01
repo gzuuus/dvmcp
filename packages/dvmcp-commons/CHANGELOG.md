@@ -1,5 +1,11 @@
 # @dvmcp/commons
 
+## 0.2.5
+
+### Patch Changes
+
+- add methods as constants
+
 ## 0.2.4
 
 ### Patch Changes

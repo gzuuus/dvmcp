@@ -153,7 +153,11 @@ export async function handleToolsCall(
     await relayHandler.publishEvent(response);
   } catch (error) {
     // Send error notification
-    await paymentProcessor.sendErrorNotification(id, pubkey);
+    await paymentProcessor.sendErrorNotification(
+      id,
+      pubkey,
+      error instanceof Error ? error.message : String(error)
+    );
 
     // Send error response
     const errorResp = keyManager.signEvent({

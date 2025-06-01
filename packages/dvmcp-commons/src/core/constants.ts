@@ -19,3 +19,12 @@ export const TAG_CAPABILITY = 'cap'; // Capability name (list announcements)
 export const TAG_KIND = 'k'; // Accepted request kind (server announcement)
 export const TAG_STATUS = 'status'; // Nostr-specific notification status (e.g., 'payment-required')
 export const TAG_AMOUNT = 'amount'; // Nostr-specific notification amount/invoice
+export const TAG_INVOICE = 'invoice'; // Nostr-specific notification invoice
+export const MCPMETHODS = {
+  toolsList: 'tools/list',
+  toolsCall: 'tools/call',
+  resourcesList: 'resources/list',
+  resourcesRead: 'resources/read',
+  promptsList: 'prompts/list',
+  promptsCall: 'prompts/call',
+} as const;

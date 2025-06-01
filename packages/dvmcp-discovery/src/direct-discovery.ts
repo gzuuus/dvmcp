@@ -3,13 +3,18 @@ import { RelayHandler } from '@dvmcp/commons/nostr';
 import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/core';
 import { loggerDiscovery } from '@dvmcp/commons/core';
 import type { AddressPointer, ProfilePointer } from 'nostr-tools/nip19';
+import type {
+  Prompt,
+  Resource,
+  Tool,
+} from '@modelcontextprotocol/sdk/types.js';
 
 export interface DVMAnnouncement {
   name: string;
   about: string;
-  tools: any[];
-  resources?: any[];
-  prompts?: any[];
+  tools: Tool[];
+  resources?: Resource[];
+  prompts?: Prompt[];
 }
 
 async function fetchAnnouncement(

@@ -65,6 +65,11 @@ export class PaymentProcessor {
       ]);
     } catch (error) {
       loggerBridge(`Payment error for ${capabilityId} - ${error}`);
+      await this.sendErrorNotification(
+        eventId,
+        pubkey,
+        error instanceof Error ? error.message : String(error)
+      );
       return false;
     }
   }
@@ -109,10 +114,14 @@ export class PaymentProcessor {
   /**
    * Send an error notification to the client
    */
-  async sendErrorNotification(eventId: string, pubkey: string): Promise<void> {
+  async sendErrorNotification(
+    eventId: string,
+    pubkey: string,
+    reason?: string
+  ): Promise<void> {
     const errorStatus = this.keyManager.signEvent({
       ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
-      content: 'Payment timeout',
+      content: reason || 'Unknown error',
       tags: [
         [TAG_STATUS, 'error'],
         [TAG_EVENT_ID, eventId],

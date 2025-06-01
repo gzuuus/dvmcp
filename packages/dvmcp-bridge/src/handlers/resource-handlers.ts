@@ -201,7 +201,11 @@ export async function handleResourcesRead(
     await relayHandler.publishEvent(response);
   } catch (err) {
     // Send error notification
-    await paymentProcessor.sendErrorNotification(id, pubkey);
+    await paymentProcessor.sendErrorNotification(
+      id,
+      pubkey,
+      err instanceof Error ? err.message : String(err)
+    );
 
     // Send error response
     const errorResp = keyManager.signEvent({

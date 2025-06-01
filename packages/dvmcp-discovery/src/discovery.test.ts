@@ -1,26 +1,39 @@
 import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
 import { DiscoveryServer } from './discovery-server';
-import { getConfig } from './config';
 import {
-  server as mockRelay,
+  createMockServer,
   stop as stopRelay,
 } from '@dvmcp/commons/nostr/mock-relay';
-import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import {
+  type Tool,
+  type Resource,
+  GetPromptResultSchema,
+  ReadResourceResultSchema,
+  CallToolResultSchema,
+} from '@modelcontextprotocol/sdk/types.js';
 
 describe('DiscoveryServer E2E', () => {
   let discoveryServer: DiscoveryServer;
   let relayConnected = false;
 
   beforeAll(async () => {
-    mockRelay;
+    // Use a different port for this test to avoid conflicts
+    createMockServer(3335);
     relayConnected = true;
 
-    const config = getConfig();
     const testConfig = {
-      ...config,
       nostr: {
-        ...config.nostr,
-        relayUrls: ['ws://localhost:3334'],
+        privateKey:
+          'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+        relayUrls: ['ws://localhost:3335'],
+      },
+      mcp: {
+        name: 'test-discovery',
+        version: '0.0.1',
+        about: 'Test discovery server',
+      },
+      featureFlags: {
+        interactive: true,
       },
     };
 
@@ -29,7 +42,7 @@ describe('DiscoveryServer E2E', () => {
   });
   afterAll(async () => {
     if (discoveryServer) {
-      await discoveryServer.cleanup();
+      discoveryServer.cleanup();
     }
 
     stopRelay();
@@ -54,7 +67,9 @@ describe('DiscoveryServer E2E', () => {
     console.log('Found tool:', mockTool);
 
     const toolRegistry = discoveryServer['toolRegistry'];
-    const toolIds = Array.from(toolRegistry['tools'].keys());
+    const toolIds = Array.from(toolRegistry.listToolsWithIds()).map(
+      ([id]) => id
+    );
     console.log('Available tool IDs:', toolIds);
 
     const toolId = toolIds.find((id) => id.startsWith(`${mockTool.name}`));
@@ -63,21 +78,111 @@ describe('DiscoveryServer E2E', () => {
 
     console.log('Executing tool...');
 
-    const result = await discoveryServer['toolExecutor'].executeTool(
-      toolId!,
-      mockTool,
-      {
-        text: 'Hello from test',
-      }
-    );
+    const result = await discoveryServer['toolExecutor'].executeTool(toolId!, {
+      text: 'Hello from test',
+      name: mockTool.name,
+    });
 
     console.log('Execution result:', result);
+    CallToolResultSchema.parse(result);
     expect(result).toBeDefined();
-    expect(result).toEqual([
+    expect(result).toEqual({
+      content: [
+        {
+          type: 'text',
+          text: '[test] Hello from test',
+        },
+      ],
+    });
+  });
+
+  test('should list discovered resources', async () => {
+    const resources = await discoveryServer.listResources();
+    console.log('Number of resources:', resources.length);
+    console.log('Final discovered resources:', resources);
+
+    expect(resources.length).toBeGreaterThan(0);
+    const mockResource = resources.find((r) => r.uri === 'test://resource');
+    expect(mockResource).toBeDefined();
+    expect(mockResource?.mimeType).toBe('text/plain');
+  });
+
+  test('should read discovered resource', async () => {
+    const resources = await discoveryServer.listResources();
+    const mockResource = resources.find(
+      (r) => r.uri === 'test://resource'
+    ) as Resource;
+    expect(mockResource).toBeDefined();
+    console.log('Found resource:', mockResource);
+
+    const resourceRegistry = discoveryServer['resourceRegistry'];
+    const resourceIds = Array.from(resourceRegistry.listResourcesWithIds()).map(
+      ([id]) => id
+    );
+    console.log('Available resource IDs:', resourceIds);
+
+    const resourceId = resourceIds.find((id) => id.startsWith(`test-resource`));
+    expect(resourceId).toBeDefined();
+    console.log('Selected resource ID:', resourceId);
+
+    console.log('Reading resource...');
+
+    const result = await discoveryServer['resourceExecutor'].executeResource(
+      resourceId!,
+      mockResource
+    );
+    ReadResourceResultSchema.parse(result);
+    console.log('Resource content:', result);
+    expect(result).toBeDefined();
+    expect(result).toHaveProperty('contents');
+    expect(result.contents[0]).toHaveProperty('text');
+    expect(result.contents[0].text).toContain(
+      'This is a test resource content'
+    );
+  });
+
+  test('should list discovered prompts', async () => {
+    const prompts = await discoveryServer.listPrompts();
+    console.log('Number of prompts:', prompts.length);
+    console.log('Final discovered prompts:', prompts);
+
+    expect(prompts.length).toBeGreaterThan(0);
+    const mockPrompt = prompts.find((p) => p.name === 'test-prompt');
+    expect(mockPrompt).toBeDefined();
+    expect(mockPrompt?.description).toBe('Test prompt for unit tests');
+  });
+
+  test('should execute discovered prompt', async () => {
+    const prompts = await discoveryServer.listPrompts();
+    const mockPrompt = prompts.find((p) => p.name === 'test-prompt');
+    expect(mockPrompt).toBeDefined();
+    console.log('Found prompt:', mockPrompt);
+
+    const promptRegistry = discoveryServer['promptRegistry'];
+    const promptIds = Array.from(promptRegistry.listPromptsWithIds()).map(
+      ([id]) => id
+    );
+    console.log('Available prompt IDs:', promptIds);
+
+    const promptId = promptIds.find((id) => id.includes(`test-prompt`));
+    expect(promptId).toBeDefined();
+    console.log('Selected prompt ID:', promptId);
+
+    console.log('Executing prompt...');
+
+    const result = await discoveryServer['promptExecutor'].executePrompt(
+      promptId!,
       {
-        type: 'text',
-        text: '[test] Hello from test',
-      },
-    ]);
+        input: 'Test input',
+      }
+    );
+    GetPromptResultSchema.parse(result);
+    console.log('Prompt execution result:', result);
+    expect(result).toBeDefined();
+    expect(result).toHaveProperty('messages');
+    expect(result.messages).toBeInstanceOf(Array);
+    expect(result.messages.length).toBeGreaterThan(0);
+    expect(result.messages[0]).toHaveProperty('role');
+    expect(result.messages[0]).toHaveProperty('content');
   });
 });

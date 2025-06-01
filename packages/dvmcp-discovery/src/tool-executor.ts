@@ -1,36 +1,54 @@
-import { type Event } from 'nostr-tools';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { createKeyManager } from '@dvmcp/commons/nostr/key-manager';
-import { type Tool } from '@modelcontextprotocol/sdk/types.js';
-import { ToolRegistry } from './tool-registry.js';
+import { type Event as NostrEvent } from 'nostr-tools';
+import { RelayHandler } from '@dvmcp/commons/nostr';
+import { createKeyManager } from '@dvmcp/commons/nostr';
+import type {
+  CallToolRequest,
+  CallToolResult,
+} from '@modelcontextprotocol/sdk/types.js';
+import { ToolRegistry } from './tool-registry';
+import type { ToolCapability } from './tool-registry';
 import {
-  TOOL_REQUEST_KIND,
-  TOOL_RESPONSE_KIND,
-  DVM_NOTICE_KIND,
-} from '@dvmcp/commons/constants';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+  REQUEST_KIND,
+  RESPONSE_KIND,
+  NOTIFICATION_KIND,
+  TAG_PUBKEY,
+  TAG_METHOD,
+  TAG_SERVER_IDENTIFIER,
+  TAG_STATUS,
+} from '@dvmcp/commons/core';
+import { loggerDiscovery } from '@dvmcp/commons/core';
 import { NWCPaymentHandler } from './nwc-payment';
-import { getConfig } from './config';
+import type { DvmcpDiscoveryConfig } from './config-schema';
+import { BaseExecutor } from './base-executor';
+import type { ExecutionContext } from './base-interfaces';
 
-interface ExecutionContext {
-  timeoutId: ReturnType<typeof setTimeout>;
-  cleanup: () => void;
-}
-
-export class ToolExecutor {
-  private executionSubscriptions: Map<string, () => void> = new Map();
-  private static readonly EXECUTION_TIMEOUT = 30000;
-  private nwcPaymentHandler: NWCPaymentHandler | null = null;
+export class ToolExecutor extends BaseExecutor<
+  ToolCapability,
+  CallToolRequest['params'],
+  CallToolResult
+> {
+  protected nwcPaymentHandler: NWCPaymentHandler | null = null;
 
   constructor(
-    private relayHandler: RelayHandler,
-    private keyManager: ReturnType<typeof createKeyManager>,
-    private toolRegistry: ToolRegistry
+    relayHandler: RelayHandler,
+    keyManager: ReturnType<typeof createKeyManager>,
+    private toolRegistry: ToolRegistry,
+    private config: DvmcpDiscoveryConfig
   ) {
-    // Initialize the NWC payment handler if NWC is configured
+    super(relayHandler, keyManager, toolRegistry);
+
+    // Initialize NWC payment handler if needed
+    this.initializeNWCPaymentHandler();
+  }
+
+  /**
+   * Initialize the NWC payment handler
+   * @private
+   */
+  private initializeNWCPaymentHandler(): void {
     try {
-      if (getConfig().nwc?.connectionString) {
-        this.nwcPaymentHandler = new NWCPaymentHandler();
+      if (this.config.nwc?.connectionString) {
+        this.nwcPaymentHandler = new NWCPaymentHandler(this.config);
       }
     } catch (error) {
       loggerDiscovery('Failed to initialize NWC payment handler:', error);
@@ -43,114 +61,90 @@ export class ToolExecutor {
    * @param relayHandler - The updated relay handler
    */
   public updateRelayHandler(relayHandler: RelayHandler): void {
-    this.relayHandler = relayHandler;
-    loggerDiscovery('Updated relay handler in tool executor');
+    super.updateRelayHandler(relayHandler);
   }
 
+  /**
+   * Execute a tool with the given ID and parameters
+   * @param toolId - ID of the tool to execute
+   * @param params - Parameters to pass to the tool
+   * @returns Tool execution result
+   */
   public async executeTool(
     toolId: string,
-    tool: Tool,
-    params: unknown
-  ): Promise<unknown> {
-    // Get tool info to determine if it's built-in
+    params: CallToolRequest['params']
+  ): Promise<CallToolResult> {
     const toolInfo = this.toolRegistry.getToolInfo(toolId);
-
-    // Check if this is a built-in tool
-    if (toolInfo?.isBuiltIn) {
-      try {
-        // Execute built-in tool directly
-        return await this.toolRegistry.executeBuiltInTool(toolId, params);
-      } catch (error) {
-        loggerDiscovery(`Error executing built-in tool ${toolId}:`, error);
-        throw error;
-      }
+    if (!toolInfo) {
+      throw new Error(`Tool ${toolId} not found`);
     }
 
-    // Handle external tools via Nostr
-    return new Promise((resolve, reject) => {
-      const request = this.createToolRequest(toolId, tool, params);
-      const executionId = request.id;
-      const context = this.createExecutionContext(executionId);
+    const tool = toolInfo.item as ToolCapability;
 
-      const subscription = this.relayHandler.subscribeToRequests(
-        (event) => {
-          if (event.tags.some((t) => t[0] === 'e' && t[1] === executionId)) {
-            this.handleToolResponse(event, context, resolve, reject);
-          }
-        },
-        {
-          kinds: [TOOL_RESPONSE_KIND, DVM_NOTICE_KIND],
-          since: Math.floor(Date.now() / 1000),
-        }
-      );
-
-      this.executionSubscriptions.set(executionId, subscription.close);
-
-      this.relayHandler.publishEvent(request).catch((err) => {
-        clearTimeout(context.timeoutId);
-        context.cleanup();
-        reject(err);
-      });
-    });
+    return this.execute(toolId, tool, params);
   }
 
   public cleanup(): void {
-    for (const sub of this.executionSubscriptions.values()) {
-      sub();
-    }
-    this.executionSubscriptions.clear();
+    super.cleanup();
 
-    // Clean up the NWC payment handler if it exists
     if (this.nwcPaymentHandler) {
       this.nwcPaymentHandler.cleanup();
     }
   }
 
-  private createExecutionContext(executionId: string): ExecutionContext {
-    const timeoutId = setTimeout(() => {
-      loggerDiscovery('Execution timeout for:', executionId);
-      this.cleanupExecution(executionId);
-    }, ToolExecutor.EXECUTION_TIMEOUT);
-
-    const cleanup = () => this.cleanupExecution(executionId);
-    return { timeoutId, cleanup };
-  }
-
-  private cleanupExecution(executionId: string): void {
-    const sub = this.executionSubscriptions.get(executionId);
-    if (sub) {
-      sub();
-      this.executionSubscriptions.delete(executionId);
-    }
-  }
-
-  private async handleToolResponse(
-    event: Event,
+  /**
+   * Handle a tool response event
+   * @param event - Nostr event containing the response
+   * @param context - Execution context
+   * @param resolve - Function to resolve the promise
+   * @param reject - Function to reject the promise
+   */
+  protected async handleResponse(
+    event: NostrEvent,
     context: ExecutionContext,
-    resolve: (value: unknown) => void,
+    resolve: (value: CallToolResult) => void,
     reject: (reason: Error) => void
   ): Promise<void> {
-    if (event.kind === TOOL_RESPONSE_KIND) {
+    if (event.kind === RESPONSE_KIND) {
       try {
-        const result = JSON.parse(event.content);
-        clearTimeout(context.timeoutId);
-        context.cleanup();
-        resolve(result.content);
+        const response = JSON.parse(event.content);
+
+        if (response.error) {
+          this.cleanupExecution(context.executionId);
+          reject(new Error(response.error.message || 'Unknown error'));
+          return;
+        }
+
+        if (response.isError === true) {
+          this.cleanupExecution(context.executionId);
+          reject(
+            new Error(
+              typeof response.content === 'string'
+                ? response.content
+                : 'Tool execution error'
+            )
+          );
+          return;
+        }
+
+        this.cleanupExecution(context.executionId);
+        resolve(response);
       } catch (error) {
-        clearTimeout(context.timeoutId);
-        context.cleanup();
+        this.cleanupExecution(context.executionId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
-    } else if (event.kind === DVM_NOTICE_KIND) {
-      const status = event.tags.find((t) => t[0] === 'status')?.[1];
-      if (status === 'error') {
-        clearTimeout(context.timeoutId);
-        context.cleanup();
-        reject(new Error(event.content));
+    } else if (event.kind === NOTIFICATION_KIND) {
+      const method = event.tags.find((t) => t[0] === TAG_METHOD)?.[1];
+      const status = event.tags.find((t) => t[0] === TAG_STATUS)?.[1];
+
+      if (status === 'error' || method === 'error') {
+        this.cleanupExecution(context.executionId);
+        reject(new Error(event.content || 'Error notification received'));
+        return;
       }
+
       if (status === 'payment-required') {
         try {
-          // Extract the invoice from the event
           const invoice = event.tags.find((t) => t[0] === 'invoice')?.[1];
           if (!invoice) {
             throw new Error('No invoice found in payment-required event');
@@ -161,13 +155,11 @@ export class ToolExecutor {
             invoice
           );
 
-          // Check if we have a payment handler
           if (!this.nwcPaymentHandler) {
             loggerDiscovery(
               'NWC payment handler not configured. Cannot process payment automatically.'
             );
-            clearTimeout(context.timeoutId);
-            context.cleanup();
+            this.cleanupExecution(context.executionId);
             reject(
               new Error(
                 'Tool requires payment but NWC is not configured. Please add NWC configuration to use paid tools.'
@@ -176,52 +168,55 @@ export class ToolExecutor {
             return;
           }
 
-          // Pay the invoice using NWC
           const success = await this.nwcPaymentHandler.payInvoice(invoice);
           if (success) {
             loggerDiscovery('Payment successful, waiting for tool response...');
-            // Payment successful, now we wait for the actual tool response
-            // Don't resolve or reject here, just continue waiting
           } else {
             throw new Error('Payment failed');
           }
         } catch (error) {
           loggerDiscovery('Payment error:', error);
-          clearTimeout(context.timeoutId);
-          context.cleanup();
+          this.cleanupExecution(context.executionId);
           reject(error instanceof Error ? error : new Error(String(error)));
         }
       }
     }
   }
 
-  private createToolRequest(
-    toolId: string,
-    tool: Tool,
-    params: unknown
-  ): Event {
-    const request = this.keyManager.createEventTemplate(TOOL_REQUEST_KIND);
+  /**
+   * Create a tool request event
+   * @param id - ID of the tool
+   * @param item - Tool capability
+   * @param params - Tool parameters
+   * @returns Nostr event for the request
+   */
+  protected createRequest(
+    id: string,
+    item: ToolCapability,
+    args: CallToolRequest['params']['arguments']
+  ): NostrEvent {
+    const request = this.keyManager.createEventTemplate(REQUEST_KIND);
 
-    const parameters =
-      !tool.inputSchema.properties ||
-      Object.keys(tool.inputSchema.properties).length === 0
-        ? {}
-        : params;
+    const toolInfo = this.toolRegistry.getToolInfo(id);
+    if (!toolInfo) throw new Error(`Tool ${id} not found`);
 
-    const toolInfo = this.toolRegistry.getToolInfo(toolId);
-    if (!toolInfo) throw new Error(`Tool ${toolId} not found`);
+    const requestContent: CallToolRequest = {
+      method: 'tools/call',
+      params: {
+        name: item.name,
+        arguments: args,
+      },
+    };
 
     request.content = JSON.stringify({
-      name: tool.name,
-      parameters,
-      providerPubkey: toolInfo?.providerPubkey || '',
+      ...requestContent,
     });
-
-    request.tags.push(['c', 'execute-tool']);
-
-    // Only add provider pubkey tag if it exists
-    if (toolInfo?.providerPubkey) {
-      request.tags.push(['p', toolInfo.providerPubkey]);
+    if (toolInfo.providerPubkey) {
+      request.tags.push([TAG_PUBKEY, toolInfo.providerPubkey]);
+    }
+    request.tags.push([TAG_METHOD, requestContent.method]);
+    if (toolInfo.serverId) {
+      request.tags.push([TAG_SERVER_IDENTIFIER, toolInfo.serverId]);
     }
 
     return this.keyManager.signEvent(request);

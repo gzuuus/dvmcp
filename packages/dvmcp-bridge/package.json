@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/bridge",
-  "version": "0.1.29",
+  "version": "0.2.0",
   "description": "Bridge connecting MCP servers to Nostr's DVM ecosystem",
   "module": "index.ts",
   "type": "module",
@@ -31,12 +31,14 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@dvmcp/commons": "^0.1.12",
+    "@dvmcp/commons": "workspace:*",
     "@getalby/lightning-tools": "^5.1.2",
-    "@modelcontextprotocol/sdk": "^1.10.2",
+    "@modelcontextprotocol/sdk": "^1.11.4",
+    "@types/yargs": "^17.0.33",
     "dotenv": "^16.5.0",
-    "nostr-tools": "^2.12.0",
-    "yaml": "^2.7.1"
+    "nostr-tools": "^2.13.0",
+    "yaml": "^2.8.0",
+    "yargs": "^17.7.2"
   },
   "publishConfig": {
     "access": "public"

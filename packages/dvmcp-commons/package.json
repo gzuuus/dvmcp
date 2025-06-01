@@ -1,29 +1,51 @@
 {
   "name": "@dvmcp/commons",
-  "version": "0.1.12",
+  "version": "0.2.5",
   "description": "Shared utilities for DVMCP packages",
   "type": "module",
+  "main": "./src/index.ts",
   "exports": {
-    "./*": "./*.ts",
-    "./*/*": "./*/*.ts"
+    ".": {
+      "import": "./src/index.ts"
+    },
+    "./core": {
+      "import": "./src/core/index.ts"
+    },
+    "./config": {
+      "import": "./src/config/index.ts"
+    },
+    "./nostr": {
+      "import": "./src/nostr/index.ts"
+    },
+    "./nostr/mock-relay": {
+      "import": "./src/nostr/mock-relay.ts"
+    },
+    "./core/mock-server": {
+      "import": "./src/core/mock-server.ts"
+    }
   },
   "files": [
-    "**/*.ts",
-    "**/*.js",
+    "src/**/*.ts",
+    "src/**/*.js",
     "!**/*.test.ts",
     "!**/*.test.js"
   ],
   "scripts": {
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "peerDependencies": {
-    "typescript": "^5.0.0",
+    "typescript": "^5.8.3",
     "@types/debug": "^4.1.12"
   },
   "dependencies": {
-    "debug": "^4.4.0"
+    "@noble/hashes": "^1.8.0",
+    "debug": "^4.4.1",
+    "nostr-tools": "^2.13.0",
+    "yaml": "^2.8.0"
   },
+  "sideEffects": false,
   "publishConfig": {
     "access": "public"
   }

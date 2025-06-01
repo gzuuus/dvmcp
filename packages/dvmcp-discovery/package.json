@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/discovery",
-  "version": "0.1.30",
+  "version": "0.2.0",
   "description": "Discovery service for MCP tools in the Nostr DVM ecosystem",
   "module": "index.ts",
   "type": "module",
@@ -31,10 +31,10 @@
     "@types/debug": "^4.1.12"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.10.2",
-    "nostr-tools": "^2.12.0",
-    "yaml": "^2.7.1",
-    "@dvmcp/commons": "^0.1.12"
+    "@modelcontextprotocol/sdk": "^1.11.4",
+    "nostr-tools": "^2.13.0",
+    "yaml": "^2.8.0",
+    "@dvmcp/commons": "workspace:*"
   },
   "publishConfig": {
     "access": "public"

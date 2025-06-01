@@ -4,11 +4,11 @@ import type { SubCloser } from 'nostr-tools/pool';
 import { useWebSocketImplementation } from 'nostr-tools/pool';
 import type { Filter } from 'nostr-tools';
 import {
-  DVM_NOTICE_KIND,
-  TOOL_REQUEST_KIND,
-  TOOL_RESPONSE_KIND,
-} from '../constants';
-import { logger } from '../logger';
+  REQUEST_KIND,
+  RESPONSE_KIND,
+  NOTIFICATION_KIND,
+} from '../core/constants';
+import { logger } from '../core/logger';
 import { EventEmitter } from 'node:events';
 
 useWebSocketImplementation(WebSocket);
@@ -66,7 +66,7 @@ export class RelayHandler {
     filter?: Filter
   ): SubCloser {
     const defaultFilter: Filter = {
-      kinds: [TOOL_REQUEST_KIND, TOOL_RESPONSE_KIND, DVM_NOTICE_KIND],
+      kinds: [REQUEST_KIND, RESPONSE_KIND, NOTIFICATION_KIND],
       since: Math.floor(Date.now() / 1000),
     };
 

@@ -1,13 +1,20 @@
 import type { Event, Filter } from 'nostr-tools';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { DVM_ANNOUNCEMENT_KIND } from '@dvmcp/commons/constants';
-import type { NaddrData, NprofileData } from './nip19-utils';
-import { loggerDiscovery } from '@dvmcp/commons/logger';
+import { RelayHandler } from '@dvmcp/commons/nostr';
+import { SERVER_ANNOUNCEMENT_KIND } from '@dvmcp/commons/core';
+import { loggerDiscovery } from '@dvmcp/commons/core';
+import type { AddressPointer, ProfilePointer } from 'nostr-tools/nip19';
+import type {
+  Prompt,
+  Resource,
+  Tool,
+} from '@modelcontextprotocol/sdk/types.js';
 
 export interface DVMAnnouncement {
   name: string;
   about: string;
-  tools: any[];
+  tools: Tool[];
+  resources?: Resource[];
+  prompts?: Prompt[];
 }
 
 async function fetchAnnouncement(
@@ -38,19 +45,18 @@ async function fetchAnnouncement(
 }
 
 export async function fetchProviderAnnouncement(
-  providerData: NprofileData
+  providerData: ProfilePointer
 ): Promise<Event | null> {
-  // Query for the provider's DVM announcement
+  // Query for the provider's server announcement
   const filter: Filter = {
-    kinds: [DVM_ANNOUNCEMENT_KIND],
+    kinds: [SERVER_ANNOUNCEMENT_KIND],
     authors: [providerData.pubkey],
-    '#t': ['mcp'],
   };
 
   const events = await fetchAnnouncement(
-    providerData.relays,
+    providerData.relays || [],
     filter,
-    'No DVM announcement found for provider'
+    'No server announcement found for provider'
   );
 
   if (!events) return null;
@@ -65,7 +71,7 @@ export async function fetchProviderAnnouncement(
 }
 
 export async function fetchServerAnnouncement(
-  addrData: NaddrData
+  addrData: AddressPointer
 ): Promise<Event | null> {
   // Query for the specific announcement event
   const filter: Filter = {
@@ -75,15 +81,50 @@ export async function fetchServerAnnouncement(
   };
 
   return fetchAnnouncement(
-    addrData.relays,
+    addrData.relays || [],
     filter,
-    'No DVM announcement found for the specified coordinates'
+    'No server announcement found for the specified coordinates'
   );
 }
 
 export function parseAnnouncement(event: Event): DVMAnnouncement | null {
   try {
-    return JSON.parse(event.content);
+    // For SERVER_ANNOUNCEMENT_KIND, parse the content as JSON
+    if (event.kind === SERVER_ANNOUNCEMENT_KIND) {
+      const content = JSON.parse(event.content);
+
+      // Create a structured announcement object with all capability types
+      const announcement: DVMAnnouncement = {
+        name: content.name || content.serverInfo?.name || 'Unknown Server',
+        about: content.about || content.serverInfo?.description || '',
+        tools: content.tools || [],
+      };
+
+      // Add resources if available
+      if (content.resources && Array.isArray(content.resources)) {
+        announcement.resources = content.resources;
+      }
+
+      // Add prompts if available
+      if (content.prompts && Array.isArray(content.prompts)) {
+        announcement.prompts = content.prompts;
+      }
+
+      loggerDiscovery(
+        `Parsed announcement with ${announcement.tools.length} tools, ` +
+          `${announcement.resources?.length || 0} resources, ` +
+          `${announcement.prompts?.length || 0} prompts`
+      );
+
+      return announcement;
+    }
+    // For other kinds, return null as they should be handled differently
+    else {
+      console.error(
+        `Unsupported event kind for parsing announcement: ${event.kind}`
+      );
+      return null;
+    }
   } catch (error) {
     console.error(`Failed to parse announcement: ${error}`);
     return null;

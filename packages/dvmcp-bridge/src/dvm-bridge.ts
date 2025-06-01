@@ -1,39 +1,81 @@
-import { keyManager, NostrAnnouncer } from './announcer';
-import type { Event } from 'nostr-tools/pure';
-import { CONFIG } from './config';
+import { NostrAnnouncer } from './announcer';
 import { MCPPool } from './mcp-pool';
-import { RelayHandler } from '@dvmcp/commons/nostr/relay-handler';
-import { relayHandler } from './relay';
+import type { DvmcpBridgeConfig } from './config-schema.js';
+import { RelayHandler } from '@dvmcp/commons/nostr';
+import { createKeyManager } from '@dvmcp/commons/nostr';
 import {
-  DVM_NOTICE_KIND,
-  TOOL_REQUEST_KIND,
-  TOOL_RESPONSE_KIND,
-} from '@dvmcp/commons/constants';
-import { loggerBridge } from '@dvmcp/commons/logger';
-import { generateZapRequest, verifyZapPayment } from './payment-handler';
+  REQUEST_KIND,
+  RESPONSE_KIND,
+  NOTIFICATION_KIND,
+  TAG_METHOD,
+  TAG_PUBKEY,
+  TAG_EVENT_ID,
+  TAG_STATUS,
+  TAG_SERVER_IDENTIFIER,
+} from '@dvmcp/commons/core';
+import { loggerBridge } from '@dvmcp/commons/core';
+import type { NostrEvent } from 'nostr-tools';
+import { getServerId } from './utils';
 
+import { handleToolsList, handleToolsCall } from './handlers/tool-handlers';
+import {
+  handleResourcesList,
+  handleResourcesRead,
+  handleResourceTemplatesList,
+} from './handlers/resource-handlers';
+import {
+  handlePromptsList,
+  handlePromptsGet,
+  handleNotificationsCancel,
+  handleCompletionComplete,
+} from './handlers';
+
+// TODO: add ping utility handler
 export class DVMBridge {
   private mcpPool: MCPPool;
   private nostrAnnouncer: NostrAnnouncer;
   private relayHandler: RelayHandler;
   private isRunning: boolean = false;
+  public readonly serverId: string;
+  public readonly keyManager: ReturnType<typeof createKeyManager>;
 
-  constructor() {
+  constructor(
+    private config: DvmcpBridgeConfig,
+    relayHandler?: RelayHandler
+  ) {
+    this.relayHandler =
+      relayHandler ?? new RelayHandler(config.nostr.relayUrls);
     loggerBridge('Initializing DVM Bridge...');
-    loggerBridge('public key:', keyManager.getPublicKey());
-    this.mcpPool = new MCPPool(CONFIG.mcp.servers);
-    this.relayHandler = relayHandler;
-    this.nostrAnnouncer = new NostrAnnouncer(this.mcpPool);
+    this.mcpPool = new MCPPool(config);
+
+    this.keyManager = createKeyManager(config.nostr.privateKey);
+    const publicKey = this.keyManager.getPublicKey();
+
+    this.serverId = getServerId(
+      this.config.mcp.name,
+      publicKey,
+      this.config.mcp.serverId
+    );
+
+    if (this.config.mcp.serverId) {
+      loggerBridge(`Using custom server ID from config: ${this.serverId}`);
+    }
+
+    this.nostrAnnouncer = new NostrAnnouncer(
+      this.mcpPool,
+      config,
+      this.relayHandler,
+      this.serverId,
+      this.keyManager
+    );
+
+    loggerBridge('public key:', publicKey);
   }
 
   private isWhitelisted(pubkey: string): boolean {
-    if (
-      !CONFIG.whitelist.allowedPubkeys ||
-      CONFIG.whitelist.allowedPubkeys.size == 0
-    ) {
-      return true;
-    }
-    return CONFIG.whitelist.allowedPubkeys.has(pubkey);
+    const allowedPubkeys = this.config.whitelist?.allowedPubkeys;
+    if (!allowedPubkeys || allowedPubkeys.length === 0) return true;
+    return allowedPubkeys.includes(pubkey);
   }
 
   async start() {
@@ -50,18 +92,32 @@ export class DVMBridge {
       loggerBridge(`Available MCP tools across all servers: ${tools.length}`);
 
       loggerBridge('Announcing service to Nostr network...');
-      await this.nostrAnnouncer.updateAnnouncement();
+      try {
+        await this.nostrAnnouncer.updateAnnouncement();
+      } catch (error) {
+        console.warn('Failed to announce service to Nostr network:', error);
+        loggerBridge(
+          '⚠️ Warning: Failed to announce service to Nostr network. The bridge will still function, but will not be discoverable via Nostr.'
+        );
+      }
 
       loggerBridge('Setting up request handlers...');
-      const publicKey = keyManager.getPublicKey();
+      const publicKey = this.keyManager.getPublicKey();
       const subscribe = () => {
         this.relayHandler.subscribeToRequests(this.handleRequest.bind(this), {
-          kinds: [TOOL_REQUEST_KIND],
+          kinds: [REQUEST_KIND, NOTIFICATION_KIND],
           '#p': [publicKey],
           since: Math.floor(Date.now() / 1000),
         });
       };
-      subscribe();
+
+      try {
+        subscribe();
+      } catch (error) {
+        loggerBridge(
+          '⚠️ Warning: Failed to subscribe to Nostr requests. Will retry on relay reconnection.'
+        );
+      }
 
       this.relayHandler.onRelayReconnected((url) => {
         loggerBridge(`Relay reconnected: ${url}, re-subscribing to requests`);
@@ -93,11 +149,6 @@ export class DVMBridge {
     }
   }
 
-  /**
-   * Deletes the service announcement from relays
-   * @param reason Optional reason for deletion
-   * @returns The deletion event that was published
-   */
   async deleteAnnouncement(reason?: string) {
     loggerBridge('Deleting service announcement from relays...');
     try {
@@ -111,165 +162,144 @@ export class DVMBridge {
     }
   }
 
-  private async handleRequest(event: Event) {
+  private async handleRequest(event: NostrEvent): Promise<void> {
     try {
-      if (this.isWhitelisted(event.pubkey)) {
-        if (event.kind === TOOL_REQUEST_KIND) {
-          const command = event.tags.find((tag) => tag[0] === 'c')?.[1];
+      const tags = event.tags;
+      const kind = event.kind;
+      const pubkey = event.pubkey;
+      const id = event.id;
+      const method = tags.find((tag) => tag[0] === TAG_METHOD)?.[1] || '';
+      const serverIdentifier =
+        tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
 
-          if (command === 'list-tools') {
-            const tools = await this.mcpPool.listTools();
-            const response = keyManager.signEvent({
-              ...keyManager.createEventTemplate(TOOL_RESPONSE_KIND),
-              content: JSON.stringify({
-                tools,
-              }),
-              tags: [
-                ['c', 'list-tools-response'],
-                ['e', event.id],
-                ['p', event.pubkey],
-              ],
-            });
-
-            await this.relayHandler.publishEvent(response);
-          } else if (command === 'execute-tool') {
-            const jobRequest = JSON.parse(event.content);
-            const processingStatus = keyManager.signEvent({
-              ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
-              tags: [
-                ['status', 'processing'],
-                ['e', event.id],
-                ['p', event.pubkey],
-              ],
-            });
-            await this.relayHandler.publishEvent(processingStatus);
-
-            try {
-              // Check if the tool has pricing information
-              const pricing = this.mcpPool.getToolPricing(jobRequest.name);
-
-              if (pricing?.price) {
-                loggerBridge(
-                  `Tool ${jobRequest.name} requires payment: ${pricing.price} ${pricing.unit || 'sats'}`
-                );
-
-                // Generate zap request for payment
-                const zapRequest = await generateZapRequest(
-                  pricing.price,
-                  jobRequest.name,
-                  event.id,
-                  event.pubkey
-                );
-
-                if (zapRequest) {
-                  // Send payment required status with zap invoice
-                  const paymentRequiredStatus = keyManager.signEvent({
-                    ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
-                    tags: [
-                      ['status', 'payment-required'],
-                      ['amount', pricing.price, pricing.unit || 'sats'],
-                      ['invoice', zapRequest.paymentRequest],
-                      ['e', event.id],
-                      ['p', event.pubkey],
-                    ],
-                  });
-                  await this.relayHandler.publishEvent(paymentRequiredStatus);
-
-                  loggerBridge(
-                    `Waiting for zap receipt for request ID: ${zapRequest.zapRequestId}`
-                  );
-
-                  const paymentVerified = await verifyZapPayment(
-                    zapRequest.relays,
-                    zapRequest.paymentRequest
-                  );
-
-                  if (!paymentVerified) {
-                    const paymentFailedStatus = keyManager.signEvent({
-                      ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
-                      tags: [
-                        [
-                          'status',
-                          'error',
-                          'Payment verification failed or timed out',
-                        ],
-                        ['e', event.id],
-                        ['p', event.pubkey],
-                      ],
-                    });
-                    await this.relayHandler.publishEvent(paymentFailedStatus);
-                    return;
-                  }
-
-                  // Payment verified via zap receipt, continue with tool execution
-                  const paymentAcceptedStatus = keyManager.signEvent({
-                    ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
-                    tags: [
-                      ['status', 'payment-accepted'],
-                      ['e', event.id],
-                      ['p', event.pubkey],
-                    ],
-                  });
-                  await this.relayHandler.publishEvent(paymentAcceptedStatus);
-                }
-              }
-
-              // Execute the tool
-              const result = await this.mcpPool.callTool(
-                jobRequest.name,
-                jobRequest.parameters
-              );
-
-              if (result?.content) {
-                const successStatus = keyManager.signEvent({
-                  ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
-                  tags: [
-                    ['status', 'success'],
-                    ['e', event.id],
-                    ['p', event.pubkey],
-                  ],
-                });
-                await this.relayHandler.publishEvent(successStatus);
-                const response = keyManager.signEvent({
-                  ...keyManager.createEventTemplate(TOOL_RESPONSE_KIND),
-                  content: JSON.stringify(result),
-                  tags: [
-                    ['c', 'execute-tool-response'],
-                    ['e', event.id],
-                    ['p', event.pubkey],
-                  ],
-                });
-                await this.relayHandler.publishEvent(response);
-              }
-            } catch (error) {
-              const errorStatus = keyManager.signEvent({
-                ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
-                tags: [
-                  [
-                    'status',
-                    'error',
-                    error instanceof Error ? error.message : 'Unknown error',
-                  ],
-                  ['e', event.id],
-                  ['p', event.pubkey],
-                ],
-              });
-              await this.relayHandler.publishEvent(errorStatus);
-            }
-          }
-        }
-      } else {
-        const errorStatus = keyManager.signEvent({
-          ...keyManager.createEventTemplate(DVM_NOTICE_KIND),
-          content: 'Unauthorized: Pubkey not in whitelist',
+      if (serverIdentifier != this.serverId) {
+        const errorStatus = this.keyManager.signEvent({
+          ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
+          content: 'Unauthorized: Server identifier does not match',
           tags: [
-            ['status', 'error'],
-            ['e', event.id],
-            ['p', event.pubkey],
+            [TAG_STATUS, 'error'],
+            [TAG_EVENT_ID, id],
+            [TAG_PUBKEY, pubkey],
           ],
         });
         await this.relayHandler.publishEvent(errorStatus);
         return;
+      }
+
+      if (!this.isWhitelisted(pubkey)) {
+        const errorStatus = this.keyManager.signEvent({
+          ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
+          content: 'Unauthorized: Pubkey not in whitelist',
+          tags: [
+            [TAG_STATUS, 'error'],
+            [TAG_EVENT_ID, id],
+            [TAG_PUBKEY, pubkey],
+          ],
+        });
+        await this.relayHandler.publishEvent(errorStatus);
+        return;
+      }
+      if (kind === REQUEST_KIND) {
+        switch (method) {
+          case 'initialize':
+            break;
+          case 'tools/list':
+            await handleToolsList(
+              event,
+              this.mcpPool,
+              this.keyManager,
+              this.relayHandler
+            );
+            break;
+          case 'tools/call':
+            await handleToolsCall(
+              event,
+              this.mcpPool,
+              this.keyManager,
+              this.relayHandler,
+              this.config
+            );
+            break;
+          case 'resources/list':
+            await handleResourcesList(
+              event,
+              this.mcpPool,
+              this.keyManager,
+              this.relayHandler
+            );
+            break;
+          case 'resources/read':
+            await handleResourcesRead(
+              event,
+              this.mcpPool,
+              this.keyManager,
+              this.relayHandler,
+              this.config
+            );
+            break;
+          case 'resources/templates/list':
+            await handleResourceTemplatesList(
+              event,
+              this.mcpPool,
+              this.keyManager,
+              this.relayHandler
+            );
+            break;
+          case 'prompts/list':
+            await handlePromptsList(
+              event,
+              this.mcpPool,
+              this.keyManager,
+              this.relayHandler
+            );
+            break;
+          case 'prompts/get':
+            await handlePromptsGet(
+              event,
+              this.mcpPool,
+              this.keyManager,
+              this.relayHandler,
+              this.config
+            );
+            break;
+          case 'completion/complete':
+            const completionResponse = await handleCompletionComplete(
+              event,
+              this.mcpPool,
+              this.keyManager
+            );
+            if (!completionResponse) break;
+            await this.relayHandler.publishEvent(completionResponse);
+            break;
+          default:
+            const notImpl = this.keyManager.signEvent({
+              ...this.keyManager.createEventTemplate(RESPONSE_KIND),
+              content: JSON.stringify({
+                error: {
+                  code: -32601,
+                  message: 'Method not implemented',
+                  data: method,
+                },
+              }),
+              tags: [
+                [TAG_EVENT_ID, id],
+                [TAG_PUBKEY, pubkey],
+              ],
+            });
+            await this.relayHandler.publishEvent(notImpl);
+        }
+      } else if (kind === NOTIFICATION_KIND) {
+        if (method === 'notifications/cancel') {
+          await handleNotificationsCancel(
+            event,
+            this.keyManager,
+            this.relayHandler
+          );
+        } else {
+          loggerBridge(`Received unhandled notification type: ${method}`);
+        }
+      } else {
+        loggerBridge(`Received unhandled event kind: ${kind}`);
       }
     } catch (error) {
       console.error('Error handling request:', error);

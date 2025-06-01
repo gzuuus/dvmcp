@@ -22,6 +22,16 @@
     // Some stricter flags (disabled by default)
     "noUnusedLocals": false,
     "noUnusedParameters": false,
-    "noPropertyAccessFromIndexSignature": false
-  }
+    "noPropertyAccessFromIndexSignature": false,
+
+    // Path aliases for better imports
+    "baseUrl": ".",
+    "paths": {
+      "@dvmcp/commons": ["src/index.ts"],
+      "@dvmcp/commons/core": ["src/core/index.ts"],
+      "@dvmcp/commons/config": ["src/config/index.ts"],
+      "@dvmcp/commons/nostr": ["src/nostr/index.ts"]
+    }
+  },
+  "include": ["src/**/*"]
 }

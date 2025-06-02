@@ -1,5 +1,11 @@
 # @dvmcp/bridge
 
+## 0.2.2
+
+### Patch Changes
+
+- 7d512ea: fix: don't throw error on server identifier mismatch
+
 ## 0.2.1
 
 ### Patch Changes

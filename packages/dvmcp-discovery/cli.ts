@@ -17,6 +17,7 @@ import { loggerDiscovery } from '@dvmcp/commons/core';
 import {
   fetchProviderAnnouncement,
   fetchServerAnnouncement,
+  fetchServerCapabilities,
   parseAnnouncement,
 } from './src/direct-discovery';
 import { loadDiscoveryConfig } from './src/config-loader';
@@ -157,6 +158,9 @@ async function setupFromProvider(nprofileEntity: string): Promise<void> {
   }
 
   try {
+    if (!!providerData.relays) {
+      providerData.relays = [DEFAULT_VALUES.DEFAULT_RELAY_URL];
+    }
     const announcement = await fetchProviderAnnouncement(providerData);
     if (!announcement) {
       console.error('Failed to fetch provider announcement');
@@ -188,6 +192,10 @@ async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
   }
 
   try {
+    const relays =
+      addrData.relays && addrData.relays.length > 0
+        ? addrData.relays
+        : [DEFAULT_VALUES.DEFAULT_RELAY_URL];
     const announcement = await fetchServerAnnouncement(addrData);
     if (!announcement) {
       console.error('Failed to fetch server announcement');
@@ -195,20 +203,64 @@ async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
     }
 
     const parsedAnnouncement = parseAnnouncement(announcement);
-    if (!parsedAnnouncement) {
+    if (!parsedAnnouncement.result) {
       console.error('Failed to parse server announcement');
       process.exit(1);
     }
 
-    setupInMemoryConfig(
-      addrData.relays || [DEFAULT_VALUES.DEFAULT_RELAY_URL],
-      addrData.pubkey
+    if (!parsedAnnouncement.serverId) {
+      console.error('Server announcement missing server ID');
+      process.exit(1);
+    }
+
+    loggerDiscovery(
+      `${CONFIG_EMOJIS.INFO} Fetching capabilities for server: ${parsedAnnouncement.serverId}`
     );
+    const capabilities = await fetchServerCapabilities(
+      relays,
+      addrData.pubkey,
+      parsedAnnouncement.serverId
+    );
+
+    const enhancedAnnouncement = {
+      ...parsedAnnouncement.result,
+      tools: capabilities.tools,
+      resources: capabilities.resources,
+      resourceTemplates: capabilities.resourceTemplates,
+      prompts: capabilities.prompts,
+      capabilities: {
+        ...parsedAnnouncement.result.capabilities,
+        tools: {
+          ...parsedAnnouncement.result.capabilities?.tools,
+          list: capabilities.tools,
+        },
+        resources: {
+          ...parsedAnnouncement.result.capabilities?.resources,
+          list: capabilities.resources,
+          templates: capabilities.resourceTemplates,
+        },
+        prompts: {
+          ...parsedAnnouncement.result.capabilities?.prompts,
+          list: capabilities.prompts,
+        },
+      },
+    };
+
+    loggerDiscovery(
+      `${CONFIG_EMOJIS.INFO} Found server capabilities: ` +
+        `${capabilities.tools.length} tools, ` +
+        `${capabilities.resources.length} resources, ` +
+        `${capabilities.resourceTemplates.length} resource templates, ` +
+        `${capabilities.prompts.length} prompts`
+    );
+
+    setupInMemoryConfig(relays, addrData.pubkey);
     loggerDiscovery(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from server`);
 
     return {
       pubkey: addrData.pubkey,
-      announcement: parsedAnnouncement,
+      announcement: enhancedAnnouncement,
+      serverId: parsedAnnouncement.serverId,
     };
   } catch (error) {
     console.error(`Error: ${error}`);

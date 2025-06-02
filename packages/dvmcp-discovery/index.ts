@@ -1,12 +1,13 @@
 import { loadDiscoveryConfig } from './src/config-loader';
 import { DiscoveryServer } from './src/discovery-server';
-import type { DVMAnnouncement } from './src/direct-discovery';
 import { loggerDiscovery as logger } from '@dvmcp/commons/core';
 import type { DvmcpDiscoveryConfig } from './src/config-schema';
+import type { InitializeResult } from '@modelcontextprotocol/sdk/types.js';
 
 export interface DirectServerInfo {
   pubkey: string;
-  announcement: DVMAnnouncement;
+  announcement: InitializeResult | null;
+  serverId?: string;
 }
 
 async function main(
@@ -21,7 +22,8 @@ async function main(
       logger(`Using direct server with pubkey: ${directServerInfo.pubkey}`);
       await server.registerDirectServerTools(
         directServerInfo.pubkey,
-        directServerInfo.announcement
+        directServerInfo.announcement!,
+        directServerInfo.serverId!
       );
     } else {
       await server.start();

@@ -24,6 +24,7 @@ import {
   type ListResourceTemplatesResult,
   type CompleteRequest,
   type CompleteResult,
+  type InitializeResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { ToolRegistry } from './tool-registry';
 import { ToolExecutor } from './tool-executor';
@@ -32,7 +33,6 @@ import { ResourceExecutor } from './resource-executor';
 import { PromptRegistry } from './prompt-registry';
 import { PromptExecutor } from './prompt-executor';
 import { ServerRegistry } from './server-registry';
-import type { DVMAnnouncement } from './direct-discovery';
 import { loggerDiscovery } from '@dvmcp/commons/core';
 import { initBuiltInTools } from './built-in-tools';
 import { createCapabilityId } from '@dvmcp/commons/core';
@@ -636,42 +636,78 @@ export class DiscoveryServer {
 
   public async registerDirectServerTools(
     pubkey: string,
-    announcement: DVMAnnouncement
+    announcement: InitializeResult,
+    serverId: string
   ) {
     loggerDiscovery(
       'Starting discovery server with direct server capabilities...'
     );
 
-    if (announcement?.tools && announcement.tools.length > 0) {
-      this.registerToolsFromAnnouncement(pubkey, announcement.tools);
-      loggerDiscovery(
-        `Registered ${announcement.tools.length} tools from direct server`
+    if (announcement.serverInfo) {
+      this.serverRegistry.registerServer(
+        serverId,
+        pubkey,
+        JSON.stringify({
+          protocolVersion: announcement.protocolVersion || '2025-03-26',
+          capabilities: announcement.capabilities || {},
+          serverInfo: announcement.serverInfo,
+          instructions: announcement.instructions,
+        })
       );
+      loggerDiscovery(
+        `Registered direct server: ${announcement.serverInfo.name || serverId} (${serverId})`
+      );
+    }
+
+    const tools: Tool[] = Array.isArray(announcement.tools)
+      ? (announcement.tools as Tool[])
+      : Array.isArray(announcement.capabilities?.tools)
+        ? (announcement.capabilities.tools as Tool[])
+        : [];
+    if (tools.length > 0) {
+      this.registerToolsFromAnnouncement(pubkey, tools, serverId);
+      loggerDiscovery(`Registered ${tools.length} tools from direct server`);
     } else {
       loggerDiscovery('No tools found in server announcement');
     }
 
-    if (announcement?.resources && announcement.resources.length > 0) {
-      const serverId = `direct_${pubkey.slice(0, 8)}`;
+    const resources: Resource[] = Array.isArray(announcement.resources)
+      ? (announcement.resources as Resource[])
+      : [];
+    if (resources.length > 0) {
       this.resourceRegistry.registerServerResources(
         serverId,
-        announcement.resources,
+        resources,
         pubkey
       );
       loggerDiscovery(
-        `Registered ${announcement.resources.length} resources from direct server`
+        `Registered ${resources.length} resources from direct server`
       );
     }
 
-    if (announcement?.prompts && announcement.prompts.length > 0) {
-      const serverId = `direct_${pubkey.slice(0, 8)}`;
-      this.promptRegistry.registerServerPrompts(
+    const resourceTemplates: ResourceTemplate[] = Array.isArray(
+      announcement.resourceTemplates
+    )
+      ? (announcement.resourceTemplates as ResourceTemplate[])
+      : [];
+    if (resourceTemplates.length > 0) {
+      this.resourceRegistry.registerServerResourceTemplates(
         serverId,
-        announcement.prompts,
+        resourceTemplates,
         pubkey
       );
       loggerDiscovery(
-        `Registered ${announcement.prompts.length} prompts from direct server`
+        `Registered ${resourceTemplates.length} resource templates from direct server`
+      );
+    }
+
+    const prompts: Prompt[] = Array.isArray(announcement.prompts)
+      ? (announcement.prompts as Prompt[])
+      : [];
+    if (prompts.length > 0) {
+      this.promptRegistry.registerServerPrompts(serverId, prompts, pubkey);
+      loggerDiscovery(
+        `Registered ${prompts.length} prompts from direct server`
       );
     }
 
@@ -679,6 +715,7 @@ export class DiscoveryServer {
       `Direct server registration complete: ` +
         `${this.toolRegistry.listTools().length} tools, ` +
         `${this.resourceRegistry.listResources().length} resources, ` +
+        `${this.resourceRegistry.listResourceTemplates().length} resource templates, ` +
         `${this.promptRegistry.listPrompts().length} prompts`
     );
 
@@ -709,7 +746,6 @@ export class DiscoveryServer {
         'Skipping discovery as no relay URLs are configured and running in interactive mode'
       );
     }
-    // Set up the completion request handler if any servers support completions
     this.serverRegistry.setupCompletionHandler(this.mcpServer, (params) =>
       this.getCompletions(params)
     );

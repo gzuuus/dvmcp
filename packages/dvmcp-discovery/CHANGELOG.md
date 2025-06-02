@@ -1,5 +1,11 @@
 # @dvmcp/discovery
 
+## 0.2.2
+
+### Patch Changes
+
+- update direct server registration to use mcp protocol types and capabilities
+
 ## 0.2.1
 
 ### Patch Changes

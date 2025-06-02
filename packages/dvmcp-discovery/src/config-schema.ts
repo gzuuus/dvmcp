@@ -7,7 +7,7 @@
 import type { ConfigSchema } from '@dvmcp/commons/config';
 
 export const DEFAULT_VALUES = {
-  DEFAULT_RELAY_URL: 'wss://relay.dvmcp.fun',
+  DEFAULT_RELAY_URL: 'wss://r.dvmcp.fun',
   DEFAULT_MCP_NAME: 'DVMCP Discovery',
   DEFAULT_MCP_VERSION: '1.0.0',
   DEFAULT_MCP_ABOUT:

@@ -173,16 +173,6 @@ export class DVMBridge {
         tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
 
       if (serverIdentifier != this.serverId) {
-        const errorStatus = this.keyManager.signEvent({
-          ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
-          content: 'Unauthorized: Server identifier does not match',
-          tags: [
-            [TAG_STATUS, 'error'],
-            [TAG_EVENT_ID, id],
-            [TAG_PUBKEY, pubkey],
-          ],
-        });
-        await this.relayHandler.publishEvent(errorStatus);
         return;
       }
 

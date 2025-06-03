@@ -734,16 +734,20 @@ export class DiscoveryServer {
       `Relay URLs: ${this.config.nostr.relayUrls.length > 0 ? this.config.nostr.relayUrls.join(', ') : 'none'}`
     );
 
-    if (this.config.nostr.relayUrls.length > 0 || !isInteractive) {
-      await this.startDiscovery();
-      loggerDiscovery(
-        `Discovery complete: ${this.toolRegistry.listTools().length} tools, ` +
-          `${this.resourceRegistry.listResources().length} resources, ` +
-          `${this.promptRegistry.listPrompts().length} prompts`
-      );
+    if (!isInteractive) {
+      if (this.config.nostr.relayUrls.length > 0) {
+        await this.startDiscovery();
+        loggerDiscovery(
+          `Discovery complete: ${this.toolRegistry.listTools().length} tools, ` +
+            `${this.resourceRegistry.listResources().length} resources, ` +
+            `${this.promptRegistry.listPrompts().length} prompts`
+        );
+      } else {
+        loggerDiscovery('Skipping discovery as no relay URLs are configured');
+      }
     } else {
       loggerDiscovery(
-        'Skipping discovery as no relay URLs are configured and running in interactive mode'
+        'Skipping discovery as running in interactive mode - using only built-in tools'
       );
     }
     this.serverRegistry.setupCompletionHandler(this.mcpServer, (params) =>

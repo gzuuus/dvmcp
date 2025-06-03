@@ -1,5 +1,11 @@
 # @dvmcp/discovery
 
+## 0.2.3
+
+### Patch Changes
+
+- skip discovery in interactive mode and use only built-in tools
+
 ## 0.2.2
 
 ### Patch Changes

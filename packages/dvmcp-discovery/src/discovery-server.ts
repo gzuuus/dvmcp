@@ -725,8 +725,10 @@ export class DiscoveryServer {
     loggerDiscovery('DVMCP Discovery Server started');
   }
 
-  public async start() {
+  public async start(options?: { forceDiscovery?: boolean }) {
     const isInteractive = this.config.featureFlags?.interactive === true;
+    const forceDiscovery = options?.forceDiscovery === true;
+
     loggerDiscovery(
       `Starting discovery server with interactive mode: ${isInteractive ? 'enabled' : 'disabled'}`
     );
@@ -734,8 +736,13 @@ export class DiscoveryServer {
       `Relay URLs: ${this.config.nostr.relayUrls.length > 0 ? this.config.nostr.relayUrls.join(', ') : 'none'}`
     );
 
-    if (!isInteractive) {
+    if (!isInteractive || forceDiscovery) {
       if (this.config.nostr.relayUrls.length > 0) {
+        if (forceDiscovery && isInteractive) {
+          loggerDiscovery(
+            'Force discovery enabled - running discovery despite interactive mode'
+          );
+        }
         await this.startDiscovery();
         loggerDiscovery(
           `Discovery complete: ${this.toolRegistry.listTools().length} tools, ` +

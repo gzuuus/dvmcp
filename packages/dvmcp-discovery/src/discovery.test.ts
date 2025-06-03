@@ -38,7 +38,7 @@ describe('DiscoveryServer E2E', () => {
     };
 
     discoveryServer = new DiscoveryServer(testConfig);
-    await discoveryServer.start();
+    await discoveryServer.start({ forceDiscovery: true });
   });
   afterAll(async () => {
     if (discoveryServer) {

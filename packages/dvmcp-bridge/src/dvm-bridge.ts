@@ -28,9 +28,8 @@ import {
   handlePromptsGet,
   handleNotificationsCancel,
   handleCompletionComplete,
+  handlePing,
 } from './handlers';
-
-// TODO: add ping utility handler
 export class DVMBridge {
   private mcpPool: MCPPool;
   private nostrAnnouncer: NostrAnnouncer;
@@ -172,7 +171,22 @@ export class DVMBridge {
       const serverIdentifier =
         tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
 
-      if (serverIdentifier != this.serverId) {
+      // For ping requests, if no server ID is specified, we should still respond
+      // For all other methods, server ID must match
+      if (
+        method !== 'ping' &&
+        serverIdentifier &&
+        serverIdentifier !== this.serverId
+      ) {
+        return;
+      }
+
+      // If server ID is specified for ping, it must match ours
+      if (
+        method === 'ping' &&
+        serverIdentifier &&
+        serverIdentifier !== this.serverId
+      ) {
         return;
       }
 
@@ -192,6 +206,9 @@ export class DVMBridge {
       if (kind === REQUEST_KIND) {
         switch (method) {
           case 'initialize':
+            break;
+          case 'ping':
+            await handlePing(event, this.keyManager, this.relayHandler);
             break;
           case 'tools/list':
             await handleToolsList(

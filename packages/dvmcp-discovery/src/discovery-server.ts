@@ -4,6 +4,7 @@ import { type Event, type Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import { createKeyManager } from '@dvmcp/commons/nostr';
 import { CompletionExecutor } from './completion-executor';
+import { PingExecutor } from './ping-executor';
 import type { DvmcpDiscoveryConfig } from './config-schema';
 import {
   SERVER_ANNOUNCEMENT_KIND,
@@ -50,6 +51,7 @@ export class DiscoveryServer {
   private promptExecutor: PromptExecutor;
   private serverRegistry: ServerRegistry;
   private completionExecutor: CompletionExecutor;
+  private pingExecutor: PingExecutor;
   private config: DvmcpDiscoveryConfig;
   private integratedRelays: Set<string> = new Set();
 
@@ -95,6 +97,8 @@ export class DiscoveryServer {
       this.resourceRegistry,
       this.serverRegistry
     );
+
+    this.pingExecutor = new PingExecutor(this.relayHandler, this.keyManager);
 
     this.toolRegistry.setExecutionCallback(async (toolId, args) => {
       return this.toolExecutor.executeTool(toolId, args);
@@ -268,6 +272,7 @@ export class DiscoveryServer {
     this.toolExecutor.updateRelayHandler(this.relayHandler);
     this.resourceExecutor.updateRelayHandler(this.relayHandler);
     this.promptExecutor.updateRelayHandler(this.relayHandler);
+    this.pingExecutor.updateRelayHandler(this.relayHandler);
 
     loggerDiscovery(
       `Updated relay handler with new relay: ${relayUrl}. Total relays: ${allRelays.length}`
@@ -287,6 +292,7 @@ export class DiscoveryServer {
     this.toolExecutor.updateRelayHandler(relayHandler);
     this.resourceExecutor.updateRelayHandler(relayHandler);
     this.promptExecutor.updateRelayHandler(relayHandler);
+    this.pingExecutor.updateRelayHandler(relayHandler);
 
     loggerDiscovery('Updated relay handler in discovery server');
   }
@@ -761,6 +767,10 @@ export class DiscoveryServer {
       this.getCompletions(params)
     );
 
+    this.serverRegistry.setupPingHandler(this.mcpServer, () =>
+      this.handlePing()
+    );
+
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
     loggerDiscovery('MCP server connected');
@@ -787,12 +797,64 @@ export class DiscoveryServer {
     return this.completionExecutor.getCompletions(params);
   }
 
+  /**
+   * Handle ping requests from MCP clients by propagating to DVMCP servers
+   * @param params - Ping request parameters
+   * @returns Empty object as per MCP ping specification
+   */
+  public async handlePing(): Promise<{}> {
+    loggerDiscovery(
+      'Received ping request from MCP client, propagating to DVMCP servers'
+    );
+
+    // Get all registered servers with their IDs
+    const serversWithIds = this.serverRegistry.listServersWithIds();
+
+    if (serversWithIds.length === 0) {
+      loggerDiscovery('No DVMCP servers to ping');
+      return {};
+    }
+
+    // Ping the first available server (or could ping all/random selection)
+    const [serverId, serverInfo] = serversWithIds[0];
+    loggerDiscovery(`Pinging DVMCP server: ${serverInfo.pubkey} (${serverId})`);
+
+    try {
+      // Use the ping executor to ping the server with server ID
+      const result = await this.pingExecutor.ping(serverInfo.pubkey, serverId);
+      loggerDiscovery(
+        `Ping result: ${result.success ? 'success' : 'failed'} in ${result.responseTime}ms`
+      );
+    } catch (error) {
+      loggerDiscovery(`Ping failed with error: ${error}`);
+    }
+
+    // Always return empty object as per MCP spec
+    return {};
+  }
+
+  /**
+   * Send a ping request to a specific server
+   * @param serverPubkey - Public key of the server to ping
+   * @param serverId - Server identifier (optional)
+   * @param options - Ping options
+   * @returns Promise that resolves with ping result
+   */
+  public async ping(
+    serverPubkey: string,
+    serverId?: string,
+    options?: { timeout?: number }
+  ): Promise<{ success: boolean; responseTime?: number; error?: string }> {
+    return this.pingExecutor.ping(serverPubkey, serverId, options);
+  }
+
   public cleanup(): void {
     this.relayHandler.cleanup();
     this.toolExecutor.cleanup();
     this.resourceExecutor.cleanup();
     this.promptExecutor.cleanup();
     this.completionExecutor.cleanup();
+    this.pingExecutor.cleanup();
 
     loggerDiscovery('DVMCP Discovery Server cleaned up');
   }

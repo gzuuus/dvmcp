@@ -3,9 +3,11 @@ import { BaseRegistry } from './base-registry';
 import type { DVMCPBridgeServer } from './base-interfaces';
 import {
   CompleteRequestSchema,
+  PingRequestSchema,
   type ServerCapabilities,
   type CompleteRequest,
   type CompleteResult,
+  type PingRequest,
 } from '@modelcontextprotocol/sdk/types.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
@@ -73,6 +75,14 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
    */
   public listServers(): ServerInfo[] {
     return Array.from(this.servers.values());
+  }
+
+  /**
+   * List all registered servers with their IDs
+   * @returns Array of [serverId, serverInfo] pairs
+   */
+  public listServersWithIds(): [string, ServerInfo][] {
+    return Array.from(this.servers.entries());
   }
 
   /**
@@ -169,5 +179,25 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
         'No servers with completions capability found, skipping handler setup'
       );
     }
+  }
+
+  /**
+   * Set up the ping request handler in the MCP server
+   * @param mcpServer - The MCP server instance
+   * @param pingHandler - Function to handle ping requests
+   */
+  public setupPingHandler(
+    mcpServer: McpServer,
+    pingHandler: (params: PingRequest['params']) => Promise<{}>
+  ): void {
+    loggerDiscovery('Setting up ping request handler');
+    mcpServer.server.setRequestHandler(PingRequestSchema, async (request) => {
+      try {
+        return await pingHandler(request.params);
+      } catch (error) {
+        loggerDiscovery(`Error handling ping request: ${error}`);
+        throw error;
+      }
+    });
   }
 }

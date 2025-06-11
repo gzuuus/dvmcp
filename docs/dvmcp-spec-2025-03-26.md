@@ -2,7 +2,7 @@
 
 ## MCP Integration for Nostr
 
-`draft` `mcp:2025-03-26` `rev1`
+`draft` `mcp:2025-03-26` `rev1.1`
 
 This document defines how Nostr and Data Vending Machines can be used to expose Model Context Protocol (MCP) server capabilities, enabling standardized usage of these resources.
 
@@ -23,6 +23,7 @@ This document defines how Nostr and Data Vending Machines can be used to expose 
   - [Resources](#resources)
   - [Prompts](#prompts)
 - [Completions](#completions)
+- [Ping](#ping)
 - [Notifications](#notifications)
   - [MCP Notifications](#mcp-notifications)
   - [Nostr-Specific Notifications](#nostr-specific-notifications)
@@ -839,6 +840,110 @@ sequenceDiagram
     Server-->>Client: Updated suggestions
 ```
 
+## Ping
+
+The Model Context Protocol includes an optional ping mechanism that allows either party to verify that their counterpart is still responsive and the connection is alive. DVMCP implements this feature following the same request/response pattern as other protocol operations while adapting it to the Nostr event-based architecture.
+
+### Overview
+
+The ping functionality enables connection health monitoring between DVMCP clients and servers. Either the client or server can initiate a ping to verify the connection status and responsiveness of their counterpart.
+
+### Message Format
+
+Ping requests follow the standard DVMCP message structure using the simplified JSON-RPC format:
+
+#### Ping Request
+
+```json
+{
+  "kind": 25910,
+  "pubkey": "<sender-pubkey>",
+  "content": {
+    "method": "ping"
+  },
+  "tags": [
+    ["method", "ping"],                      // Required: Method name for filtering
+    ["p", "<recipient-pubkey>"],             // Required: Target public key (provider or client)
+    ["s", "<server-identifier>"]             // Optional: Server identifier when targeting specific server
+  ]
+}
+```
+
+#### Ping Response
+
+The receiver **MUST** respond promptly with an empty response following DVMCP's simplified response format:
+
+```json
+{
+  "kind": 26910,
+  "pubkey": "<recipient-pubkey>",
+  "content": {},
+  "tags": [
+    ["e", "<ping-request-event-id>"]         // Required: Reference to the ping request event
+  ]
+}
+```
+
+### Behavior Requirements
+
+1. **Prompt Response**: The receiver **MUST** respond promptly with an empty response as shown above.
+
+2. **Timeout Handling**: If no response is received within a reasonable timeout period, the sender **MAY**:
+   - Consider the connection stale
+   - Terminate the connection
+   - Attempt reconnection procedures
+   - Log the failure for diagnostic purposes
+
+3. **Bidirectional Support**: Both clients and servers **MAY** initiate ping requests:
+   - **Client-initiated pings**: Use the provider's public key in the `p` tag
+   - **Server-initiated pings**: Use the client's public key in the `p` tag
+
+### Usage Patterns
+
+```mermaid
+sequenceDiagram
+    participant Sender as Sender (Client/Server)
+    participant Receiver as Receiver (Server/Client)
+
+    Sender->>Receiver: ping request (kind 25910)
+    Receiver->>Sender: empty response (kind 26910)
+    
+    Note over Sender,Receiver: Connection verified as healthy
+```
+
+### Implementation Considerations
+
+* Implementations **MAY** periodically issue pings to detect connection health
+* Timeouts **SHOULD** be appropriate for the network environment (recommended: 10-15 seconds)
+* Excessive pinging **SHOULD** be avoided to reduce network overhead and relay load
+
+### Error Handling
+
+* **Timeouts**: **SHOULD** be treated as connection failures
+* **Multiple Failed Pings**: **MAY** trigger connection reset or server unavailability status
+* **Protocol Errors**: If a ping request is malformed, standard DVMCP error responses should be used
+* **Logging**: Implementations **SHOULD** log ping failures for diagnostics
+
+#### Example Error Response
+
+If a ping cannot be processed due to protocol errors:
+
+```json
+{
+  "kind": 26910,
+  "pubkey": "<recipient-pubkey>",
+  "content": {
+    "error": {
+      "code": -32603,
+      "message": "Internal error processing ping"
+    }
+  },
+  "tags": [
+    ["e", "<ping-request-event-id>"]
+  ]
+}
+```
+
 ## Notifications
 
 Notifications in DVMCP are divided into two categories: MCP-compliant notifications that follow the Model Context Protocol specification, and Nostr-specific notifications that leverage Nostr's event-based architecture for features like payment handling.
@@ -965,6 +1070,7 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 5. Include appropriate error information for failed requests
 6. Process notifications according to the MCP specification
 7. Use standard Nostr tags for Nostr-specific features (like payments)
+8. Respond promptly to ping requests with empty responses
 
 ### Clients MUST:
 
@@ -974,6 +1080,7 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 4. Track event IDs for request-response correlation
 5. Subscribe to notifications from the server is interacting with
 6. Send the initialized notification when using Direct Discovery (private servers)
+7. Handle ping requests and responses appropriately for connection health monitoring
 
 ## Complete Protocol Flow
 
@@ -1043,6 +1150,10 @@ sequenceDiagram
     Note over Client,Server: MCP Notifications
     Server->>DVM: Resource updated
     DVM-->>Client: kind:21316, notifications/resources/updated
+
+    Note over Client,Server: Connection Health Monitoring
+    Client->>DVM: kind:25910, method:ping
+    DVM-->>Client: kind:26910, empty response
 ```
 
 ## Subscription Management

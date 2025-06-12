@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { type Event, type Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import { createKeyManager } from '@dvmcp/commons/nostr';
+import { EncryptionManager } from './encryption';
 import { CompletionExecutor } from './completion-executor';
 import { PingExecutor } from './ping-executor';
 import type { DvmcpDiscoveryConfig } from './config-schema';
@@ -42,6 +43,7 @@ export class DiscoveryServer {
   private mcpServer: McpServer;
   private relayHandler: RelayHandler;
   private keyManager: ReturnType<typeof createKeyManager>;
+  private encryptionManager: EncryptionManager | null = null;
 
   private toolRegistry: ToolRegistry;
   private toolExecutor: ToolExecutor;
@@ -59,6 +61,16 @@ export class DiscoveryServer {
     this.config = config;
     this.relayHandler = new RelayHandler(config.nostr.relayUrls);
     this.keyManager = createKeyManager(config.nostr.privateKey);
+
+    // Initialize encryption manager if encryption is configured
+    if (config.encryption) {
+      this.encryptionManager = new EncryptionManager(config.encryption);
+      loggerDiscovery(
+        'Encryption manager initialized with support:',
+        config.encryption.supportEncryption
+      );
+    }
+
     this.mcpServer = new McpServer({
       name: config.mcp.name,
       version: config.mcp.version,
@@ -71,7 +83,8 @@ export class DiscoveryServer {
       this.relayHandler,
       this.keyManager,
       this.toolRegistry,
-      this.config
+      this.config,
+      this.encryptionManager
     );
 
     this.resourceRegistry = new ResourceRegistry(this.mcpServer);
@@ -79,7 +92,8 @@ export class DiscoveryServer {
       this.relayHandler,
       this.keyManager,
       this.resourceRegistry,
-      this.config
+      this.config,
+      this.encryptionManager || undefined
     );
 
     this.promptRegistry = new PromptRegistry(this.mcpServer);
@@ -87,7 +101,8 @@ export class DiscoveryServer {
       this.relayHandler,
       this.keyManager,
       this.promptRegistry,
-      this.config
+      this.config,
+      this.encryptionManager || undefined
     );
 
     this.completionExecutor = new CompletionExecutor(
@@ -95,10 +110,15 @@ export class DiscoveryServer {
       this.keyManager,
       this.promptRegistry,
       this.resourceRegistry,
-      this.serverRegistry
+      this.serverRegistry,
+      this.encryptionManager || undefined
     );
 
-    this.pingExecutor = new PingExecutor(this.relayHandler, this.keyManager);
+    this.pingExecutor = new PingExecutor(
+      this.relayHandler,
+      this.keyManager,
+      this.encryptionManager || undefined
+    );
 
     this.toolRegistry.setExecutionCallback(async (toolId, args) => {
       return this.toolExecutor.executeTool(toolId, args);

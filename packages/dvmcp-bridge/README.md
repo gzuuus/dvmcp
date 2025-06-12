@@ -9,6 +9,7 @@ A bridge implementation that connects Model Context Protocol (MCP) servers to No
 - Tool discovery and execution through DVM kind:5910/6910 events
 - Job status updates and payment handling via kind:7000 events
 - Service announcement deletion using NIP-09
+- Encrypted communication support using NIP-17/NIP-59
 - Comprehensive error handling
 
 ## Configuration
@@ -49,6 +50,8 @@ DVMCP_MCP_CLIENT_VERSION="1.0.0"
 DVMCP_MCP_PICTURE="https://example.com/picture.jpg"
 DVMCP_MCP_WEBSITE="https://example.com"
 DVMCP_MCP_BANNER="https://example.com/banner.jpg"
+DVMCP_ENCRYPTION_SUPPORT_ENCRYPTION=true
+DVMCP_ENCRYPTION_PREFER_ENCRYPTION=false
 DVMCP_WHITELIST_ALLOWED_PUBKEYS=pubkey1,pubkey2
 DVMCP_LIGHTNING_ADDRESS="your-lightning-address@provider.com"
 DVMCP_LIGHTNING_ZAP_RELAYS=wss://relay1.com,wss://relay2.com
@@ -69,6 +72,8 @@ npx @dvmcp/bridge \
   --mcp-picture "https://example.com/picture.jpg" \
   --mcp-website "https://example.com" \
   --mcp-banner "https://example.com/banner.jpg" \
+  --encryption-support-encryption true \
+  --encryption-prefer-encryption false \
   --whitelist-allowed-pubkeys pubkey1,pubkey2 \
   --lightning-address "your-lightning-address@provider.com" \
   --lightning-zap-relays wss://relay1.com,wss://relay2.com
@@ -99,6 +104,51 @@ Use the `--verbose` or `-v` flag to display the current configuration:
 ```bash
 npx @dvmcp/bridge --verbose
 ```
+
+## Encryption Support
+
+DVMCP Bridge supports encrypted communication using Nostr's NIP-17 (Private Direct Messages) and NIP-59 (Gift Wrap) protocols. This allows for secure, private communication between clients and the DVM service.
+
+### How It Works
+
+- **NIP-17**: Implements private direct messages using NIP-44 encryption with sealed messages (kind 14 events wrapped as kind 13)
+- **NIP-59**: Adds metadata protection by gift-wrapping sealed messages as kind 1059 events using random ephemeral keys
+- **Automatic Detection**: The bridge automatically detects if incoming messages are encrypted and handles decryption seamlessly
+- **Client Preference**: Respects client preferences for encrypted communication when `preferEncryption` is enabled
+
+### Configuration
+
+Enable encryption support in your configuration file:
+
+```yaml
+encryption:
+  # Whether this server supports encrypted communication
+  supportEncryption: true
+  # Whether to prefer encrypted communication when possible
+  preferEncryption: false
+```
+
+### Environment Variables
+
+```bash
+DVMCP_ENCRYPTION_SUPPORT_ENCRYPTION=true
+DVMCP_ENCRYPTION_PREFER_ENCRYPTION=false
+```
+
+### Command Line
+
+```bash
+npx @dvmcp/bridge \
+  --encryption-support-encryption true \
+  --encryption-prefer-encryption false
+```
+
+### Security Features
+
+- **End-to-End Encryption**: Messages are encrypted using NIP-44 elliptic curve encryption
+- **Metadata Protection**: NIP-59 gift wrap obscures sender/recipient information
+- **Forward Secrecy**: Each message uses fresh encryption keys
+- **Automatic Key Management**: No manual key exchange required - uses Nostr public keys
 
 ## Usage
 

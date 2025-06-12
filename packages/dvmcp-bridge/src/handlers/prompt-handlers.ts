@@ -1,18 +1,59 @@
 import { TAG_EVENT_ID, TAG_PUBKEY, RESPONSE_KIND } from '@dvmcp/commons/core';
 import type { MCPPool } from '../mcp-pool';
-import type { DvmcpBridgeConfig } from '../config-schema.js';
 import type { RelayHandler } from '@dvmcp/commons/nostr';
 import type { KeyManager } from '@dvmcp/commons/nostr';
 import type { NostrEvent } from 'nostr-tools';
 import {
-  GetPromptRequestSchema,
-  ListPromptsRequestSchema,
-  type GetPromptResult,
   type ListPromptsResult,
+  type GetPromptResult,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { createProtocolErrorResponse } from '../utils';
 import { loggerBridge } from '@dvmcp/commons/core';
-import { PaymentProcessor } from './payment-processor';
+import type { ResponseContext } from '../dvm-bridge.js';
+
+/**
+ * Helper function to publish response with encryption support
+ */
+async function publishResponse(
+  response: NostrEvent,
+  responseContext: ResponseContext
+): Promise<void> {
+  if (
+    responseContext.shouldEncrypt &&
+    responseContext.encryptionManager?.isEncryptionEnabled()
+  ) {
+    // Encrypt the response for the original requester
+    try {
+      // Convert signed event back to EventTemplate for encryption
+      const eventTemplate = {
+        kind: response.kind,
+        content: response.content,
+        tags: response.tags,
+        created_at: response.created_at,
+      };
+
+      const encryptedEvent =
+        await responseContext.encryptionManager.encryptMessage(
+          responseContext.keyManager.getPrivateKey(),
+          responseContext.recipientPubkey,
+          eventTemplate
+        );
+
+      if (encryptedEvent) {
+        await responseContext.relayHandler.publishEvent(encryptedEvent);
+      } else {
+        await responseContext.relayHandler.publishEvent(response);
+      }
+    } catch (error) {
+      await responseContext.relayHandler.publishEvent(response);
+    }
+  } else {
+    // Publish unencrypted response
+    await responseContext.relayHandler.publishEvent(response);
+  }
+}
 
 /**
  * Handles the prompts/list method request
@@ -21,23 +62,23 @@ export async function handlePromptsList(
   event: NostrEvent,
   mcpPool: MCPPool,
   keyManager: KeyManager,
-  relayHandler: RelayHandler
+  relayHandler: RelayHandler,
+  responseContext: ResponseContext
 ): Promise<void> {
   const { success, error } = ListPromptsRequestSchema.safeParse(
     JSON.parse(event.content)
   );
   if (!success) {
     loggerBridge('prompts list request error', error);
-    await relayHandler.publishEvent(
-      createProtocolErrorResponse(
-        event.id,
-        event.pubkey,
-        -32700,
-        JSON.stringify(error),
-        keyManager,
-        RESPONSE_KIND
-      )
+    const errorResponse = createProtocolErrorResponse(
+      event.id,
+      event.pubkey,
+      -32700,
+      JSON.stringify(error),
+      keyManager,
+      RESPONSE_KIND
     );
+    await publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -53,7 +94,7 @@ export async function handlePromptsList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(response);
+    await publishResponse(response, responseContext);
   } catch (err) {
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -69,7 +110,7 @@ export async function handlePromptsList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(errorResp);
+    await publishResponse(errorResp, responseContext);
   }
 }
 
@@ -81,7 +122,7 @@ export async function handlePromptsGet(
   mcpPool: MCPPool,
   keyManager: KeyManager,
   relayHandler: RelayHandler,
-  config: DvmcpBridgeConfig
+  responseContext: ResponseContext
 ): Promise<void> {
   const {
     success,
@@ -90,84 +131,39 @@ export async function handlePromptsGet(
   } = GetPromptRequestSchema.safeParse(JSON.parse(event.content));
   if (!success) {
     loggerBridge('prompts get request error', error);
-    await relayHandler.publishEvent(
-      createProtocolErrorResponse(
-        event.id,
-        event.pubkey,
-        -32700,
-        JSON.stringify(error),
-        keyManager,
-        RESPONSE_KIND
-      )
+    const errorResponse = createProtocolErrorResponse(
+      event.id,
+      event.pubkey,
+      -32700,
+      JSON.stringify(error),
+      keyManager,
+      RESPONSE_KIND
     );
+    await publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
   const pubkey = event.pubkey;
-
-  // Create payment processor
-  const paymentProcessor = new PaymentProcessor(
-    config,
-    keyManager,
-    relayHandler
-  );
 
   try {
     if (!getParams.params.name) {
       throw new Error('Prompt name is required');
     }
 
-    const promptName = getParams.params.name;
-
-    // Check if prompt requires payment
-    const pricing = mcpPool.getPromptPricing(promptName);
-
-    // Process payment if required
-    const paymentSuccessful = await paymentProcessor.processPaymentIfRequired(
-      pricing,
-      promptName,
-      'prompt',
-      id,
-      pubkey
+    const promptResult = await mcpPool.getPrompt(
+      getParams.params.name,
+      getParams.params.arguments
     );
-
-    if (!paymentSuccessful) {
-      // Payment failed, exit early
-      return;
-    }
-
-    const promptArgs = getParams.params.arguments || {};
-    loggerBridge(`Getting prompt '${promptName}' with arguments:`, promptArgs);
-
-    const prompt: GetPromptResult | undefined = await mcpPool.getPrompt(
-      promptName,
-      promptArgs
-    );
-    if (!prompt) {
-      throw new Error(`Prompt not found: ${promptName}`);
-    }
-
-    // Send success notification
-    await paymentProcessor.sendSuccessNotification(id, pubkey);
-
     const response = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
-      content: JSON.stringify(prompt),
+      content: JSON.stringify(promptResult),
       tags: [
         [TAG_EVENT_ID, id],
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(response);
+    await publishResponse(response, responseContext);
   } catch (err) {
-    // Send error notification
-    await paymentProcessor.sendErrorNotification(
-      id,
-      pubkey,
-      err instanceof Error ? err.message : String(err)
-    );
-
-    // Send error response
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
       content: JSON.stringify({
@@ -182,6 +178,6 @@ export async function handlePromptsGet(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(errorResp);
+    await publishResponse(errorResp, responseContext);
   }
 }

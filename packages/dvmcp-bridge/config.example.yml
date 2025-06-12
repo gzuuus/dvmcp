@@ -81,7 +81,14 @@ lightning:
     - "wss://relay.damus.io"
     - "wss://nostr.mutinywallet.com"
 
-    # [Optional] Whitelist Configuration
+# [Optional] Encryption Configuration (NIP-17/NIP-59 support)
+encryption:
+  # Whether this server supports encrypted communication
+  supportEncryption: true
+  # Whether to prefer encrypted communication when possible
+  preferEncryption: false
+
+# [Optional] Whitelist Configuration
 # whitelist:
   # List of allowed public keys (leave empty for no restrictions)
   # allowedPubkeys: []

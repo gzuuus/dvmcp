@@ -8,6 +8,7 @@ export const PROMPTS_LIST_KIND = 31319; // Addressable: Prompts List
 export const REQUEST_KIND = 25910; // Ephemeral: Client Requests
 export const RESPONSE_KIND = 26910; // Ephemeral: Server Responses
 export const NOTIFICATION_KIND = 21316; // Ephemeral: Feedback/Notifications
+export const GIFT_WRAP_KIND = 1059; // Gift Wrap (NIP-59): Encrypted messages
 
 // Common Tags for DVMCP Events
 export const TAG_UNIQUE_IDENTIFIER = 'd'; // Unique identifier (addressable events) or Server ID (init response)

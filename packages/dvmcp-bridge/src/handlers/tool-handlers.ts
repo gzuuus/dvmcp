@@ -12,6 +12,49 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { PaymentProcessor } from './payment-processor';
 import { createProtocolErrorResponse } from '../utils.js';
+import type { ResponseContext } from '../dvm-bridge.js';
+
+/**
+ * Helper function to publish response with encryption support
+ */
+async function publishResponse(
+  response: NostrEvent,
+  responseContext: ResponseContext
+): Promise<void> {
+  if (
+    responseContext.shouldEncrypt &&
+    responseContext.encryptionManager?.isEncryptionEnabled()
+  ) {
+    // Encrypt the response for the original requester
+    try {
+      // Convert signed event back to EventTemplate for encryption
+      const eventTemplate = {
+        kind: response.kind,
+        content: response.content,
+        tags: response.tags,
+        created_at: response.created_at,
+      };
+
+      const encryptedEvent =
+        await responseContext.encryptionManager.encryptMessage(
+          responseContext.keyManager.getPrivateKey(),
+          responseContext.recipientPubkey,
+          eventTemplate
+        );
+
+      if (encryptedEvent) {
+        await responseContext.relayHandler.publishEvent(encryptedEvent);
+      } else {
+        await responseContext.relayHandler.publishEvent(response);
+      }
+    } catch (error) {
+      await responseContext.relayHandler.publishEvent(response);
+    }
+  } else {
+    // Publish unencrypted response
+    await responseContext.relayHandler.publishEvent(response);
+  }
+}
 
 /**
  * Handles the tools/list method request
@@ -20,23 +63,23 @@ export async function handleToolsList(
   event: NostrEvent,
   mcpPool: MCPPool,
   keyManager: KeyManager,
-  relayHandler: RelayHandler
+  relayHandler: RelayHandler,
+  responseContext: ResponseContext
 ): Promise<void> {
   const { success, error } = ListToolsRequestSchema.safeParse(
     JSON.parse(event.content)
   );
   if (!success) {
     loggerBridge('tools list request error', error);
-    await relayHandler.publishEvent(
-      createProtocolErrorResponse(
-        event.id,
-        event.pubkey,
-        -32700,
-        JSON.stringify(error),
-        keyManager,
-        RESPONSE_KIND
-      )
+    const errorResponse = createProtocolErrorResponse(
+      event.id,
+      event.pubkey,
+      -32700,
+      JSON.stringify(error),
+      keyManager,
+      RESPONSE_KIND
     );
+    await publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -53,7 +96,7 @@ export async function handleToolsList(
       ],
     });
     loggerBridge('tools list response', response);
-    await relayHandler.publishEvent(response);
+    await publishResponse(response, responseContext);
   } catch (err) {
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -69,7 +112,7 @@ export async function handleToolsList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(errorResp);
+    await publishResponse(errorResp, responseContext);
   }
 }
 
@@ -81,7 +124,8 @@ export async function handleToolsCall(
   mcpPool: MCPPool,
   keyManager: KeyManager,
   relayHandler: RelayHandler,
-  config: DvmcpBridgeConfig
+  config: DvmcpBridgeConfig,
+  responseContext: ResponseContext
 ): Promise<void> {
   const {
     success,
@@ -90,16 +134,15 @@ export async function handleToolsCall(
   } = CallToolRequestSchema.safeParse(JSON.parse(event.content));
   if (!success) {
     loggerBridge('tools call request error', error);
-    await relayHandler.publishEvent(
-      createProtocolErrorResponse(
-        event.id,
-        event.pubkey,
-        -32700,
-        JSON.stringify(error),
-        keyManager,
-        RESPONSE_KIND
-      )
+    const errorResponse = createProtocolErrorResponse(
+      event.id,
+      event.pubkey,
+      -32700,
+      JSON.stringify(error),
+      keyManager,
+      RESPONSE_KIND
     );
+    await publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -150,7 +193,7 @@ export async function handleToolsCall(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(response);
+    await publishResponse(response, responseContext);
   } catch (error) {
     // Send error notification
     await paymentProcessor.sendErrorNotification(
@@ -175,6 +218,6 @@ export async function handleToolsCall(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(errorResp);
+    await publishResponse(errorResp, responseContext);
   }
 }

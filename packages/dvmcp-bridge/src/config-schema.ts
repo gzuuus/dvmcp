@@ -5,6 +5,7 @@
  */
 
 import type { ConfigSchema } from '@dvmcp/commons/config';
+import type { EncryptionConfig } from '@dvmcp/commons/encryption';
 
 /**
  * Nostr protocol configuration.
@@ -190,6 +191,10 @@ export interface DvmcpBridgeConfig {
    * Optional Lightning payment configuration.
    */
   lightning?: LightningConfig;
+  /**
+   * Optional encryption configuration.
+   */
+  encryption?: EncryptionConfig;
 }
 
 /**
@@ -391,6 +396,25 @@ export const dvmcpBridgeConfigSchema: ConfigSchema = {
         itemType: 'string',
         required: false,
         doc: 'Zap receipt relay URLs (optional).',
+      },
+    },
+  },
+  encryption: {
+    type: 'object',
+    required: false,
+    doc: 'Optional encryption configuration for NIP-17/NIP-59 support.',
+    fields: {
+      supportEncryption: {
+        type: 'boolean',
+        required: true,
+        default: false,
+        doc: 'Whether encryption is supported by this server.',
+      },
+      preferEncryption: {
+        type: 'boolean',
+        required: false,
+        default: false,
+        doc: 'Whether to prefer encrypted communication when possible.',
       },
     },
   },

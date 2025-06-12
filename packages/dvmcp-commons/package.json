@@ -17,6 +17,9 @@
     "./nostr": {
       "import": "./src/nostr/index.ts"
     },
+    "./encryption": {
+      "import": "./src/encryption/index.ts"
+    },
     "./nostr/mock-relay": {
       "import": "./src/nostr/mock-relay.ts"
     },

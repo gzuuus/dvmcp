@@ -36,7 +36,8 @@ function createResponseEvent(
 export async function handleCompletionComplete(
   event: NostrEvent,
   mcpPool: MCPPool,
-  keyManager: KeyManager
+  keyManager: KeyManager,
+  responseContext: any
 ): Promise<NostrEvent | undefined> {
   try {
     // Parse the request content

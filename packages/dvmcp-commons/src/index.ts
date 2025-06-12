@@ -10,3 +10,4 @@
 export * as core from './core';
 export * as config from './config';
 export * as nostr from './nostr';
+export * as encryption from './encryption';

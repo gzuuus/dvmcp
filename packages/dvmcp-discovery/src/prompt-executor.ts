@@ -1,6 +1,7 @@
 import { type Event as NostrEvent } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import { createKeyManager } from '@dvmcp/commons/nostr';
+import { EncryptionManager } from '@dvmcp/commons/encryption';
 import { PromptRegistry, type PromptCapability } from './prompt-registry';
 import { BaseExecutor } from './base-executor';
 import type { ExecutionContext } from './base-interfaces';
@@ -32,9 +33,10 @@ export class PromptExecutor extends BaseExecutor<
     relayHandler: RelayHandler,
     keyManager: ReturnType<typeof createKeyManager>,
     private promptRegistry: PromptRegistry,
-    private config: DvmcpDiscoveryConfig
+    private config: DvmcpDiscoveryConfig,
+    encryptionManager?: EncryptionManager
   ) {
-    super(relayHandler, keyManager, promptRegistry);
+    super(relayHandler, keyManager, promptRegistry, encryptionManager);
 
     try {
       if (this.config.nwc?.connectionString) {

@@ -26,6 +26,7 @@ export type KeyManager = {
   signEvent(event: UnsignedEvent): Event;
   createEventTemplate(kind: number): UnsignedEvent;
   getPublicKey(): string;
+  getPrivateKey(): string;
 };
 
 /**
@@ -56,6 +57,10 @@ export const createKeyManager = (privateKeyHex: string): KeyManager => {
 
     getPublicKey(): string {
       return this.pubkey;
+    }
+
+    getPrivateKey(): string {
+      return privateKeyHex;
     }
   }
 

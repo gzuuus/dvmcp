@@ -1,6 +1,7 @@
 import { type Event as NostrEvent } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import { type KeyManager } from '@dvmcp/commons/nostr';
+import { EncryptionManager } from '@dvmcp/commons/encryption';
 import {
   type ReadResourceRequest,
   type ReadResourceResult,
@@ -32,9 +33,10 @@ export class ResourceExecutor extends BaseExecutor<
     relayHandler: RelayHandler,
     keyManager: KeyManager,
     private resourceRegistry: ResourceRegistry,
-    private config: DvmcpDiscoveryConfig
+    private config: DvmcpDiscoveryConfig,
+    encryptionManager?: EncryptionManager
   ) {
-    super(relayHandler, keyManager, resourceRegistry);
+    super(relayHandler, keyManager, resourceRegistry, encryptionManager);
 
     try {
       if (this.config.nwc?.connectionString) {

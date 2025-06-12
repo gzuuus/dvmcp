@@ -21,6 +21,7 @@ import { NWCPaymentHandler } from './nwc-payment';
 import type { DvmcpDiscoveryConfig } from './config-schema';
 import { BaseExecutor } from './base-executor';
 import type { ExecutionContext } from './base-interfaces';
+import type { EncryptionManager } from './encryption';
 
 export class ToolExecutor extends BaseExecutor<
   ToolCapability,
@@ -33,9 +34,10 @@ export class ToolExecutor extends BaseExecutor<
     relayHandler: RelayHandler,
     keyManager: ReturnType<typeof createKeyManager>,
     private toolRegistry: ToolRegistry,
-    private config: DvmcpDiscoveryConfig
+    private config: DvmcpDiscoveryConfig,
+    encryptionManager?: EncryptionManager | null
   ) {
-    super(relayHandler, keyManager, toolRegistry);
+    super(relayHandler, keyManager, toolRegistry, encryptionManager);
 
     // Initialize NWC payment handler if needed
     this.initializeNWCPaymentHandler();

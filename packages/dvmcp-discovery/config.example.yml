@@ -14,6 +14,13 @@ mcp:
   # Server description
   about: "DVMCP Discovery Server for aggregating MCP tools from DVMs"
 
+# [Optional] Encryption Configuration (NIP-17/NIP-59 support)
+encryption:
+  # Whether this client supports encrypted communication
+  supportEncryption: true
+  # Whether to prefer encrypted communication when possible
+  preferEncryption: false
+
 # NWC (Nostr Wallet Connect) configuration for payments
 #nwc:
   # connectionString: "nostr+walletconnect:your_wallet_pubkey_here?relay=wss%3A%2F%2Frelay.example.com&secret=your_secret_here"

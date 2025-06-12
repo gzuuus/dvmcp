@@ -5,6 +5,7 @@
  */
 
 import type { ConfigSchema } from '@dvmcp/commons/config';
+import type { EncryptionConfig } from '@dvmcp/commons/encryption';
 
 export const DEFAULT_VALUES = {
   DEFAULT_RELAY_URL: 'wss://r.dvmcp.fun',
@@ -111,6 +112,9 @@ export interface DvmcpDiscoveryConfig {
 
   /** Optional feature flags configuration */
   featureFlags?: FeatureFlagsConfig;
+
+  /** Optional encryption configuration */
+  encryption?: EncryptionConfig;
 }
 
 /**
@@ -210,6 +214,25 @@ export const dvmcpDiscoveryConfigSchema: ConfigSchema = {
         required: false,
         default: false,
         doc: 'Enable interactive mode with built-in tools',
+      },
+    },
+  },
+  encryption: {
+    type: 'object',
+    required: false,
+    doc: 'Optional encryption configuration for NIP-17/NIP-59 support',
+    fields: {
+      supportEncryption: {
+        type: 'boolean',
+        required: true,
+        default: false,
+        doc: 'Whether encryption is supported by this client',
+      },
+      preferEncryption: {
+        type: 'boolean',
+        required: false,
+        default: false,
+        doc: 'Whether to prefer encrypted communication when possible',
       },
     },
   },

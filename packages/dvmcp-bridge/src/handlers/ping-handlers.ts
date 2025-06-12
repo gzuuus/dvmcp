@@ -7,6 +7,49 @@ import {
   TAG_PUBKEY,
   loggerBridge,
 } from '@dvmcp/commons/core';
+import type { ResponseContext } from '../dvm-bridge.js';
+
+/**
+ * Helper function to publish response with encryption support
+ */
+async function publishResponse(
+  response: NostrEvent,
+  responseContext: ResponseContext
+): Promise<void> {
+  if (
+    responseContext.shouldEncrypt &&
+    responseContext.encryptionManager?.isEncryptionEnabled()
+  ) {
+    // Encrypt the response for the original requester
+    try {
+      // Convert signed event back to EventTemplate for encryption
+      const eventTemplate = {
+        kind: response.kind,
+        content: response.content,
+        tags: response.tags,
+        created_at: response.created_at,
+      };
+
+      const encryptedEvent =
+        await responseContext.encryptionManager.encryptMessage(
+          responseContext.keyManager.getPrivateKey(),
+          responseContext.recipientPubkey,
+          eventTemplate
+        );
+
+      if (encryptedEvent) {
+        await responseContext.relayHandler.publishEvent(encryptedEvent);
+      } else {
+        await responseContext.relayHandler.publishEvent(response);
+      }
+    } catch (error) {
+      await responseContext.relayHandler.publishEvent(response);
+    }
+  } else {
+    // Publish unencrypted response
+    await responseContext.relayHandler.publishEvent(response);
+  }
+}
 
 /**
  * Handle ping requests from clients
@@ -15,7 +58,8 @@ import {
 export async function handlePing(
   event: NostrEvent,
   keyManager: KeyManager,
-  relayHandler: RelayHandler
+  relayHandler: RelayHandler,
+  responseContext: ResponseContext
 ): Promise<void> {
   const pubkey = event.pubkey;
   const id = event.id;
@@ -33,7 +77,7 @@ export async function handlePing(
       ],
     });
 
-    await relayHandler.publishEvent(response);
+    await publishResponse(response, responseContext);
     loggerBridge(`Sent ping response to ${pubkey}`);
   } catch (error) {
     console.error('Error handling ping request:', error);
@@ -53,6 +97,6 @@ export async function handlePing(
       ],
     });
 
-    await relayHandler.publishEvent(errorResponse);
+    await publishResponse(errorResponse, responseContext);
   }
 }

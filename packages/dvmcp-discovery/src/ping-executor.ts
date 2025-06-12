@@ -1,5 +1,6 @@
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import type { KeyManager } from '@dvmcp/commons/nostr';
+import { EncryptionManager } from '@dvmcp/commons/encryption';
 import {
   REQUEST_KIND,
   RESPONSE_KIND,
@@ -34,10 +35,11 @@ export class PingExecutor {
       timeout: NodeJS.Timeout;
     }
   >();
-
+  // TODO: we are not using the encryption manager
   constructor(
     private relayHandler: RelayHandler,
-    private keyManager: KeyManager
+    private keyManager: KeyManager,
+    private encryptionManager?: EncryptionManager
   ) {
     // Subscribe to ping responses
     this.setupResponseSubscription();

@@ -1,5 +1,11 @@
 import { loggerBridge } from '@dvmcp/commons/core';
-import { TAG_EVENT_ID, TAG_PUBKEY, RESPONSE_KIND } from '@dvmcp/commons/core';
+import {
+  TAG_EVENT_ID,
+  TAG_PUBKEY,
+  RESPONSE_KIND,
+  TAG_STATUS,
+  TAG_METHOD,
+} from '@dvmcp/commons/core';
 import type { MCPPool } from '../mcp-pool';
 import type { DvmcpBridgeConfig } from '../config-schema.js';
 import type { RelayHandler } from '@dvmcp/commons/nostr';
@@ -11,9 +17,9 @@ import {
   type CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { PaymentProcessor } from './payment-processor';
-import { createProtocolErrorResponse } from '../utils.js';
 import type { ResponseContext } from '../dvm-bridge.js';
 import { getResponsePublisher } from '../utils/response-publisher';
+import { createProtocolErrorResponse } from '../utils.js';
 
 /**
  * Handles the tools/list method request
@@ -129,13 +135,18 @@ export async function handleToolsCall(
 
   // Processing notification will be sent by the payment processor
 
+  const publisher = getResponsePublisher(
+    relayHandler,
+    keyManager,
+    responseContext.encryptionManager
+  );
+
   // Create payment processor
   const paymentProcessor = new PaymentProcessor(
     config,
     keyManager,
     relayHandler,
-    undefined, // paymentTimeoutMs - use default
-    responseContext.encryptionManager
+    publisher
   );
 
   try {
@@ -163,13 +174,6 @@ export async function handleToolsCall(
       jobRequest.params.arguments!
     );
 
-    // Send success notification
-    await paymentProcessor.sendSuccessNotification(
-      id,
-      pubkey,
-      responseContext.shouldEncrypt
-    );
-
     // Send response
     const response = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -179,18 +183,17 @@ export async function handleToolsCall(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    const publisher = getResponsePublisher(
-      relayHandler,
-      keyManager,
-      responseContext.encryptionManager
-    );
     await publisher.publishResponse(response, responseContext);
   } catch (error) {
     // Send error notification
-    await paymentProcessor.sendErrorNotification(
-      id,
-      pubkey,
+    await publisher.publishNotification(
       error instanceof Error ? error.message : String(error),
+      pubkey,
+      [
+        [TAG_STATUS, 'error'],
+        [TAG_EVENT_ID, id],
+        [TAG_PUBKEY, pubkey],
+      ],
       responseContext.shouldEncrypt
     );
 
@@ -210,11 +213,6 @@ export async function handleToolsCall(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    const publisher = getResponsePublisher(
-      relayHandler,
-      keyManager,
-      responseContext.encryptionManager
-    );
     await publisher.publishResponse(errorResp, responseContext);
   }
 }

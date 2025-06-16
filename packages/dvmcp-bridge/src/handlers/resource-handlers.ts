@@ -1,4 +1,9 @@
-import { TAG_EVENT_ID, TAG_PUBKEY, RESPONSE_KIND } from '@dvmcp/commons/core';
+import {
+  TAG_EVENT_ID,
+  TAG_PUBKEY,
+  RESPONSE_KIND,
+  TAG_STATUS,
+} from '@dvmcp/commons/core';
 import type { MCPPool } from '../mcp-pool';
 import type { DvmcpBridgeConfig } from '../config-schema.js';
 import type { RelayHandler } from '@dvmcp/commons/nostr';
@@ -183,12 +188,16 @@ export async function handleResourcesRead(
   const pubkey = event.pubkey;
 
   // Create payment processor
+  const publisher = getResponsePublisher(
+    relayHandler,
+    keyManager,
+    responseContext.encryptionManager
+  );
   const paymentProcessor = new PaymentProcessor(
     config,
     keyManager,
     relayHandler,
-    undefined, // paymentTimeoutMs - use default
-    responseContext.encryptionManager
+    publisher
   );
 
   try {
@@ -199,7 +208,6 @@ export async function handleResourcesRead(
     const resourceUri = readParams.params.uri;
     // Check if resource requires payment
     const pricing = mcpPool.getResourcePricing(resourceUri);
-
     // Process payment if required
     const paymentSuccessful = await paymentProcessor.processPaymentIfRequired(
       pricing,
@@ -221,13 +229,6 @@ export async function handleResourcesRead(
       throw new Error(`Resource not found: ${resourceUri}`);
     }
 
-    // Send success notification
-    await paymentProcessor.sendSuccessNotification(
-      id,
-      pubkey,
-      responseContext.shouldEncrypt
-    );
-
     const response = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
       content: JSON.stringify(resourceResult),
@@ -236,18 +237,17 @@ export async function handleResourcesRead(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    const publisher = getResponsePublisher(
-      relayHandler,
-      keyManager,
-      responseContext.encryptionManager
-    );
     await publisher.publishResponse(response, responseContext);
   } catch (err) {
     // Send error notification
-    await paymentProcessor.sendErrorNotification(
-      id,
-      pubkey,
+    await publisher.publishNotification(
       err instanceof Error ? err.message : String(err),
+      pubkey,
+      [
+        [TAG_STATUS, 'error'],
+        [TAG_EVENT_ID, id],
+        [TAG_PUBKEY, pubkey],
+      ],
       responseContext.shouldEncrypt
     );
 
@@ -266,11 +266,6 @@ export async function handleResourcesRead(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    const publisher = getResponsePublisher(
-      relayHandler,
-      keyManager,
-      responseContext.encryptionManager
-    );
     await publisher.publishResponse(errorResp, responseContext);
   }
 }

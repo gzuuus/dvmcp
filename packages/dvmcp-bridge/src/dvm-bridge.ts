@@ -15,7 +15,7 @@ import {
   TAG_SERVER_IDENTIFIER,
 } from '@dvmcp/commons/core';
 import { loggerBridge } from '@dvmcp/commons/core';
-import type { NostrEvent, EventTemplate } from 'nostr-tools';
+import { type NostrEvent, type EventTemplate, getEventHash } from 'nostr-tools';
 import { getServerId } from './utils';
 import { EncryptionManager } from '@dvmcp/commons/encryption';
 import { EventPublisher } from '@dvmcp/commons/nostr';
@@ -262,7 +262,6 @@ export class DVMBridge {
         loggerBridge('Successfully decrypted event, processing...');
         // Construct a NostrEvent from the decrypted template and real sender pubkey
         // The ID should be computed from the inner event content, not the gift wrap
-        const { getEventHash } = await import('nostr-tools');
         const innerEventId = getEventHash({
           ...decryptionResult.eventTemplate,
           pubkey: decryptionResult.realSenderPubkey,
@@ -470,15 +469,13 @@ export class DVMBridge {
             );
             break;
           case 'completion/complete':
-            const completionResponse = await handleCompletionComplete(
+            await handleCompletionComplete(
               event,
               this.mcpPool,
               this.keyManager,
+              this.relayHandler,
               responseContext
             );
-            if (completionResponse) {
-              await this.publishResponse(completionResponse, responseContext);
-            }
             break;
           default:
             const notImpl = this.keyManager.signEvent({

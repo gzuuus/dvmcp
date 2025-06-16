@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { type Event, type Filter } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import { createKeyManager } from '@dvmcp/commons/nostr';
-import { EncryptionManager } from './encryption';
+import { EncryptionManager } from '@dvmcp/commons/encryption';
 import { CompletionExecutor } from './completion-executor';
 import { PingExecutor } from './ping-executor';
 import type { DvmcpDiscoveryConfig } from './config-schema';
@@ -66,8 +66,7 @@ export class DiscoveryServer {
     if (config.encryption) {
       this.encryptionManager = new EncryptionManager(config.encryption);
       loggerDiscovery(
-        'Encryption manager initialized with support:',
-        config.encryption.supportEncryption
+        `Encryption manager initialized with mode: ${config.encryption.mode || 'optional'}`
       );
     }
 
@@ -84,7 +83,7 @@ export class DiscoveryServer {
       this.keyManager,
       this.toolRegistry,
       this.config,
-      this.encryptionManager
+      this.encryptionManager || undefined
     );
 
     this.resourceRegistry = new ResourceRegistry(this.mcpServer);

@@ -4,18 +4,12 @@ import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { finalizeEvent } from 'nostr-tools/pure';
 import { hexToBytes } from '@noble/hashes/utils';
 import type { EncryptionConfig } from './types';
+import { EncryptionMode } from './types';
 import {
   SEALED_DIRECT_MESSAGE_KIND,
   PRIVATE_DIRECT_MESSAGE_KIND,
 } from './types';
 import { GIFT_WRAP_KIND } from '../core/constants';
-
-// FIXME: Right now encryption, and its settings have some issues
-// - Just work if both bridge and discovery have 'supportEncryption' and 'forceEncryption' set to true
-// - If both packages have 'supportEncryption' set to true and 'forceEncryption' set to false, it will not work, the events are sended unencrypted, but the packages will process the events succesfully
-// - If both packages have 'supportEncryption' set to false and 'forceEncryption' set to true, it will not work, the events are sended unencrypted, but the packages will process the events succesfully
-// - If bridge has 'supportEncryption' set to true and 'forceEncryption' set to false, and discovery has 'supportEncryption' set to true and 'forceEncryption' set to true, it will not work, the discovery sends the request encrypted but the bridge would not process it even if supportEncryption is set to true
-// - If bridge has 'supportEncryption' set to true and 'forceEncryption' set to true, and discovery has 'supportEncryption' set to true and 'forceEncryption' set to false, it will not work, the discovery sends the request unencrypted but the bridge would send the response encrypted and its not processed by the discovery
 
 export interface DecryptedMessage {
   content: any;
@@ -34,14 +28,53 @@ export interface EventTemplate {
  * Centralized encryption manager that handles all NIP-17/NIP-59 operations
  */
 export class EncryptionManager {
-  private enabled: boolean;
+  private mode: EncryptionMode;
 
   constructor(config: EncryptionConfig) {
-    this.enabled = config.supportEncryption && (config.forceEncryption ?? true);
+    this.mode = config.mode ?? EncryptionMode.OPTIONAL;
+  }
+
+  public getEncryptionMode(): EncryptionMode {
+    return this.mode;
   }
 
   public isEncryptionEnabled(): boolean {
-    return this.enabled;
+    return this.mode !== EncryptionMode.DISABLED;
+  }
+
+  public isEncryptionRequired(): boolean {
+    return this.mode === EncryptionMode.REQUIRED;
+  }
+
+  /**
+   * Determines if we should encrypt outgoing messages based on incoming message format
+   * @param incomingWasEncrypted - Whether the incoming message was encrypted
+   */
+  public shouldEncryptResponse(incomingWasEncrypted: boolean): boolean {
+    switch (this.mode) {
+      case EncryptionMode.DISABLED:
+        return false;
+      case EncryptionMode.REQUIRED:
+        return true;
+      case EncryptionMode.OPTIONAL:
+        return incomingWasEncrypted; // Mirror the incoming format
+      default:
+        return false;
+    }
+  }
+
+  /**
+   * Determines if we should attempt encryption for outgoing requests (when no incoming context)
+   */
+  public shouldAttemptEncryption(): boolean {
+    return this.mode === EncryptionMode.REQUIRED;
+  }
+
+  /**
+   * Determines if we can accept unencrypted messages
+   */
+  public canAcceptUnencrypted(): boolean {
+    return this.mode !== EncryptionMode.REQUIRED;
   }
 
   /**
@@ -56,7 +89,7 @@ export class EncryptionManager {
     recipientPublicKey: string,
     eventTemplate: EventTemplate
   ): Promise<NostrEvent | null> {
-    if (!this.enabled) {
+    if (this.mode === EncryptionMode.DISABLED) {
       return null;
     }
 
@@ -123,7 +156,7 @@ export class EncryptionManager {
     event: NostrEvent,
     recipientPrivateKey: string
   ): Promise<DecryptedMessage | null> {
-    if (!this.enabled || event.kind !== GIFT_WRAP_KIND) {
+    if (!this.isEncryptionEnabled() || event.kind !== GIFT_WRAP_KIND) {
       return null;
     }
 

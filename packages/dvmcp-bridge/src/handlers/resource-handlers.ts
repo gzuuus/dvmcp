@@ -15,7 +15,7 @@ import { createProtocolErrorResponse } from '../utils';
 import { loggerBridge } from '@dvmcp/commons/core';
 import { PaymentProcessor } from './payment-processor';
 import type { ResponseContext } from '../dvm-bridge.js';
-import { getResponsePublisher } from '../utils/response-publisher-factory';
+import { getResponsePublisher } from '../utils/response-publisher';
 
 /**
  * Handles the resources/list method request

@@ -5,14 +5,13 @@ import type { KeyManager } from '@dvmcp/commons/nostr';
 import type { NostrEvent } from 'nostr-tools';
 import {
   type ListPromptsResult,
-  type GetPromptResult,
   ListPromptsRequestSchema,
   GetPromptRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { createProtocolErrorResponse } from '../utils';
 import { loggerBridge } from '@dvmcp/commons/core';
 import type { ResponseContext } from '../dvm-bridge.js';
-import { getResponsePublisher } from '../utils/response-publisher-factory';
+import { getResponsePublisher } from '../utils/response-publisher';
 
 /**
  * Handles the prompts/list method request

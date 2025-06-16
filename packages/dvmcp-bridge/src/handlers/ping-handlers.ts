@@ -8,7 +8,7 @@ import {
   loggerBridge,
 } from '@dvmcp/commons/core';
 import type { ResponseContext } from '../dvm-bridge.js';
-import { getResponsePublisher } from '../utils/response-publisher-factory';
+import { getResponsePublisher } from '../utils/response-publisher';
 
 /**
  * Handle ping requests from clients
@@ -26,7 +26,6 @@ export async function handlePing(
   loggerBridge(`Handling ping request from ${pubkey}`);
 
   try {
-    // Create ping response with empty content as per DVMCP spec
     const response = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
       content: JSON.stringify({}),

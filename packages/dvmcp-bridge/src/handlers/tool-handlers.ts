@@ -13,7 +13,7 @@ import {
 import { PaymentProcessor } from './payment-processor';
 import { createProtocolErrorResponse } from '../utils.js';
 import type { ResponseContext } from '../dvm-bridge.js';
-import { getResponsePublisher } from '../utils/response-publisher-factory';
+import { getResponsePublisher } from '../utils/response-publisher';
 
 /**
  * Handles the tools/list method request

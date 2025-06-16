@@ -35,7 +35,6 @@ import {
 } from './handlers';
 
 // TODO: Clean up encryption implementation, we have some redundant and unnecesary code. We also have a publish event function in each handler which can be simplified
-// TODO: notifications are unencrypted
 export interface ResponseContext {
   recipientPubkey: string;
   shouldEncrypt: boolean;
@@ -75,9 +74,11 @@ export class DVMBridge {
     }
 
     // Initialize encryption manager if encryption is configured
-    if (this.config.encryption?.supportEncryption) {
+    if (this.config.encryption) {
       this.encryptionManager = new EncryptionManager(this.config.encryption);
-      loggerBridge('Encryption support enabled (NIP-17/NIP-59)');
+      loggerBridge(
+        `Encryption support enabled (${this.config.encryption.mode || 'optional'} mode)`
+      );
     } else {
       loggerBridge('Encryption support disabled');
     }
@@ -366,10 +367,8 @@ export class DVMBridge {
       }
 
       if (!this.isWhitelisted(pubkey)) {
-        // Use centralized event publisher with encryption awareness
         const shouldEncryptResponse =
-          this.encryptionManager?.isEncryptionEnabled() &&
-          (isEncrypted || this.config.encryption?.forceEncryption);
+          this.encryptionManager?.shouldEncryptResponse(isEncrypted) || false;
 
         await this.eventPublisher.publishNotification(
           'Unauthorized: Pubkey not in whitelist',
@@ -379,22 +378,18 @@ export class DVMBridge {
             [TAG_EVENT_ID, id],
             [TAG_PUBKEY, pubkey],
           ],
-          shouldEncryptResponse || false
+          shouldEncryptResponse
         );
         return;
       }
 
       if (kind === REQUEST_KIND) {
-        // Create response context for encryption awareness
-        // If encryption is enabled and we received an encrypted request, respond with encryption
-        // Or if encryption is enabled and forceEncryption is set, encrypt all responses
         const shouldEncryptResponse =
-          this.encryptionManager?.isEncryptionEnabled() &&
-          (isEncrypted || this.config.encryption?.forceEncryption);
+          this.encryptionManager?.shouldEncryptResponse(isEncrypted) || false;
 
         const responseContext: ResponseContext = {
           recipientPubkey: pubkey,
-          shouldEncrypt: shouldEncryptResponse || false,
+          shouldEncrypt: shouldEncryptResponse,
           encryptionManager: this.encryptionManager || undefined,
         };
 
@@ -504,14 +499,12 @@ export class DVMBridge {
         }
       } else if (kind === NOTIFICATION_KIND) {
         if (method === 'notifications/cancel') {
-          // Create response context for encryption awareness
           const shouldEncryptResponse =
-            this.encryptionManager?.isEncryptionEnabled() &&
-            (isEncrypted || this.config.encryption?.forceEncryption);
+            this.encryptionManager?.shouldEncryptResponse(isEncrypted) || false;
 
           const responseContext: ResponseContext = {
             recipientPubkey: pubkey,
-            shouldEncrypt: shouldEncryptResponse || false,
+            shouldEncrypt: shouldEncryptResponse,
             encryptionManager: this.encryptionManager || undefined,
           };
 

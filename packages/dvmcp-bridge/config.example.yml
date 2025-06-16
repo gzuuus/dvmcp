@@ -83,10 +83,11 @@ lightning:
 
 # [Optional] Encryption Configuration (NIP-17/NIP-59 support)
 encryption:
-  # Whether this server supports encrypted communication
-  supportEncryption: true
-  # Whether to force encrypted communication (rejects clear text requests)
-  forceEncryption: false
+  # Encryption mode: 'disabled', 'optional' (default), or 'required'
+  # - disabled: No encryption support
+  # - optional: Message format mirroring (encrypted request -> encrypted response)
+  # - required: Only accepts encrypted communication
+  mode: "optional"
 
 # [Optional] Whitelist Configuration
 # whitelist:

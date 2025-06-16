@@ -6,6 +6,7 @@
 
 import type { ConfigSchema } from '@dvmcp/commons/config';
 import type { EncryptionConfig } from '@dvmcp/commons/encryption';
+import { EncryptionMode } from '@dvmcp/commons/encryption';
 
 export const DEFAULT_VALUES = {
   DEFAULT_RELAY_URL: 'wss://r.dvmcp.fun',
@@ -222,17 +223,11 @@ export const dvmcpDiscoveryConfigSchema: ConfigSchema = {
     required: false,
     doc: 'Optional encryption configuration for NIP-17/NIP-59 support',
     fields: {
-      supportEncryption: {
-        type: 'boolean',
-        required: true,
-        default: false,
-        doc: 'Whether encryption is supported by this client',
-      },
-      forceEncryption: {
-        type: 'boolean',
+      mode: {
+        type: 'string',
         required: false,
-        default: false,
-        doc: 'Whether to force encrypted communication. If true, clear text requests will be rejected.',
+        default: EncryptionMode.OPTIONAL,
+        doc: 'Encryption mode: disabled, optional (mirrors incoming format), or required.',
       },
     },
   },

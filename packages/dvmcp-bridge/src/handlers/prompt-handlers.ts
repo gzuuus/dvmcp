@@ -12,48 +12,7 @@ import {
 import { createProtocolErrorResponse } from '../utils';
 import { loggerBridge } from '@dvmcp/commons/core';
 import type { ResponseContext } from '../dvm-bridge.js';
-
-/**
- * Helper function to publish response with encryption support
- */
-async function publishResponse(
-  response: NostrEvent,
-  responseContext: ResponseContext
-): Promise<void> {
-  if (
-    responseContext.shouldEncrypt &&
-    responseContext.encryptionManager?.isEncryptionEnabled()
-  ) {
-    // Encrypt the response for the original requester
-    try {
-      // Convert signed event back to EventTemplate for encryption
-      const eventTemplate = {
-        kind: response.kind,
-        content: response.content,
-        tags: response.tags,
-        created_at: response.created_at,
-      };
-
-      const encryptedEvent =
-        await responseContext.encryptionManager.encryptMessage(
-          responseContext.keyManager.getPrivateKey(),
-          responseContext.recipientPubkey,
-          eventTemplate
-        );
-
-      if (encryptedEvent) {
-        await responseContext.relayHandler.publishEvent(encryptedEvent);
-      } else {
-        await responseContext.relayHandler.publishEvent(response);
-      }
-    } catch (error) {
-      await responseContext.relayHandler.publishEvent(response);
-    }
-  } else {
-    // Publish unencrypted response
-    await responseContext.relayHandler.publishEvent(response);
-  }
-}
+import { getResponsePublisher } from '../utils/response-publisher-factory';
 
 /**
  * Handles the prompts/list method request
@@ -78,7 +37,12 @@ export async function handlePromptsList(
       keyManager,
       RESPONSE_KIND
     );
-    await publishResponse(errorResponse, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -94,7 +58,12 @@ export async function handlePromptsList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(response, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(response, responseContext);
   } catch (err) {
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -110,7 +79,12 @@ export async function handlePromptsList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(errorResp, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResp, responseContext);
   }
 }
 
@@ -139,7 +113,12 @@ export async function handlePromptsGet(
       keyManager,
       RESPONSE_KIND
     );
-    await publishResponse(errorResponse, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -162,7 +141,12 @@ export async function handlePromptsGet(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(response, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(response, responseContext);
   } catch (err) {
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -178,6 +162,11 @@ export async function handlePromptsGet(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(errorResp, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResp, responseContext);
   }
 }

@@ -228,11 +228,11 @@ export const dvmcpDiscoveryConfigSchema: ConfigSchema = {
         default: false,
         doc: 'Whether encryption is supported by this client',
       },
-      preferEncryption: {
+      forceEncryption: {
         type: 'boolean',
         required: false,
         default: false,
-        doc: 'Whether to prefer encrypted communication when possible',
+        doc: 'Whether to force encrypted communication. If true, clear text requests will be rejected.',
       },
     },
   },

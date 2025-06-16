@@ -15,48 +15,7 @@ import { createProtocolErrorResponse } from '../utils';
 import { loggerBridge } from '@dvmcp/commons/core';
 import { PaymentProcessor } from './payment-processor';
 import type { ResponseContext } from '../dvm-bridge.js';
-
-/**
- * Helper function to publish response with encryption support
- */
-async function publishResponse(
-  response: NostrEvent,
-  responseContext: ResponseContext
-): Promise<void> {
-  if (
-    responseContext.shouldEncrypt &&
-    responseContext.encryptionManager?.isEncryptionEnabled()
-  ) {
-    // Encrypt the response for the original requester
-    try {
-      // Convert signed event back to EventTemplate for encryption
-      const eventTemplate = {
-        kind: response.kind,
-        content: response.content,
-        tags: response.tags,
-        created_at: response.created_at,
-      };
-
-      const encryptedEvent =
-        await responseContext.encryptionManager.encryptMessage(
-          responseContext.keyManager.getPrivateKey(),
-          responseContext.recipientPubkey,
-          eventTemplate
-        );
-
-      if (encryptedEvent) {
-        await responseContext.relayHandler.publishEvent(encryptedEvent);
-      } else {
-        await responseContext.relayHandler.publishEvent(response);
-      }
-    } catch (error) {
-      await responseContext.relayHandler.publishEvent(response);
-    }
-  } else {
-    // Publish unencrypted response
-    await responseContext.relayHandler.publishEvent(response);
-  }
-}
+import { getResponsePublisher } from '../utils/response-publisher-factory';
 
 /**
  * Handles the resources/list method request
@@ -81,7 +40,12 @@ export async function handleResourcesList(
       keyManager,
       RESPONSE_KIND
     );
-    await publishResponse(errorResponse, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -97,7 +61,12 @@ export async function handleResourcesList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(response, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(response, responseContext);
   } catch (err) {
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -113,7 +82,12 @@ export async function handleResourcesList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(errorResp, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResp, responseContext);
   }
 }
 
@@ -141,7 +115,12 @@ export async function handleResourceTemplatesList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(response, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(response, responseContext);
   } catch (err) {
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -157,7 +136,12 @@ export async function handleResourceTemplatesList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(errorResp, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResp, responseContext);
   }
 }
 
@@ -187,7 +171,12 @@ export async function handleResourcesRead(
       keyManager,
       RESPONSE_KIND
     );
-    await publishResponse(errorResponse, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -197,7 +186,9 @@ export async function handleResourcesRead(
   const paymentProcessor = new PaymentProcessor(
     config,
     keyManager,
-    relayHandler
+    relayHandler,
+    undefined, // paymentTimeoutMs - use default
+    responseContext.encryptionManager
   );
 
   try {
@@ -206,7 +197,6 @@ export async function handleResourcesRead(
     }
 
     const resourceUri = readParams.params.uri;
-
     // Check if resource requires payment
     const pricing = mcpPool.getResourcePricing(resourceUri);
 
@@ -216,14 +206,14 @@ export async function handleResourcesRead(
       resourceUri,
       'resource',
       id,
-      pubkey
+      pubkey,
+      responseContext.shouldEncrypt
     );
 
     if (!paymentSuccessful) {
       // Payment failed, exit early
       return;
     }
-
     const resourceResult: ReadResourceResult | undefined =
       await mcpPool.readResource(resourceUri);
 
@@ -232,7 +222,11 @@ export async function handleResourcesRead(
     }
 
     // Send success notification
-    await paymentProcessor.sendSuccessNotification(id, pubkey);
+    await paymentProcessor.sendSuccessNotification(
+      id,
+      pubkey,
+      responseContext.shouldEncrypt
+    );
 
     const response = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -242,13 +236,19 @@ export async function handleResourcesRead(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(response, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(response, responseContext);
   } catch (err) {
     // Send error notification
     await paymentProcessor.sendErrorNotification(
       id,
       pubkey,
-      err instanceof Error ? err.message : String(err)
+      err instanceof Error ? err.message : String(err),
+      responseContext.shouldEncrypt
     );
 
     // Send error response
@@ -266,6 +266,11 @@ export async function handleResourcesRead(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(errorResp, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResp, responseContext);
   }
 }

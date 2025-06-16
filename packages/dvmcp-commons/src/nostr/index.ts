@@ -10,3 +10,6 @@ export * from './key-manager';
 
 // Export relay handler
 export * from './relay-handler';
+
+// Export event publisher
+export * from './event-publisher';

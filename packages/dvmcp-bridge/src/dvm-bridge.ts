@@ -17,7 +17,8 @@ import {
 import { loggerBridge } from '@dvmcp/commons/core';
 import type { NostrEvent, EventTemplate } from 'nostr-tools';
 import { getServerId } from './utils';
-import { EncryptionManager } from './encryption';
+import { EncryptionManager } from '@dvmcp/commons/encryption';
+import { EventPublisher } from '@dvmcp/commons/nostr';
 
 import { handleToolsList, handleToolsCall } from './handlers/tool-handlers';
 import {
@@ -36,12 +37,9 @@ import {
 // TODO: Clean up encryption implementation, we have some redundant and unnecesary code. We also have a publish event function in each handler which can be simplified
 // TODO: notifications are unencrypted
 export interface ResponseContext {
-  originalRequestId: string;
   recipientPubkey: string;
   shouldEncrypt: boolean;
-  encryptionManager?: EncryptionManager | null;
-  keyManager: ReturnType<typeof createKeyManager>;
-  relayHandler: RelayHandler;
+  encryptionManager?: EncryptionManager;
 }
 
 export class DVMBridge {
@@ -49,6 +47,7 @@ export class DVMBridge {
   private nostrAnnouncer: NostrAnnouncer;
   private relayHandler: RelayHandler;
   private encryptionManager: EncryptionManager | null = null;
+  private eventPublisher: EventPublisher;
   private isRunning: boolean = false;
   public readonly serverId: string;
   public readonly keyManager: ReturnType<typeof createKeyManager>;
@@ -82,6 +81,13 @@ export class DVMBridge {
     } else {
       loggerBridge('Encryption support disabled');
     }
+
+    // Initialize centralized event publisher
+    this.eventPublisher = new EventPublisher(
+      this.relayHandler,
+      this.keyManager,
+      this.encryptionManager || undefined
+    );
 
     this.nostrAnnouncer = new NostrAnnouncer(
       this.mcpPool,
@@ -192,7 +198,7 @@ export class DVMBridge {
 
   /**
    * Decrypt an encrypted event and extract the real sender's public key
-   * This manually performs NIP-17/NIP-59 decryption to access the sealed message layer
+   * Uses centralized EncryptionManager for cleaner implementation
    */
   private async decryptEventAndExtractSender(
     giftWrapEvent: NostrEvent
@@ -205,64 +211,26 @@ export class DVMBridge {
         return null;
       }
 
-      const recipientSecretKey = Buffer.from(
-        this.config.nostr.privateKey,
-        'hex'
-      );
-
-      // Step 1: Unwrap the gift wrap to get the sealed message
-      // This uses the ephemeral key from the gift wrap but we need the real sender from the sealed message
-      const { decrypt } = await import('nostr-tools/nip04');
-
-      let sealedMessage: NostrEvent;
-      try {
-        const decryptedSealContent = decrypt(
-          recipientSecretKey,
-          giftWrapEvent.pubkey,
-          giftWrapEvent.content
+      const decryptionResult =
+        await this.encryptionManager.decryptEventAndExtractSender(
+          giftWrapEvent,
+          this.keyManager.getPrivateKey()
         );
-        sealedMessage = JSON.parse(decryptedSealContent) as NostrEvent;
-      } catch (error) {
-        loggerBridge('Failed to unwrap gift wrap:', error);
+
+      if (!decryptionResult) {
         return null;
       }
-
-      // Step 2: Extract the real sender's public key from the sealed message
-      const realSenderPubkey = sealedMessage.pubkey;
-      loggerBridge(
-        'Extracted real sender pubkey from sealed message:',
-        realSenderPubkey
-      );
-
-      // Step 3: Unseal the message to get the original DVMCP content
-      let originalMessageContent: string;
-      try {
-        originalMessageContent = decrypt(
-          recipientSecretKey,
-          realSenderPubkey,
-          sealedMessage.content
-        );
-      } catch (error) {
-        loggerBridge('Failed to unseal message:', error);
-        return null;
-      }
-
-      // Step 4: Parse the original message (kind 14 private direct message)
-      const privateDirectMessage = JSON.parse(originalMessageContent);
-
-      // Step 5: Extract the DVMCP message from the private direct message content
-      const dvmcpMessage = JSON.parse(privateDirectMessage.content);
 
       const eventTemplate: EventTemplate = {
-        kind: dvmcpMessage.kind,
-        content: dvmcpMessage.content,
-        tags: dvmcpMessage.tags,
-        created_at: dvmcpMessage.created_at,
+        kind: decryptionResult.decryptedEvent.kind,
+        content: decryptionResult.decryptedEvent.content,
+        tags: decryptionResult.decryptedEvent.tags,
+        created_at: decryptionResult.decryptedEvent.created_at,
       };
 
       return {
         eventTemplate,
-        realSenderPubkey,
+        realSenderPubkey: decryptionResult.sender,
       };
     } catch (error) {
       loggerBridge('Error in decryptEventAndExtractSender:', error);
@@ -398,28 +366,36 @@ export class DVMBridge {
       }
 
       if (!this.isWhitelisted(pubkey)) {
-        const errorStatus = this.keyManager.signEvent({
-          ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
-          content: 'Unauthorized: Pubkey not in whitelist',
-          tags: [
+        // Use centralized event publisher with encryption awareness
+        const shouldEncryptResponse =
+          this.encryptionManager?.isEncryptionEnabled() &&
+          (isEncrypted || this.config.encryption?.forceEncryption);
+
+        await this.eventPublisher.publishNotification(
+          'Unauthorized: Pubkey not in whitelist',
+          pubkey,
+          [
             [TAG_STATUS, 'error'],
             [TAG_EVENT_ID, id],
             [TAG_PUBKEY, pubkey],
           ],
-        });
-        await this.relayHandler.publishEvent(errorStatus);
+          shouldEncryptResponse || false
+        );
         return;
       }
 
       if (kind === REQUEST_KIND) {
         // Create response context for encryption awareness
-        const responseContext = {
-          originalRequestId: id,
+        // If encryption is enabled and we received an encrypted request, respond with encryption
+        // Or if encryption is enabled and forceEncryption is set, encrypt all responses
+        const shouldEncryptResponse =
+          this.encryptionManager?.isEncryptionEnabled() &&
+          (isEncrypted || this.config.encryption?.forceEncryption);
+
+        const responseContext: ResponseContext = {
           recipientPubkey: pubkey,
-          shouldEncrypt: isEncrypted,
-          encryptionManager: this.encryptionManager,
-          keyManager: this.keyManager,
-          relayHandler: this.relayHandler,
+          shouldEncrypt: shouldEncryptResponse || false,
+          encryptionManager: this.encryptionManager || undefined,
         };
 
         switch (method) {
@@ -528,10 +504,22 @@ export class DVMBridge {
         }
       } else if (kind === NOTIFICATION_KIND) {
         if (method === 'notifications/cancel') {
+          // Create response context for encryption awareness
+          const shouldEncryptResponse =
+            this.encryptionManager?.isEncryptionEnabled() &&
+            (isEncrypted || this.config.encryption?.forceEncryption);
+
+          const responseContext: ResponseContext = {
+            recipientPubkey: pubkey,
+            shouldEncrypt: shouldEncryptResponse || false,
+            encryptionManager: this.encryptionManager || undefined,
+          };
+
           await handleNotificationsCancel(
             event,
             this.keyManager,
-            this.relayHandler
+            this.relayHandler,
+            responseContext
           );
         } else {
           loggerBridge(`Received unhandled notification type: ${method}`);
@@ -545,53 +533,16 @@ export class DVMBridge {
   }
 
   /**
-   * Publishes a response, handling encryption based on the response context
+   * Publishes a response using the centralized event publisher
    */
   private async publishResponse(
     event: NostrEvent,
     responseContext: ResponseContext
   ): Promise<void> {
-    if (
-      responseContext.shouldEncrypt &&
-      responseContext.encryptionManager?.isEncryptionEnabled()
-    ) {
-      // Encrypt the response for the original requester
-      try {
-        // Convert signed event back to EventTemplate for encryption
-        const eventTemplate = {
-          kind: event.kind,
-          content: event.content,
-          tags: event.tags,
-          created_at: event.created_at,
-        };
-
-        const encryptedEvent =
-          await responseContext.encryptionManager.encryptMessage(
-            this.config.nostr.privateKey,
-            responseContext.recipientPubkey,
-            eventTemplate
-          );
-
-        if (encryptedEvent) {
-          loggerBridge('Publishing encrypted response');
-          await responseContext.relayHandler.publishEvent(encryptedEvent);
-        } else {
-          loggerBridge(
-            'Failed to encrypt response, falling back to unencrypted'
-          );
-          await responseContext.relayHandler.publishEvent(event);
-        }
-      } catch (error) {
-        loggerBridge(
-          'Error encrypting response, falling back to unencrypted:',
-          error
-        );
-        await responseContext.relayHandler.publishEvent(event);
-      }
-    } else {
-      // Publish unencrypted response
-      loggerBridge('Publishing unencrypted response');
-      await responseContext.relayHandler.publishEvent(event);
-    }
+    await this.eventPublisher.publishResponse(
+      event,
+      responseContext.recipientPubkey,
+      responseContext.shouldEncrypt
+    );
   }
 }

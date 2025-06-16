@@ -85,8 +85,8 @@ lightning:
 encryption:
   # Whether this server supports encrypted communication
   supportEncryption: true
-  # Whether to prefer encrypted communication when possible
-  preferEncryption: false
+  # Whether to force encrypted communication (rejects clear text requests)
+  forceEncryption: false
 
 # [Optional] Whitelist Configuration
 # whitelist:

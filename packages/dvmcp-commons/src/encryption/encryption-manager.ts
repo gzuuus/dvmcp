@@ -1,322 +1,257 @@
-import type { EventTemplate, Event as NostrEvent } from 'nostr-tools';
+import type { Event as NostrEvent, UnsignedEvent } from 'nostr-tools';
+import { nip44 } from 'nostr-tools';
+import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
+import { finalizeEvent } from 'nostr-tools/pure';
 import { hexToBytes } from '@noble/hashes/utils';
-import { finalizeEvent, generateSecretKey } from 'nostr-tools/pure';
-import { encrypt, decrypt } from 'nostr-tools/nip04';
-import { GIFT_WRAP_KIND } from '../core';
 import type { EncryptionConfig } from './types';
 import {
   SEALED_DIRECT_MESSAGE_KIND,
   PRIVATE_DIRECT_MESSAGE_KIND,
 } from './types';
+import { GIFT_WRAP_KIND } from '../core/constants';
+
+// FIXME: Right now encryption, and its settings have some issues
+// - Just work if both bridge and discovery have 'supportEncryption' and 'forceEncryption' set to true
+// - If both packages have 'supportEncryption' set to true and 'forceEncryption' set to false, it will not work, the events are sended unencrypted, but the packages will process the events succesfully
+// - If both packages have 'supportEncryption' set to false and 'forceEncryption' set to true, it will not work, the events are sended unencrypted, but the packages will process the events succesfully
+// - If bridge has 'supportEncryption' set to true and 'forceEncryption' set to false, and discovery has 'supportEncryption' set to true and 'forceEncryption' set to true, it will not work, the discovery sends the request encrypted but the bridge would not process it even if supportEncryption is set to true
+// - If bridge has 'supportEncryption' set to true and 'forceEncryption' set to true, and discovery has 'supportEncryption' set to true and 'forceEncryption' set to false, it will not work, the discovery sends the request unencrypted but the bridge would send the response encrypted and its not processed by the discovery
+
+export interface DecryptedMessage {
+  content: any;
+  sender: string;
+  event: NostrEvent;
+}
+
+export interface EventTemplate {
+  kind: number;
+  content: string;
+  tags: string[][];
+  created_at: number;
+}
 
 /**
- * Shared encryption utilities for DVMCP using NIP-17/NIP-59
- * This class provides encryption/decryption functionality that can be used
- * by both bridge and discovery packages.
+ * Centralized encryption manager that handles all NIP-17/NIP-59 operations
  */
 export class EncryptionManager {
-  constructor(private config: EncryptionConfig) {}
+  private enabled: boolean;
 
-  /**
-   * Check if encryption is enabled
-   */
-  isEncryptionEnabled(): boolean {
-    return this.config.supportEncryption;
+  constructor(config: EncryptionConfig) {
+    this.enabled = config.supportEncryption && (config.forceEncryption ?? true);
+  }
+
+  public isEncryptionEnabled(): boolean {
+    return this.enabled;
   }
 
   /**
-   * Check if encryption should be preferred
+   * Encrypt a message using NIP-17/NIP-59 gift wrap scheme
+   * @param senderPrivateKey - Sender's private key
+   * @param recipientPublicKey - Recipient's public key
+   * @param eventTemplate - Event to encrypt
+   * @returns Gift wrapped event or null if encryption fails
    */
-  shouldPreferEncryption(): boolean {
-    return this.config.preferEncryption ?? false;
-  }
-
-  /**
-   * Check if encryption should be used (enabled and preferred)
-   */
-  shouldEncrypt(): boolean {
-    return this.isEncryptionEnabled() && this.shouldPreferEncryption();
-  }
-
-  /**
-   * Encrypt a DVMCP message using NIP-17 (seal) + NIP-59 (gift wrap)
-   * @param senderPrivateKey - Private key of the sender (hex string)
-   * @param recipientPubkey - Public key of the recipient
-   * @param eventTemplate - Event template to encrypt
-   * @param conversationTitle - Optional conversation title
-   * @param replyTo - Optional reply-to event ID
-   * @returns Promise<NostrEvent> - Gift wrapped event (kind 1059)
-   */
-  async encryptMessage(
+  public async encryptMessage(
     senderPrivateKey: string,
-    recipientPubkey: string,
-    eventTemplate: EventTemplate,
-    conversationTitle?: string,
-    replyTo?: string
-  ): Promise<NostrEvent> {
-    try {
-      const senderSecretKey = hexToBytes(senderPrivateKey);
-
-      // Step 1: Create the original message (kind 14 - private direct message)
-      const messageContent = JSON.stringify({
-        kind: eventTemplate.kind,
-        content: eventTemplate.content,
-        tags: eventTemplate.tags,
-        created_at: eventTemplate.created_at,
-      });
-
-      // Step 2: Create NIP-17 sealed message (kind 13)
-      const sealedMessage = await this.createSealedMessage(
-        senderSecretKey,
-        recipientPubkey,
-        messageContent,
-        replyTo
-      );
-
-      // Step 3: Create NIP-59 gift wrap (kind 1059)
-      const giftWrappedEvent = await this.createGiftWrap(
-        sealedMessage,
-        recipientPubkey
-      );
-
-      return giftWrappedEvent;
-    } catch (error) {
-      throw new Error(`Encryption failed: ${error}`);
+    recipientPublicKey: string,
+    eventTemplate: EventTemplate
+  ): Promise<NostrEvent | null> {
+    if (!this.enabled) {
+      return null;
     }
-  }
 
-  /**
-   * Encrypt a DVMCP message for multiple recipients
-   * @param senderPrivateKey - Private key of the sender (hex string)
-   * @param recipientPubkeys - Array of recipient public keys
-   * @param eventTemplate - Event template to encrypt
-   * @param conversationTitle - Optional conversation title
-   * @param replyTo - Optional reply-to event ID
-   * @returns Promise<NostrEvent[]> - Array of gift wrapped events (kind 1059)
-   */
-  async encryptMessageForMany(
-    senderPrivateKey: string,
-    recipientPubkeys: string[],
-    eventTemplate: EventTemplate,
-    conversationTitle?: string,
-    replyTo?: string
-  ): Promise<NostrEvent[]> {
     try {
-      const encryptedEvents: NostrEvent[] = [];
-
-      // Encrypt for each recipient individually
-      for (const recipientPubkey of recipientPubkeys) {
-        const encryptedEvent = await this.encryptMessage(
-          senderPrivateKey,
-          recipientPubkey,
-          eventTemplate,
-          conversationTitle,
-          replyTo
-        );
-        encryptedEvents.push(encryptedEvent);
-      }
-
-      return encryptedEvents;
-    } catch (error) {
-      throw new Error(`Multi-recipient encryption failed: ${error}`);
-    }
-  }
-
-  /**
-   * Decrypt a DVMCP message using NIP-17/NIP-59
-   * @param wrappedEvent - Gift wrapped event (kind 1059)
-   * @param recipientPrivateKey - Private key of the recipient (hex string)
-   * @returns Promise<EventTemplate | null> - Decrypted event template or null if decryption failed
-   */
-  async decryptMessage(
-    wrappedEvent: NostrEvent,
-    recipientPrivateKey: string
-  ): Promise<EventTemplate | null> {
-    try {
-      // Verify this is a gift wrapped event
-      if (wrappedEvent.kind !== GIFT_WRAP_KIND) {
-        return null;
-      }
-
-      const recipientSecretKey = hexToBytes(recipientPrivateKey);
-
-      // Step 1: Unwrap the gift wrap to get the sealed message
-      const sealedMessage = await this.unwrapGiftWrap(
-        wrappedEvent,
-        recipientSecretKey
-      );
-      if (!sealedMessage) {
-        return null;
-      }
-
-      // Step 2: Unseal the message to get the original content
-      const originalMessage = await this.unsealMessage(
-        sealedMessage,
-        recipientSecretKey
-      );
-      if (!originalMessage) {
-        return null;
-      }
-
-      // Parse the decrypted message content
-      const messageData = JSON.parse(originalMessage);
-
-      const eventTemplate: EventTemplate = {
-        kind: messageData.kind,
-        content: messageData.content,
-        tags: messageData.tags,
-        created_at: messageData.created_at,
+      // Step 1: Create the rumor (original message without signature)
+      const rumor = {
+        ...eventTemplate,
+        pubkey: getPublicKey(hexToBytes(senderPrivateKey)),
       };
 
-      return eventTemplate;
+      // Step 2: Create seal (kind 13) - encrypt the rumor
+      const sealPrivateKey = generateSecretKey();
+      const sealPublicKey = getPublicKey(sealPrivateKey);
+
+      const encryptedRumor = nip44.v2.encrypt(
+        JSON.stringify(rumor),
+        nip44.v2.utils.getConversationKey(sealPrivateKey, recipientPublicKey)
+      );
+
+      const seal: UnsignedEvent = {
+        kind: SEALED_DIRECT_MESSAGE_KIND,
+        content: encryptedRumor,
+        tags: [],
+        created_at: Math.floor(Date.now() / 1000),
+        pubkey: sealPublicKey,
+      };
+
+      const signedSeal = finalizeEvent(seal, sealPrivateKey);
+
+      // Step 3: Create gift wrap (kind 1059) - encrypt the seal
+      const giftWrapPrivateKey = generateSecretKey();
+      const giftWrapPublicKey = getPublicKey(giftWrapPrivateKey);
+
+      const encryptedSeal = nip44.v2.encrypt(
+        JSON.stringify(signedSeal),
+        nip44.v2.utils.getConversationKey(
+          giftWrapPrivateKey,
+          recipientPublicKey
+        )
+      );
+
+      const giftWrap: UnsignedEvent = {
+        kind: GIFT_WRAP_KIND,
+        content: encryptedSeal,
+        tags: [['p', recipientPublicKey]],
+        created_at: Math.floor(Date.now() / 1000),
+        pubkey: giftWrapPublicKey,
+      };
+
+      return finalizeEvent(giftWrap, giftWrapPrivateKey);
     } catch (error) {
+      console.error('Encryption failed:', error);
       return null;
     }
   }
 
   /**
-   * Check if an event is encrypted (gift wrapped)
-   * @param event - Nostr event to check
-   * @returns boolean - True if the event is encrypted
+   * Decrypt a gift wrapped message and extract sender information
+   * @param event - Gift wrap event to decrypt
+   * @param recipientPrivateKey - Recipient's private key
+   * @returns Decrypted message with sender info or null if decryption fails
    */
-  isEncryptedEvent(event: NostrEvent): boolean {
-    return event.kind === GIFT_WRAP_KIND;
-  }
-
-  /**
-   * Determine if a recipient supports encryption based on their capabilities
-   * @param recipientPubkey - Public key of the recipient
-   * @param serverCapabilities - Server capabilities from announcements
-   * @returns boolean - True if encryption is supported
-   */
-  recipientSupportsEncryption(
-    recipientPubkey: string,
-    serverCapabilities?: any
-  ): boolean {
-    // For now, we'll assume encryption support based on configuration
-    // In a real implementation, this would check the recipient's announced capabilities
-    if (serverCapabilities?.encryption?.supportEncryption) {
-      return true;
+  public async decryptMessage(
+    event: NostrEvent,
+    recipientPrivateKey: string
+  ): Promise<DecryptedMessage | null> {
+    if (!this.enabled || event.kind !== GIFT_WRAP_KIND) {
+      return null;
     }
 
-    // Default to false if no capability information is available
-    return false;
-  }
-
-  /**
-   * Create a sealed message (NIP-17, kind 13)
-   * @private
-   */
-  private async createSealedMessage(
-    senderSecretKey: Uint8Array,
-    recipientPubkey: string,
-    content: string,
-    replyTo?: string
-  ): Promise<NostrEvent> {
-    // Create kind 14 (private direct message) event
-    const dmEvent: EventTemplate = {
-      kind: PRIVATE_DIRECT_MESSAGE_KIND,
-      content,
-      tags: replyTo ? [['e', replyTo]] : [],
-      created_at: Math.floor(Date.now() / 1000),
-    };
-
-    // Encrypt the entire event for the recipient
-    const encryptedContent = encrypt(
-      senderSecretKey,
-      recipientPubkey,
-      JSON.stringify(dmEvent)
-    );
-
-    // Create sealed message (kind 13)
-    const sealedTemplate: EventTemplate = {
-      kind: SEALED_DIRECT_MESSAGE_KIND,
-      content: encryptedContent,
-      tags: [],
-      created_at: Math.floor(Date.now() / 1000),
-    };
-
-    return finalizeEvent(sealedTemplate, senderSecretKey);
-  }
-
-  /**
-   * Create a gift wrap (NIP-59, kind 1059)
-   * @private
-   */
-  private async createGiftWrap(
-    sealedMessage: NostrEvent,
-    recipientPubkey: string
-  ): Promise<NostrEvent> {
-    // Generate random ephemeral key for gift wrapping
-    const ephemeralKey = generateSecretKey();
-
-    // Encrypt the sealed message for the recipient
-    const encryptedSealedMessage = encrypt(
-      ephemeralKey,
-      recipientPubkey,
-      JSON.stringify(sealedMessage)
-    );
-
-    // Create gift wrap event
-    const giftWrapTemplate: EventTemplate = {
-      kind: GIFT_WRAP_KIND,
-      content: encryptedSealedMessage,
-      tags: [['p', recipientPubkey]],
-      created_at: Math.floor(Date.now() / 1000),
-    };
-
-    return finalizeEvent(giftWrapTemplate, ephemeralKey);
-  }
-
-  /**
-   * Unwrap a gift wrap to get the sealed message
-   * @private
-   */
-  private async unwrapGiftWrap(
-    giftWrapEvent: NostrEvent,
-    recipientSecretKey: Uint8Array
-  ): Promise<NostrEvent | null> {
     try {
-      // Decrypt the gift wrap content to get the sealed message
-      const decryptedContent = decrypt(
-        recipientSecretKey,
-        giftWrapEvent.pubkey,
-        giftWrapEvent.content
+      const recipientPublicKey = getPublicKey(hexToBytes(recipientPrivateKey));
+
+      // Check if this gift wrap is for us
+      const isForUs = event.tags.some(
+        (tag) => tag[0] === 'p' && tag[1] === recipientPublicKey
       );
 
-      // Parse the decrypted content as the sealed message
-      const sealedMessage = JSON.parse(decryptedContent) as NostrEvent;
-
-      // Verify it's a sealed message (kind 13)
-      if (sealedMessage.kind !== SEALED_DIRECT_MESSAGE_KIND) {
+      if (!isForUs) {
         return null;
       }
 
-      return sealedMessage;
+      // Step 1: Decrypt the gift wrap to get the seal
+      const conversationKey = nip44.v2.utils.getConversationKey(
+        hexToBytes(recipientPrivateKey),
+        event.pubkey
+      );
+
+      const decryptedSealJson = nip44.v2.decrypt(
+        event.content,
+        conversationKey
+      );
+      const seal = JSON.parse(decryptedSealJson) as NostrEvent;
+
+      if (seal.kind !== SEALED_DIRECT_MESSAGE_KIND) {
+        console.error('Invalid seal kind:', seal.kind);
+        return null;
+      }
+
+      // Step 2: Decrypt the seal to get the rumor
+      const sealConversationKey = nip44.v2.utils.getConversationKey(
+        hexToBytes(recipientPrivateKey),
+        seal.pubkey
+      );
+
+      const decryptedRumorJson = nip44.v2.decrypt(
+        seal.content,
+        sealConversationKey
+      );
+      const rumor = JSON.parse(decryptedRumorJson);
+
+      // Step 3: Parse the rumor content
+      let actualContent;
+      if (rumor.kind === PRIVATE_DIRECT_MESSAGE_KIND) {
+        // If it's a kind 14, the content might be JSON-encoded DVMCP message
+        try {
+          actualContent = JSON.parse(rumor.content);
+        } catch {
+          actualContent = rumor.content;
+        }
+      } else {
+        actualContent = rumor;
+      }
+
+      return {
+        content: actualContent,
+        sender: rumor.pubkey,
+        event: {
+          ...rumor,
+          id: event.id, // Keep original gift wrap ID for tracking
+          sig: event.sig,
+        } as NostrEvent,
+      };
     } catch (error) {
+      console.error('Decryption failed:', error);
       return null;
     }
   }
 
   /**
-   * Unseal a sealed message to get the original content
-   * @private
+   * Decrypt an event and extract sender information (unified method)
+   * Handles both gift wrapped and direct encrypted events
    */
-  private async unsealMessage(
-    sealedMessage: NostrEvent,
-    recipientSecretKey: Uint8Array
-  ): Promise<string | null> {
-    try {
-      // Decrypt the sealed message content
-      const decryptedContent = decrypt(
-        recipientSecretKey,
-        sealedMessage.pubkey,
-        sealedMessage.content
-      );
+  public async decryptEventAndExtractSender(
+    event: NostrEvent,
+    recipientPrivateKey: string
+  ): Promise<{ decryptedEvent: NostrEvent; sender: string } | null> {
+    const decrypted = await this.decryptMessage(event, recipientPrivateKey);
 
-      return decryptedContent;
-    } catch (error) {
+    if (!decrypted) {
       return null;
     }
+
+    return {
+      decryptedEvent: decrypted.event,
+      sender: decrypted.sender,
+    };
+  }
+
+  /**
+   * Check if an event is encrypted for a specific recipient
+   */
+  public isEventForRecipient(
+    event: NostrEvent,
+    recipientPublicKey: string
+  ): boolean {
+    if (event.kind !== GIFT_WRAP_KIND) {
+      return false;
+    }
+
+    return event.tags.some(
+      (tag) => tag[0] === 'p' && tag[1] === recipientPublicKey
+    );
+  }
+
+  /**
+   * Encrypt a notification event
+   */
+  public async encryptNotification(
+    senderPrivateKey: string,
+    recipientPublicKey: string,
+    notificationContent: string,
+    tags: string[][] = []
+  ): Promise<NostrEvent | null> {
+    const eventTemplate: EventTemplate = {
+      kind: 21316, // NOTIFICATION_KIND
+      content: notificationContent,
+      tags,
+      created_at: Math.floor(Date.now() / 1000),
+    };
+
+    return this.encryptMessage(
+      senderPrivateKey,
+      recipientPublicKey,
+      eventTemplate
+    );
   }
 }

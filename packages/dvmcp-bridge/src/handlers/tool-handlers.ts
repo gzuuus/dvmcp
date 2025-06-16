@@ -13,48 +13,7 @@ import {
 import { PaymentProcessor } from './payment-processor';
 import { createProtocolErrorResponse } from '../utils.js';
 import type { ResponseContext } from '../dvm-bridge.js';
-
-/**
- * Helper function to publish response with encryption support
- */
-async function publishResponse(
-  response: NostrEvent,
-  responseContext: ResponseContext
-): Promise<void> {
-  if (
-    responseContext.shouldEncrypt &&
-    responseContext.encryptionManager?.isEncryptionEnabled()
-  ) {
-    // Encrypt the response for the original requester
-    try {
-      // Convert signed event back to EventTemplate for encryption
-      const eventTemplate = {
-        kind: response.kind,
-        content: response.content,
-        tags: response.tags,
-        created_at: response.created_at,
-      };
-
-      const encryptedEvent =
-        await responseContext.encryptionManager.encryptMessage(
-          responseContext.keyManager.getPrivateKey(),
-          responseContext.recipientPubkey,
-          eventTemplate
-        );
-
-      if (encryptedEvent) {
-        await responseContext.relayHandler.publishEvent(encryptedEvent);
-      } else {
-        await responseContext.relayHandler.publishEvent(response);
-      }
-    } catch (error) {
-      await responseContext.relayHandler.publishEvent(response);
-    }
-  } else {
-    // Publish unencrypted response
-    await responseContext.relayHandler.publishEvent(response);
-  }
-}
+import { getResponsePublisher } from '../utils/response-publisher-factory';
 
 /**
  * Handles the tools/list method request
@@ -79,7 +38,12 @@ export async function handleToolsList(
       keyManager,
       RESPONSE_KIND
     );
-    await publishResponse(errorResponse, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -96,7 +60,12 @@ export async function handleToolsList(
       ],
     });
     loggerBridge('tools list response', response);
-    await publishResponse(response, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(response, responseContext);
   } catch (err) {
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -112,7 +81,12 @@ export async function handleToolsList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(errorResp, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResp, responseContext);
   }
 }
 
@@ -142,7 +116,12 @@ export async function handleToolsCall(
       keyManager,
       RESPONSE_KIND
     );
-    await publishResponse(errorResponse, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -154,7 +133,9 @@ export async function handleToolsCall(
   const paymentProcessor = new PaymentProcessor(
     config,
     keyManager,
-    relayHandler
+    relayHandler,
+    undefined, // paymentTimeoutMs - use default
+    responseContext.encryptionManager
   );
 
   try {
@@ -167,7 +148,8 @@ export async function handleToolsCall(
       jobRequest.params.name,
       'tool',
       id,
-      pubkey
+      pubkey,
+      responseContext.shouldEncrypt
     );
 
     if (!paymentSuccessful) {
@@ -182,7 +164,11 @@ export async function handleToolsCall(
     );
 
     // Send success notification
-    await paymentProcessor.sendSuccessNotification(id, pubkey);
+    await paymentProcessor.sendSuccessNotification(
+      id,
+      pubkey,
+      responseContext.shouldEncrypt
+    );
 
     // Send response
     const response = keyManager.signEvent({
@@ -193,13 +179,19 @@ export async function handleToolsCall(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(response, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(response, responseContext);
   } catch (error) {
     // Send error notification
     await paymentProcessor.sendErrorNotification(
       id,
       pubkey,
-      error instanceof Error ? error.message : String(error)
+      error instanceof Error ? error.message : String(error),
+      responseContext.shouldEncrypt
     );
 
     // Send error response
@@ -218,6 +210,11 @@ export async function handleToolsCall(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await publishResponse(errorResp, responseContext);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResp, responseContext);
   }
 }

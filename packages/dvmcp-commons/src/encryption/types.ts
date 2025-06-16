@@ -4,8 +4,8 @@
 export interface EncryptionConfig {
   /** Whether encryption is supported by this server/client */
   supportEncryption: boolean;
-  /** Whether to prefer encrypted communication when possible */
-  preferEncryption?: boolean;
+  /** Whether to force encrypted communication. If true, clear text requests will be rejected. */
+  forceEncryption?: boolean;
 }
 // TODO: move this kinds to constants
 /**

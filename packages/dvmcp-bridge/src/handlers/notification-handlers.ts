@@ -3,10 +3,12 @@ import {
   TAG_EVENT_ID,
   TAG_PUBKEY,
   TAG_STATUS,
-  NOTIFICATION_KIND,
+  TAG_METHOD,
 } from '@dvmcp/commons/core';
 import type { KeyManager, RelayHandler } from '@dvmcp/commons/nostr';
+import { EventPublisher } from '@dvmcp/commons/nostr';
 import type { NostrEvent } from 'nostr-tools';
+import type { ResponseContext } from '../dvm-bridge';
 // TODO: actually cancel the job
 /**
  * Handles the notifications/cancel method
@@ -14,7 +16,8 @@ import type { NostrEvent } from 'nostr-tools';
 export async function handleNotificationsCancel(
   event: NostrEvent,
   keyManager: KeyManager,
-  relayHandler: RelayHandler
+  relayHandler: RelayHandler,
+  responseContext?: ResponseContext
 ): Promise<void> {
   const pubkey = event.pubkey;
   const tags = event.tags;
@@ -25,20 +28,27 @@ export async function handleNotificationsCancel(
   if (eventIdToCancel) {
     loggerBridge(`Received cancel request for job: ${eventIdToCancel}`);
 
-    // Send cancellation acknowledgment
-    const cancelAckStatus = keyManager.signEvent({
-      ...keyManager.createEventTemplate(NOTIFICATION_KIND),
-      content: JSON.stringify({
+    // Send cancellation acknowledgment using centralized event publisher
+    const eventPublisher = new EventPublisher(
+      relayHandler,
+      keyManager,
+      responseContext?.encryptionManager
+    );
+
+    await eventPublisher.publishNotification(
+      JSON.stringify({
         method: 'notifications/progress',
         params: { message: 'cancellation-acknowledged' },
       }),
-      tags: [
+      pubkey,
+      [
         [TAG_STATUS, 'cancelled'],
         [TAG_EVENT_ID, eventIdToCancel],
         [TAG_PUBKEY, pubkey],
+        [TAG_METHOD, 'notifications/progress'],
       ],
-    });
-    await relayHandler.publishEvent(cancelAckStatus);
+      responseContext?.shouldEncrypt || false
+    );
   } else {
     loggerBridge('Received cancel notification without event ID');
   }

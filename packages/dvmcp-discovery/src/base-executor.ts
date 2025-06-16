@@ -10,10 +10,7 @@ import {
 import type { RelayHandler } from '@dvmcp/commons/nostr';
 import type { KeyManager } from '@dvmcp/commons/nostr';
 import type { NWCPaymentHandler } from './nwc-payment';
-import {
-  PRIVATE_DIRECT_MESSAGE_KIND,
-  type EncryptionManager,
-} from '@dvmcp/commons/encryption';
+import { type EncryptionManager } from '@dvmcp/commons/encryption';
 
 export abstract class BaseExecutor<T extends Capability, P, R> {
   protected executionSubscriptions: Map<string, () => void> = new Map();
@@ -93,105 +90,43 @@ export abstract class BaseExecutor<T extends Capability, P, R> {
               (t: string[]) => t[0] === 'e' && t[1] === executionId
             );
 
-            // If not a direct response, check if it's an encrypted response for us
+            // If not a direct response, check if it's an encrypted response
             if (
               !isResponseToOurRequest &&
               this.encryptionManager &&
               event.kind === GIFT_WRAP_KIND
             ) {
-              const isForUs = event.tags.some(
-                (t: string[]) =>
-                  t[0] === 'p' && t[1] === this.keyManager.getPublicKey()
-              );
-              if (isForUs) {
-                try {
-                  const decryptedTemplate =
-                    await this.encryptionManager.decryptMessage(
-                      event,
-                      this.keyManager.getPrivateKey()
-                    );
-                  if (decryptedTemplate) {
-                    // The decrypted template is a kind 14 event containing the DVMCP response
-                    // We need to parse the content to get the actual DVMCP response
-                    let actualResponse;
-                    if (
-                      decryptedTemplate.kind === PRIVATE_DIRECT_MESSAGE_KIND
-                    ) {
-                      // Parse the kind 14 content to get the DVMCP response
-                      try {
-                        actualResponse = JSON.parse(decryptedTemplate.content);
-                      } catch (parseError) {
-                        console.error(
-                          'Failed to parse kind 14 content:',
-                          parseError
-                        );
-                        return;
-                      }
-                    } else {
-                      actualResponse = decryptedTemplate;
-                    }
-
-                    // Check if the actual response is a response to our request
-                    const isDecryptedResponse = actualResponse.tags?.some(
-                      (t: string[]) => t[0] === 'e' && t[1] === executionId
-                    );
-                    console.error(
-                      'is decrypted?',
-                      isDecryptedResponse,
-                      actualResponse,
-                      'executionId expected:',
-                      executionId
-                    );
-                    if (isDecryptedResponse) {
-                      isResponseToOurRequest = true;
-                      // Convert the actual response back to event format
-                      processedEvent = {
-                        ...actualResponse,
-                        id: event.id, // Keep original ID for response matching
-                        pubkey: actualResponse.pubkey || event.pubkey,
-                        created_at:
-                          actualResponse.created_at || event.created_at,
-                        sig: event.sig,
-                      } as NostrEvent;
-                    }
-                  }
-                } catch (decryptError) {
-                  // If decryption fails, ignore this event
-                }
-              }
-            }
-            // If it's an unencrypted response but we have encryption enabled, still try to decrypt
-            else if (isResponseToOurRequest && this.encryptionManager) {
               try {
-                const decryptedTemplate =
-                  await this.encryptionManager.decryptMessage(
+                // Use centralized decryption method
+                const decryptionResult =
+                  await this.encryptionManager.decryptEventAndExtractSender(
                     event,
                     this.keyManager.getPrivateKey()
                   );
-                if (decryptedTemplate) {
-                  // Handle kind 14 content parsing
-                  let actualResponse;
-                  if (decryptedTemplate.kind === PRIVATE_DIRECT_MESSAGE_KIND) {
-                    try {
-                      actualResponse = JSON.parse(decryptedTemplate.content);
-                    } catch (parseError) {
-                      actualResponse = decryptedTemplate;
-                    }
-                  } else {
-                    actualResponse = decryptedTemplate;
-                  }
 
-                  // Convert actual response back to event format
-                  processedEvent = {
-                    ...actualResponse,
-                    id: event.id, // Keep original ID for response matching
-                    pubkey: actualResponse.pubkey || event.pubkey,
-                    created_at: actualResponse.created_at || event.created_at,
-                    sig: event.sig,
-                  } as NostrEvent;
+                if (decryptionResult) {
+                  // Check if the decrypted event is a response to our request
+                  const isDecryptedResponse =
+                    decryptionResult.decryptedEvent.tags?.some(
+                      (t: string[]) => t[0] === 'e' && t[1] === executionId
+                    );
+
+                  if (isDecryptedResponse) {
+                    isResponseToOurRequest = true;
+                    // Convert the decrypted event to NostrEvent format
+                    processedEvent = {
+                      id: event.id, // Keep original gift wrap ID for tracking
+                      pubkey: decryptionResult.sender,
+                      created_at: decryptionResult.decryptedEvent.created_at,
+                      kind: decryptionResult.decryptedEvent.kind,
+                      tags: decryptionResult.decryptedEvent.tags,
+                      content: decryptionResult.decryptedEvent.content,
+                      sig: event.sig, // Keep original signature
+                    } as NostrEvent;
+                  }
                 }
               } catch (decryptError) {
-                // If decryption fails, use the original event (not encrypted)
+                // Silently ignore decryption failures - may not be for us
               }
             }
 
@@ -231,7 +166,9 @@ export abstract class BaseExecutor<T extends Capability, P, R> {
                     created_at: request.created_at,
                   }
                 );
-              eventToPublish = encryptedEvent;
+              if (encryptedEvent) {
+                eventToPublish = encryptedEvent;
+              }
             } catch (encryptError) {
               // If encryption fails, send the original unencrypted request
               console.warn(

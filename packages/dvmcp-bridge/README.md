@@ -40,62 +40,17 @@ npx dvmcp-bridge --config-path /path/to/custom/config.yml
 
 You can configure the bridge using environment variables. The following variables are supported:
 
-```
-DVMCP_NOSTR_PRIVATE_KEY=<hex-private-key>
-DVMCP_NOSTR_RELAY_URLS=wss://relay1.com,wss://relay2.com
-DVMCP_MCP_NAME="My DVM Bridge"
-DVMCP_MCP_ABOUT="My custom DVM bridge description"
-DVMCP_MCP_CLIENT_NAME="My Client"
-DVMCP_MCP_CLIENT_VERSION="1.0.0"
-DVMCP_MCP_PICTURE="https://example.com/picture.jpg"
-DVMCP_MCP_WEBSITE="https://example.com"
-DVMCP_MCP_BANNER="https://example.com/banner.jpg"
-DVMCP_ENCRYPTION_SUPPORT_ENCRYPTION=true
-DVMCP_ENCRYPTION_PREFER_ENCRYPTION=false
-DVMCP_WHITELIST_ALLOWED_PUBKEYS=pubkey1,pubkey2
-DVMCP_LIGHTNING_ADDRESS="your-lightning-address@provider.com"
-DVMCP_LIGHTNING_ZAP_RELAYS=wss://relay1.com,wss://relay2.com
-```
+// TODO: Improve docs, add env variables
 
 ### Command-Line Arguments
 
 You can also configure the bridge using command-line arguments, which have the highest priority:
 
-```bash
-npx @dvmcp/bridge \
-  --nostr-private-key <hex-private-key> \
-  --nostr-relay-urls wss://relay1.com,wss://relay2.com \
-  --mcp-name "My DVM Bridge" \
-  --mcp-about "My custom DVM bridge description" \
-  --mcp-client-name "My Client" \
-  --mcp-client-version "1.0.0" \
-  --mcp-picture "https://example.com/picture.jpg" \
-  --mcp-website "https://example.com" \
-  --mcp-banner "https://example.com/banner.jpg" \
-  --encryption-support-encryption true \
-  --encryption-prefer-encryption false \
-  --whitelist-allowed-pubkeys pubkey1,pubkey2 \
-  --lightning-address "your-lightning-address@provider.com" \
-  --lightning-zap-relays wss://relay1.com,wss://relay2.com
-```
+// TODO: Add command line arguments
 
 Shorthand flags are available for some options:
 
-- `-c` for `--config-path`
-- `-r` for `--nostr-relay-urls`
-- `-v` for `--verbose`
-- `-h` for `--help`
-
-### Configuration Priority
-
-When multiple configuration sources provide values for the same setting, the priority order is:
-
-1. Command-line arguments (highest priority)
-2. Environment variables
-3. Configuration file
-4. Default values (lowest priority)
-
-This means that command-line arguments will override environment variables, which will override values from the configuration file, which will override default values.
+...
 
 ### Viewing Configuration
 
@@ -108,47 +63,6 @@ npx @dvmcp/bridge --verbose
 ## Encryption Support
 
 DVMCP Bridge supports encrypted communication using Nostr's NIP-17 (Private Direct Messages) and NIP-59 (Gift Wrap) protocols. This allows for secure, private communication between clients and the DVM service.
-
-### How It Works
-
-- **NIP-17**: Implements private direct messages using NIP-44 encryption with sealed messages (kind 14 events wrapped as kind 13)
-- **NIP-59**: Adds metadata protection by gift-wrapping sealed messages as kind 1059 events using random ephemeral keys
-- **Automatic Detection**: The bridge automatically detects if incoming messages are encrypted and handles decryption seamlessly
-- **Client Preference**: Respects client preferences for encrypted communication when `preferEncryption` is enabled
-
-### Configuration
-
-Enable encryption support in your configuration file:
-
-```yaml
-encryption:
-  # Whether this server supports encrypted communication
-  supportEncryption: true
-  # Whether to prefer encrypted communication when possible
-  preferEncryption: false
-```
-
-### Environment Variables
-
-```bash
-DVMCP_ENCRYPTION_SUPPORT_ENCRYPTION=true
-DVMCP_ENCRYPTION_PREFER_ENCRYPTION=false
-```
-
-### Command Line
-
-```bash
-npx @dvmcp/bridge \
-  --encryption-support-encryption true \
-  --encryption-prefer-encryption false
-```
-
-### Security Features
-
-- **End-to-End Encryption**: Messages are encrypted using NIP-44 elliptic curve encryption
-- **Metadata Protection**: NIP-59 gift wrap obscures sender/recipient information
-- **Forward Secrecy**: Each message uses fresh encryption keys
-- **Automatic Key Management**: No manual key exchange required - uses Nostr public keys
 
 ## Usage
 

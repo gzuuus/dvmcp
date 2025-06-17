@@ -1,4 +1,8 @@
-import type { Event as NostrEvent, UnsignedEvent } from 'nostr-tools';
+import type {
+  EventTemplate,
+  Event as NostrEvent,
+  UnsignedEvent,
+} from 'nostr-tools';
 import { nip44 } from 'nostr-tools';
 import { generateSecretKey, getPublicKey } from 'nostr-tools/pure';
 import { finalizeEvent } from 'nostr-tools/pure';
@@ -15,13 +19,6 @@ export interface DecryptedMessage {
   content: any;
   sender: string;
   event: NostrEvent;
-}
-
-export interface EventTemplate {
-  kind: number;
-  content: string;
-  tags: string[][];
-  created_at: number;
 }
 
 /**

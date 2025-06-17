@@ -34,7 +34,6 @@ import {
   handlePing,
 } from './handlers';
 
-// TODO: Clean up encryption implementation, we have some redundant and unnecesary code. We also have a publish event function in each handler which can be simplified
 export interface ResponseContext {
   recipientPubkey: string;
   shouldEncrypt: boolean;

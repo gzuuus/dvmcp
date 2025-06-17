@@ -62,9 +62,6 @@ npx dvmcp-discovery --interactive
 # Set MCP service details
 npx dvmcp-discovery --mcp-name "My DVMCP Service" --mcp-version "1.2.0"
 
-# Set encryption configuration
-npx dvmcp-discovery --encryption-support-encryption true --encryption-prefer-encryption false
-
 # Limit the number of DVMs to discover
 npx dvmcp-discovery --discovery-limit 5
 
@@ -78,29 +75,7 @@ npx dvmcp-discovery --verbose
 
 You can also configure the service using environment variables:
 
-```bash
-# Set Nostr configuration
-export DVMCP_NOSTR_PRIVATE_KEY=<hex-private-key>
-export DVMCP_NOSTR_RELAY_URLS=wss://relay1.com,wss://relay2.com
-
-# Set MCP service details
-export DVMCP_MCP_NAME="My DVMCP Service"
-export DVMCP_MCP_VERSION="1.2.0"
-export DVMCP_MCP_ABOUT="Custom description"
-
-# Set Encryption configuration
-export DVMCP_ENCRYPTION_SUPPORT_ENCRYPTION=true
-export DVMCP_ENCRYPTION_PREFER_ENCRYPTION=false
-
-# Set NWC configuration
-export DVMCP_NWC_CONNECTION_STRING="nostr+walletconnect:..."
-
-# Limit the number of DVMs to discover
-export DVMCP_DISCOVERY_LIMIT=5
-
-# Run the service
-npx dvmcp-discovery
-```
+// TODO: Add environment variables
 
 ### NWC Payment Configuration
 
@@ -124,47 +99,7 @@ You can obtain an NWC connection string from compatible wallets like Alby or Coi
 
 DVMCP Discovery supports encrypted communication using Nostr's NIP-17 (Private Direct Messages) and NIP-59 (Gift Wrap) protocols. This enables secure, private communication when interacting with DVMs that support encryption.
 
-### How It Works
-
-- **NIP-17**: Implements private direct messages using NIP-44 encryption with sealed messages (kind 14 events wrapped as kind 13)
-- **NIP-59**: Adds metadata protection by gift-wrapping sealed messages as kind 1059 events using random ephemeral keys
-- **Automatic Detection**: The discovery client automatically detects if DVM services support encryption and can use it when available
-- **Preference Support**: Can be configured to prefer encrypted communication when both client and server support it
-
-### Configuration
-
-Enable encryption support in your configuration file:
-
-```yaml
-encryption:
-  # Whether this client supports encrypted communication
-  supportEncryption: true
-  # Whether to prefer encrypted communication when possible
-  preferEncryption: false
-```
-
-### Environment Variables
-
-```bash
-export DVMCP_ENCRYPTION_SUPPORT_ENCRYPTION=true
-export DVMCP_ENCRYPTION_PREFER_ENCRYPTION=false
-```
-
-### Command Line
-
-```bash
-npx dvmcp-discovery \
-  --encryption-support-encryption true \
-  --encryption-prefer-encryption false
-```
-
-### Security Features
-
-- **End-to-End Encryption**: Messages are encrypted using NIP-44 elliptic curve encryption
-- **Metadata Protection**: NIP-59 gift wrap obscures sender/recipient information
-- **Forward Secrecy**: Each message uses fresh encryption keys
-- **Automatic Key Management**: No manual key exchange required - uses Nostr public keys
-- **Seamless Integration**: Works transparently with existing tool discovery and execution
+// TODO: improve docs
 
 ## Usage
 

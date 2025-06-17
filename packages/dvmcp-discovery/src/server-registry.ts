@@ -15,6 +15,7 @@ export interface ServerInfo {
   pubkey: string;
   content: string;
   capabilities?: ServerCapabilities;
+  supportsEncryption?: boolean; // New field to indicate encryption support
 }
 
 export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
@@ -29,7 +30,8 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
   public registerServer(
     serverId: string,
     pubkey: string,
-    content: string
+    content: string,
+    supportsEncryption: boolean
   ): void {
     let capabilities: ServerCapabilities | undefined;
     try {
@@ -41,7 +43,12 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
       loggerDiscovery(`Error parsing server announcement: ${error}`);
     }
 
-    const serverInfo: ServerInfo = { pubkey, content, capabilities };
+    const serverInfo: ServerInfo = {
+      pubkey,
+      content,
+      capabilities,
+      supportsEncryption,
+    };
     this.servers.set(serverId, serverInfo);
 
     const serverCapability: DVMCPBridgeServer = {
@@ -67,6 +74,20 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
    */
   public getServer(serverId: string): ServerInfo | undefined {
     return this.servers.get(serverId);
+  }
+
+  /**
+   * Get server information by public key
+   * @param pubkey - Provider's public key
+   * @returns Server information or undefined if not found
+   */
+  public getServerByPubkey(pubkey: string): ServerInfo | undefined {
+    for (const serverInfo of this.servers.values()) {
+      if (serverInfo.pubkey === pubkey) {
+        return serverInfo;
+      }
+    }
+    return undefined;
   }
 
   /**

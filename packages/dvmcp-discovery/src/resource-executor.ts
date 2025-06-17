@@ -2,6 +2,7 @@ import { type Event as NostrEvent } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import { type KeyManager } from '@dvmcp/commons/nostr';
 import { EncryptionManager } from '@dvmcp/commons/encryption';
+import type { ServerRegistry } from './server-registry'; // Import ServerRegistry
 import {
   type ReadResourceRequest,
   type ReadResourceResult,
@@ -33,10 +34,17 @@ export class ResourceExecutor extends BaseExecutor<
     relayHandler: RelayHandler,
     keyManager: KeyManager,
     private resourceRegistry: ResourceRegistry,
+    protected serverRegistry: ServerRegistry, // Add serverRegistry
     private config: DvmcpDiscoveryConfig,
     encryptionManager?: EncryptionManager
   ) {
-    super(relayHandler, keyManager, resourceRegistry, encryptionManager);
+    super(
+      relayHandler,
+      keyManager,
+      resourceRegistry,
+      serverRegistry,
+      encryptionManager
+    );
 
     try {
       if (this.config.nwc?.connectionString) {

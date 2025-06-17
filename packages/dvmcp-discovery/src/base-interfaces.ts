@@ -6,7 +6,8 @@ export interface Capability {
     | 'resource'
     | 'resourceTemplate'
     | 'server'
-    | 'completion';
+    | 'completion'
+    | 'ping';
 }
 
 export interface DVMCPBridgeServer extends Capability {

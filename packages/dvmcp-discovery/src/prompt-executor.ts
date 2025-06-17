@@ -4,6 +4,7 @@ import { createKeyManager } from '@dvmcp/commons/nostr';
 import { EncryptionManager } from '@dvmcp/commons/encryption';
 import { PromptRegistry, type PromptCapability } from './prompt-registry';
 import { BaseExecutor } from './base-executor';
+import type { ServerRegistry } from './server-registry'; // Import ServerRegistry
 import type { ExecutionContext } from './base-interfaces';
 import {
   REQUEST_KIND,
@@ -33,10 +34,17 @@ export class PromptExecutor extends BaseExecutor<
     relayHandler: RelayHandler,
     keyManager: ReturnType<typeof createKeyManager>,
     private promptRegistry: PromptRegistry,
+    protected serverRegistry: ServerRegistry, // Add serverRegistry
     private config: DvmcpDiscoveryConfig,
     encryptionManager?: EncryptionManager
   ) {
-    super(relayHandler, keyManager, promptRegistry, encryptionManager);
+    super(
+      relayHandler,
+      keyManager,
+      promptRegistry,
+      serverRegistry,
+      encryptionManager
+    );
 
     try {
       if (this.config.nwc?.connectionString) {

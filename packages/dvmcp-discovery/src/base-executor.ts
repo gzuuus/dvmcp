@@ -6,11 +6,13 @@ import {
   NOTIFICATION_KIND,
   GIFT_WRAP_KIND,
   TAG_PUBKEY,
+  loggerDiscovery,
 } from '@dvmcp/commons/core';
 import type { RelayHandler } from '@dvmcp/commons/nostr';
 import type { KeyManager } from '@dvmcp/commons/nostr';
 import type { NWCPaymentHandler } from './nwc-payment';
 import { type EncryptionManager } from '@dvmcp/commons/encryption';
+import type { ServerRegistry } from './server-registry'; // Import ServerRegistry type
 
 export abstract class BaseExecutor<T extends Capability, P, R> {
   protected executionSubscriptions: Map<string, () => void> = new Map();
@@ -22,6 +24,7 @@ export abstract class BaseExecutor<T extends Capability, P, R> {
     protected relayHandler: RelayHandler,
     protected keyManager: KeyManager,
     protected registry: BaseRegistry<T>,
+    protected serverRegistry: ServerRegistry, // Add ServerRegistry to constructor
     encryptionManager?: EncryptionManager | null
   ) {
     this.encryptionManager = encryptionManager || null;
@@ -153,27 +156,39 @@ export abstract class BaseExecutor<T extends Capability, P, R> {
           const recipientPubkey = request.tags.find(
             (tag) => tag[0] === TAG_PUBKEY
           )?.[1];
+
           if (recipientPubkey) {
-            try {
-              const encryptedEvent =
-                await this.encryptionManager.encryptMessage(
-                  this.keyManager.getPrivateKey(),
-                  recipientPubkey,
-                  {
-                    kind: request.kind,
-                    content: request.content,
-                    tags: request.tags,
-                    created_at: request.created_at,
-                  }
+            const serverInfo =
+              this.serverRegistry.getServerByPubkey(recipientPubkey);
+
+            // Check if the recipient server supports encryption
+            if (serverInfo?.supportsEncryption) {
+              try {
+                const encryptedEvent =
+                  await this.encryptionManager.encryptMessage(
+                    this.keyManager.getPrivateKey(),
+                    recipientPubkey,
+                    {
+                      kind: request.kind,
+                      content: request.content,
+                      tags: request.tags,
+                      created_at: request.created_at,
+                    }
+                  );
+                if (encryptedEvent) {
+                  eventToPublish = encryptedEvent;
+                }
+              } catch (encryptError) {
+                // If encryption fails, send the original unencrypted request
+                console.warn(
+                  'Failed to encrypt request, sending unencrypted:',
+                  encryptError
                 );
-              if (encryptedEvent) {
-                eventToPublish = encryptedEvent;
               }
-            } catch (encryptError) {
-              // If encryption fails, send the original unencrypted request
-              console.warn(
-                'Failed to encrypt request, sending unencrypted:',
-                encryptError
+            } else {
+              // If server does not support encryption, send unencrypted
+              loggerDiscovery(
+                `Recipient server ${recipientPubkey} does not support encryption or encryption mode disabled. Sending unencrypted.`
               );
             }
           }

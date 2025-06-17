@@ -9,6 +9,8 @@ export const REQUEST_KIND = 25910; // Ephemeral: Client Requests
 export const RESPONSE_KIND = 26910; // Ephemeral: Server Responses
 export const NOTIFICATION_KIND = 21316; // Ephemeral: Feedback/Notifications
 export const GIFT_WRAP_KIND = 1059; // Gift Wrap (NIP-59): Encrypted messages
+export const SEALED_DIRECT_MESSAGE_KIND = 13;
+export const PRIVATE_DIRECT_MESSAGE_KIND = 14;
 
 // Common Tags for DVMCP Events
 export const TAG_UNIQUE_IDENTIFIER = 'd'; // Unique identifier (addressable events) or Server ID (init response)
@@ -21,6 +23,7 @@ export const TAG_KIND = 'k'; // Accepted request kind (server announcement)
 export const TAG_STATUS = 'status'; // Nostr-specific notification status (e.g., 'payment-required')
 export const TAG_AMOUNT = 'amount'; // Nostr-specific notification amount/invoice
 export const TAG_INVOICE = 'invoice'; // Nostr-specific notification invoice
+export const TAG_SUPPORT_ENCRYPTION = 'support_encryption';
 export const MCPMETHODS = {
   toolsList: 'tools/list',
   toolsCall: 'tools/call',

@@ -11,6 +11,7 @@ import {
   TAG_UNIQUE_IDENTIFIER,
   TAG_KIND,
   TAG_SERVER_IDENTIFIER,
+  TAG_SUPPORT_ENCRYPTION,
 } from '@dvmcp/commons/core';
 import type { Event } from 'nostr-tools/pure';
 import { loggerBridge } from '@dvmcp/commons/core';
@@ -24,6 +25,7 @@ import {
   type ListResourceTemplatesResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { slugify } from '@dvmcp/commons/core';
+import { EncryptionMode } from '@dvmcp/commons/encryption';
 
 function getNip89Tags(cfg: DvmcpBridgeConfig['mcp']): string[][] {
   const keys = ['name', 'about', 'picture', 'website', 'banner'] as const;
@@ -91,6 +93,11 @@ export class NostrAnnouncer {
       [TAG_KIND, `${REQUEST_KIND}`],
       ...getNip89Tags(this.config.mcp),
     ];
+
+    // Add encryption support tag conditionally
+    if (this.config.encryption?.mode !== EncryptionMode.DISABLED) {
+      tags.push([TAG_SUPPORT_ENCRYPTION, 'true']);
+    }
     const event = this.keyManager.signEvent({
       ...this.keyManager.createEventTemplate(SERVER_ANNOUNCEMENT_KIND),
       content: announcementContent,

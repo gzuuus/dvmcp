@@ -14,6 +14,7 @@ import {
   PROMPTS_LIST_KIND,
   TAG_SERVER_IDENTIFIER,
   TAG_UNIQUE_IDENTIFIER,
+  TAG_SUPPORT_ENCRYPTION,
 } from '@dvmcp/commons/core';
 import {
   type Tool,
@@ -82,6 +83,7 @@ export class DiscoveryServer {
       this.relayHandler,
       this.keyManager,
       this.toolRegistry,
+      this.serverRegistry,
       this.config,
       this.encryptionManager || undefined
     );
@@ -91,6 +93,7 @@ export class DiscoveryServer {
       this.relayHandler,
       this.keyManager,
       this.resourceRegistry,
+      this.serverRegistry,
       this.config,
       this.encryptionManager || undefined
     );
@@ -100,6 +103,7 @@ export class DiscoveryServer {
       this.relayHandler,
       this.keyManager,
       this.promptRegistry,
+      this.serverRegistry,
       this.config,
       this.encryptionManager || undefined
     );
@@ -116,6 +120,7 @@ export class DiscoveryServer {
     this.pingExecutor = new PingExecutor(
       this.relayHandler,
       this.keyManager,
+      this.serverRegistry,
       this.encryptionManager || undefined
     );
 
@@ -342,8 +347,24 @@ export class DiscoveryServer {
         loggerDiscovery('Server announcement missing server ID');
         return;
       }
-      this.serverRegistry.registerServer(serverId, event.pubkey, event.content);
-      loggerDiscovery(`Registered server: ${serverId} from ${event.pubkey}`);
+      // Extract support_encryption tag
+      const supportsEncryptionTag = event.tags.find(
+        (tag) => tag[0] === TAG_SUPPORT_ENCRYPTION
+      );
+      const supportsEncryption =
+        supportsEncryptionTag && supportsEncryptionTag[1] === 'true'
+          ? true
+          : false;
+
+      this.serverRegistry.registerServer(
+        serverId,
+        event.pubkey,
+        event.content,
+        supportsEncryption
+      );
+      loggerDiscovery(
+        `Registered server: ${serverId} from ${event.pubkey}, encryption support: ${supportsEncryption}`
+      );
     } catch (error) {
       console.error('Error processing server announcement:', error);
     }
@@ -677,7 +698,12 @@ export class DiscoveryServer {
           capabilities: announcement.capabilities || {},
           serverInfo: announcement.serverInfo,
           instructions: announcement.instructions,
-        })
+        }),
+        // For direct servers, assuming no explicit 'support_encryption' tag in InitializeResult.
+        // If the MCP protocol or InitializeResult type is extended to include encryption info,
+        // this logic would need to be updated to extract it.
+        // For now, we default to false for direct servers unless explicitly handled.
+        false // Defaulting to false for direct server encryption support
       );
       loggerDiscovery(
         `Registered direct server: ${announcement.serverInfo.name || serverId} (${serverId})`

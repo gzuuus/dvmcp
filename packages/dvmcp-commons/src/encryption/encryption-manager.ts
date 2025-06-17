@@ -6,10 +6,10 @@ import { hexToBytes } from '@noble/hashes/utils';
 import type { EncryptionConfig } from './types';
 import { EncryptionMode } from './types';
 import {
-  SEALED_DIRECT_MESSAGE_KIND,
+  GIFT_WRAP_KIND,
   PRIVATE_DIRECT_MESSAGE_KIND,
-} from './types';
-import { GIFT_WRAP_KIND } from '../core/constants';
+  SEALED_DIRECT_MESSAGE_KIND,
+} from '../core/constants';
 
 export interface DecryptedMessage {
   content: any;

@@ -20,10 +20,3 @@ export interface EncryptionConfig {
    */
   mode?: EncryptionMode;
 }
-
-// TODO: move this kinds to constants
-/**
- * NIP-17 constants
- */
-export const SEALED_DIRECT_MESSAGE_KIND = 13;
-export const PRIVATE_DIRECT_MESSAGE_KIND = 14;

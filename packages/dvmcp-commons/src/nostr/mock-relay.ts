@@ -24,6 +24,7 @@ import {
   TAG_CAPABILITY,
   TAG_UNIQUE_IDENTIFIER,
   TAG_KIND,
+  TAG_SERVER_IDENTIFIER,
 } from '../core/constants';
 
 // Default port for the relay server
@@ -81,7 +82,7 @@ const mockToolsList = {
   created_at: Math.floor(Date.now() / 1000),
   tags: [
     [TAG_UNIQUE_IDENTIFIER, 'tools-list-id'],
-    ['s', 'test-server-id'],
+    [TAG_SERVER_IDENTIFIER, 'test-server-id'],
     [TAG_CAPABILITY, 'test-echo'],
   ],
 } as UnsignedEvent;
@@ -102,7 +103,7 @@ const mockResourcesList = {
   created_at: Math.floor(Date.now() / 1000),
   tags: [
     [TAG_UNIQUE_IDENTIFIER, 'resources-list-id'],
-    ['s', 'test-server-id'],
+    [TAG_SERVER_IDENTIFIER, 'test-server-id'],
     [TAG_CAPABILITY, 'test-resource'],
   ],
 } as UnsignedEvent;
@@ -129,7 +130,7 @@ const mockPromptsList = {
   created_at: Math.floor(Date.now() / 1000),
   tags: [
     [TAG_UNIQUE_IDENTIFIER, 'prompts-list-id'],
-    ['s', 'test-server-id'],
+    [TAG_SERVER_IDENTIFIER, 'test-server-id'],
     [TAG_CAPABILITY, 'test-prompt'],
   ],
 } as UnsignedEvent;

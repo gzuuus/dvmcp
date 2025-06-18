@@ -6,7 +6,7 @@ import {
 import { NWCWalletRequest, NWCWalletResponse } from 'nostr-tools/kinds';
 import { hexToBytes } from '@noble/hashes/utils';
 import { encrypt, decrypt } from 'nostr-tools/nip04';
-import { loggerDiscovery } from '@dvmcp/commons/core';
+import { loggerDiscovery, TAG_PUBKEY } from '@dvmcp/commons/core';
 import type { DvmcpDiscoveryConfig } from './config-schema';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 
@@ -116,7 +116,7 @@ export async function makeNwcRequestEvent(
     kind: NWCWalletRequest,
     created_at: Math.round(Date.now() / 1000),
     content: encryptedContent,
-    tags: [['p', pubkey]],
+    tags: [[TAG_PUBKEY, pubkey]],
   };
 
   return finalizeEvent(eventTemplate, secretKey);

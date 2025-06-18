@@ -18,6 +18,7 @@ import {
   TAG_METHOD,
   TAG_SERVER_IDENTIFIER,
   TAG_STATUS,
+  TAG_INVOICE,
 } from '@dvmcp/commons/core';
 import { loggerDiscovery } from '@dvmcp/commons/core';
 import { NWCPaymentHandler } from './nwc-payment';
@@ -208,7 +209,7 @@ export class ResourceExecutor extends BaseExecutor<
 
       if (status === 'payment-required') {
         try {
-          const invoice = event.tags.find((t) => t[0] === 'invoice')?.[1];
+          const invoice = event.tags.find((t) => t[0] === TAG_INVOICE)?.[1];
           if (!invoice) {
             throw new Error('No invoice found in payment-required event');
           }

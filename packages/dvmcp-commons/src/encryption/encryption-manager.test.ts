@@ -12,7 +12,6 @@ describe('EncryptionManager', () => {
       expect(manager.getEncryptionMode()).toBe(EncryptionMode.REQUIRED);
       expect(manager.isEncryptionRequired()).toBe(true);
       expect(manager.shouldAttemptEncryption()).toBe(true);
-      expect(manager.canAcceptUnencrypted()).toBe(false);
     });
 
     it('should default to OPTIONAL when no config provided', () => {
@@ -22,7 +21,6 @@ describe('EncryptionManager', () => {
       expect(manager.isEncryptionEnabled()).toBe(true);
       expect(manager.isEncryptionRequired()).toBe(false);
       expect(manager.shouldAttemptEncryption()).toBe(false);
-      expect(manager.canAcceptUnencrypted()).toBe(true);
     });
   });
 
@@ -33,7 +31,6 @@ describe('EncryptionManager', () => {
       expect(manager.isEncryptionEnabled()).toBe(false);
       expect(manager.isEncryptionRequired()).toBe(false);
       expect(manager.shouldAttemptEncryption()).toBe(false);
-      expect(manager.canAcceptUnencrypted()).toBe(true);
 
       // Should never encrypt responses regardless of incoming format
       expect(manager.shouldEncryptResponse(true)).toBe(false);
@@ -46,7 +43,6 @@ describe('EncryptionManager', () => {
       expect(manager.isEncryptionEnabled()).toBe(true);
       expect(manager.isEncryptionRequired()).toBe(false);
       expect(manager.shouldAttemptEncryption()).toBe(false);
-      expect(manager.canAcceptUnencrypted()).toBe(true);
 
       // Should mirror incoming message format
       expect(manager.shouldEncryptResponse(true)).toBe(true);
@@ -59,7 +55,6 @@ describe('EncryptionManager', () => {
       expect(manager.isEncryptionEnabled()).toBe(true);
       expect(manager.isEncryptionRequired()).toBe(true);
       expect(manager.shouldAttemptEncryption()).toBe(true);
-      expect(manager.canAcceptUnencrypted()).toBe(false);
 
       // Should always encrypt responses regardless of incoming format
       expect(manager.shouldEncryptResponse(true)).toBe(true);

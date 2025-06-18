@@ -1,4 +1,4 @@
-import { loggerBridge } from '@dvmcp/commons/core';
+import { loggerBridge, MCPMETHODS } from '@dvmcp/commons/core';
 import {
   TAG_EVENT_ID,
   TAG_PUBKEY,
@@ -37,7 +37,7 @@ export async function handleNotificationsCancel(
 
     await eventPublisher.publishNotification(
       JSON.stringify({
-        method: 'notifications/progress',
+        method: MCPMETHODS.notificationsProgress,
         params: { message: 'cancellation-acknowledged' },
       }),
       pubkey,
@@ -45,7 +45,7 @@ export async function handleNotificationsCancel(
         [TAG_STATUS, 'cancelled'],
         [TAG_EVENT_ID, eventIdToCancel],
         [TAG_PUBKEY, pubkey],
-        [TAG_METHOD, 'notifications/progress'],
+        [TAG_METHOD, MCPMETHODS.notificationsProgress],
       ],
       responseContext?.shouldEncrypt || false
     );

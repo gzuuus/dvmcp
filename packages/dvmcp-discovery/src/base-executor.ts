@@ -7,11 +7,15 @@ import {
   GIFT_WRAP_KIND,
   TAG_PUBKEY,
   loggerDiscovery,
+  TAG_EVENT_ID,
 } from '@dvmcp/commons/core';
 import type { RelayHandler } from '@dvmcp/commons/nostr';
 import type { KeyManager } from '@dvmcp/commons/nostr';
 import type { NWCPaymentHandler } from './nwc-payment';
-import { type EncryptionManager } from '@dvmcp/commons/encryption';
+import {
+  EncryptionMode,
+  type EncryptionManager,
+} from '@dvmcp/commons/encryption';
 import type { ServerRegistry } from './server-registry'; // Import ServerRegistry type
 
 export abstract class BaseExecutor<T extends Capability, P, R> {
@@ -83,63 +87,64 @@ export abstract class BaseExecutor<T extends Capability, P, R> {
           reject(new Error(`Execution timeout for: ${executionId}`));
         }, BaseExecutor.EXECUTION_TIMEOUT);
 
+        // Helper to check if an event is a response to our request (unencrypted or encrypted)
+        const isResponseEvent = async (
+          event: NostrEvent
+        ): Promise<{ match: boolean; event: NostrEvent }> => {
+          // Direct (unencrypted) response
+          if (
+            event.tags.some(
+              (t: string[]) => t[0] === TAG_EVENT_ID && t[1] === executionId
+            )
+          ) {
+            return { match: true, event };
+          }
+          // Encrypted response
+          if (this.encryptionManager && event.kind === GIFT_WRAP_KIND) {
+            try {
+              const decryptionResult =
+                await this.encryptionManager.decryptEventAndExtractSender(
+                  event,
+                  this.keyManager.getPrivateKey()
+                );
+              if (decryptionResult) {
+                if (
+                  decryptionResult.decryptedEvent.tags?.some(
+                    (t: string[]) =>
+                      t[0] === TAG_EVENT_ID && t[1] === executionId
+                  )
+                ) {
+                  // Convert decrypted event to NostrEvent format
+                  const decryptedNostrEvent = {
+                    id: event.id,
+                    pubkey: decryptionResult.sender,
+                    created_at: decryptionResult.decryptedEvent.created_at,
+                    kind: decryptionResult.decryptedEvent.kind,
+                    tags: decryptionResult.decryptedEvent.tags,
+                    content: decryptionResult.decryptedEvent.content,
+                    sig: event.sig,
+                  } as NostrEvent;
+                  return { match: true, event: decryptedNostrEvent };
+                }
+              }
+            } catch {
+              // Silently ignore decryption failures
+            }
+          }
+          return { match: false, event };
+        };
+
         const subscription = this.relayHandler.subscribeToRequests(
           async (event: NostrEvent) => {
-            let isResponseToOurRequest = false;
-            let processedEvent = event;
-
-            // First check if it's a direct response (unencrypted)
-            isResponseToOurRequest = event.tags.some(
-              (t: string[]) => t[0] === 'e' && t[1] === executionId
-            );
-
-            // If not a direct response, check if it's an encrypted response
-            if (
-              !isResponseToOurRequest &&
-              this.encryptionManager &&
-              event.kind === GIFT_WRAP_KIND
-            ) {
-              try {
-                // Use centralized decryption method
-                const decryptionResult =
-                  await this.encryptionManager.decryptEventAndExtractSender(
-                    event,
-                    this.keyManager.getPrivateKey()
-                  );
-
-                if (decryptionResult) {
-                  // Check if the decrypted event is a response to our request
-                  const isDecryptedResponse =
-                    decryptionResult.decryptedEvent.tags?.some(
-                      (t: string[]) => t[0] === 'e' && t[1] === executionId
-                    );
-
-                  if (isDecryptedResponse) {
-                    isResponseToOurRequest = true;
-                    // Convert the decrypted event to NostrEvent format
-                    processedEvent = {
-                      id: event.id, // Keep original gift wrap ID for tracking
-                      pubkey: decryptionResult.sender,
-                      created_at: decryptionResult.decryptedEvent.created_at,
-                      kind: decryptionResult.decryptedEvent.kind,
-                      tags: decryptionResult.decryptedEvent.tags,
-                      content: decryptionResult.decryptedEvent.content,
-                      sig: event.sig, // Keep original signature
-                    } as NostrEvent;
-                  }
-                }
-              } catch (decryptError) {
-                // Silently ignore decryption failures - may not be for us
-              }
-            }
-
-            if (isResponseToOurRequest) {
+            const { match, event: processedEvent } =
+              await isResponseEvent(event);
+            if (match) {
               clearTimeout(timeoutId);
               this.handleResponse(processedEvent, context, resolve, reject);
             }
           },
           {
-            kinds: [RESPONSE_KIND, NOTIFICATION_KIND, GIFT_WRAP_KIND], // Include gift wrap events
+            kinds: [RESPONSE_KIND, NOTIFICATION_KIND, GIFT_WRAP_KIND],
             since: Math.floor(Date.now() / 1000),
           }
         );
@@ -149,20 +154,22 @@ export abstract class BaseExecutor<T extends Capability, P, R> {
           subscription.close();
         });
 
-        // Encrypt the request if encryption is enabled and should be used
+        // Decide if encryption is needed and possible
         let eventToPublish = request;
         if (this.encryptionManager) {
-          // Extract recipient from request tags (assuming it's in a 'pubkey' tag)
           const recipientPubkey = request.tags.find(
             (tag) => tag[0] === TAG_PUBKEY
           )?.[1];
-
           if (recipientPubkey) {
             const serverInfo =
               this.serverRegistry.getServerByPubkey(recipientPubkey);
+            const encryptionMode = this.encryptionManager.getEncryptionMode();
+            const canEncrypt =
+              serverInfo?.supportsEncryption &&
+              (encryptionMode === EncryptionMode.REQUIRED ||
+                encryptionMode === EncryptionMode.OPTIONAL);
 
-            // Check if the recipient server supports encryption
-            if (serverInfo?.supportsEncryption) {
+            if (canEncrypt) {
               try {
                 const encryptedEvent =
                   await this.encryptionManager.encryptMessage(
@@ -180,15 +187,14 @@ export abstract class BaseExecutor<T extends Capability, P, R> {
                 }
               } catch (encryptError) {
                 // If encryption fails, send the original unencrypted request
-                console.warn(
+                loggerDiscovery(
                   'Failed to encrypt request, sending unencrypted:',
                   encryptError
                 );
               }
-            } else {
-              // If server does not support encryption, send unencrypted
-              loggerDiscovery(
-                `Recipient server ${recipientPubkey} does not support encryption or encryption mode disabled. Sending unencrypted.`
+            } else if (encryptionMode === EncryptionMode.REQUIRED) {
+              throw new Error(
+                `Recipient server ${recipientPubkey} does not support encryption`
               );
             }
           }

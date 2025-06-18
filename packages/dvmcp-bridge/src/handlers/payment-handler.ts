@@ -1,4 +1,4 @@
-import { loggerBridge } from '@dvmcp/commons/core';
+import { loggerBridge, TAG_INVOICE } from '@dvmcp/commons/core';
 import {
   TAG_AMOUNT,
   TAG_EVENT_ID,
@@ -65,7 +65,7 @@ export async function handlePaymentFlow(
       [
         [TAG_STATUS, 'payment-required'],
         [TAG_AMOUNT, price, unit],
-        ['invoice', zapRequest.paymentRequest],
+        [TAG_INVOICE, zapRequest.paymentRequest],
         [TAG_EVENT_ID, eventId],
         [TAG_PUBKEY, pubkey],
       ],

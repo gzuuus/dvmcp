@@ -1,4 +1,4 @@
-import { loggerBridge } from '@dvmcp/commons/core';
+import { loggerBridge, MCPMETHODS } from '@dvmcp/commons/core';
 import type { DvmcpBridgeConfig, MCPPricingConfig } from '../config-schema.js';
 import type { KeyManager } from '@dvmcp/commons/nostr'; // KeyManager might still be needed for handlePaymentFlow
 import type { RelayHandler } from '@dvmcp/commons/nostr'; // RelayHandler might still be needed for handlePaymentFlow
@@ -51,14 +51,14 @@ export class PaymentProcessor {
 
     await this.notificationPublisher.publishNotification(
       JSON.stringify({
-        method: 'notifications/progress',
+        method: MCPMETHODS.notificationsProgress,
         params: { message: 'processing payment' },
       }),
       pubkey,
       [
         [TAG_PUBKEY, pubkey],
         [TAG_EVENT_ID, eventId],
-        [TAG_METHOD, 'notifications/progress'],
+        [TAG_METHOD, MCPMETHODS.notificationsProgress],
       ],
       shouldEncrypt
     );

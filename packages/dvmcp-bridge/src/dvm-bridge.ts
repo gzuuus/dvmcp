@@ -13,11 +13,12 @@ import {
   TAG_EVENT_ID,
   TAG_STATUS,
   TAG_SERVER_IDENTIFIER,
+  MCPMETHODS,
 } from '@dvmcp/commons/core';
 import { loggerBridge } from '@dvmcp/commons/core';
-import { type NostrEvent, type EventTemplate, getEventHash } from 'nostr-tools';
+import { type NostrEvent, getEventHash } from 'nostr-tools';
 import { getServerId } from './utils';
-import { EncryptionManager } from '@dvmcp/commons/encryption';
+import { EncryptionManager, EncryptionMode } from '@dvmcp/commons/encryption';
 import { EventPublisher } from '@dvmcp/commons/nostr';
 
 import { handleToolsList, handleToolsCall } from './handlers/tool-handlers';
@@ -203,7 +204,7 @@ export class DVMBridge {
   private async decryptEventAndExtractSender(
     giftWrapEvent: NostrEvent
   ): Promise<{
-    eventTemplate: EventTemplate;
+    eventTemplate: NostrEvent;
     realSenderPubkey: string;
   } | null> {
     try {
@@ -221,15 +222,8 @@ export class DVMBridge {
         return null;
       }
 
-      const eventTemplate: EventTemplate = {
-        kind: decryptionResult.decryptedEvent.kind,
-        content: decryptionResult.decryptedEvent.content,
-        tags: decryptionResult.decryptedEvent.tags,
-        created_at: decryptionResult.decryptedEvent.created_at,
-      };
-
       return {
-        eventTemplate,
+        eventTemplate: decryptionResult.decryptedEvent,
         realSenderPubkey: decryptionResult.sender,
       };
     } catch (error) {
@@ -281,7 +275,9 @@ export class DVMBridge {
       }
 
       // Handle regular unencrypted events
-      await this.processRegularRequest(event);
+      if (this.config.encryption?.mode !== EncryptionMode.REQUIRED) {
+        await this.processRegularRequest(event);
+      }
     } catch (error) {
       console.error('Error handling request:', error);
     }
@@ -392,9 +388,9 @@ export class DVMBridge {
         };
 
         switch (method) {
-          case 'initialize':
+          case MCPMETHODS.initialize:
             break;
-          case 'ping':
+          case MCPMETHODS.ping:
             await handlePing(
               event,
               this.keyManager,
@@ -402,7 +398,7 @@ export class DVMBridge {
               responseContext
             );
             break;
-          case 'tools/list':
+          case MCPMETHODS.toolsList:
             await handleToolsList(
               event,
               this.mcpPool,
@@ -411,7 +407,7 @@ export class DVMBridge {
               responseContext
             );
             break;
-          case 'tools/call':
+          case MCPMETHODS.toolsCall:
             await handleToolsCall(
               event,
               this.mcpPool,
@@ -421,7 +417,7 @@ export class DVMBridge {
               responseContext
             );
             break;
-          case 'resources/list':
+          case MCPMETHODS.resourcesList:
             await handleResourcesList(
               event,
               this.mcpPool,
@@ -430,7 +426,7 @@ export class DVMBridge {
               responseContext
             );
             break;
-          case 'resources/read':
+          case MCPMETHODS.resourcesRead:
             await handleResourcesRead(
               event,
               this.mcpPool,
@@ -440,7 +436,7 @@ export class DVMBridge {
               responseContext
             );
             break;
-          case 'resources/templates/list':
+          case MCPMETHODS.resourcesTemplatesList:
             await handleResourceTemplatesList(
               event,
               this.mcpPool,
@@ -449,7 +445,7 @@ export class DVMBridge {
               responseContext
             );
             break;
-          case 'prompts/list':
+          case MCPMETHODS.promptsList:
             await handlePromptsList(
               event,
               this.mcpPool,
@@ -458,7 +454,7 @@ export class DVMBridge {
               responseContext
             );
             break;
-          case 'prompts/get':
+          case MCPMETHODS.promptsGet:
             await handlePromptsGet(
               event,
               this.mcpPool,
@@ -467,7 +463,7 @@ export class DVMBridge {
               responseContext
             );
             break;
-          case 'completion/complete':
+          case MCPMETHODS.completionComplete:
             await handleCompletionComplete(
               event,
               this.mcpPool,
@@ -494,7 +490,7 @@ export class DVMBridge {
             await this.publishResponse(notImpl, responseContext);
         }
       } else if (kind === NOTIFICATION_KIND) {
-        if (method === 'notifications/cancel') {
+        if (method === MCPMETHODS.notificationsCancel) {
           const shouldEncryptResponse =
             this.encryptionManager?.shouldEncryptResponse(isEncrypted) || false;
 

@@ -13,6 +13,7 @@ import {
   GIFT_WRAP_KIND,
   PRIVATE_DIRECT_MESSAGE_KIND,
   SEALED_DIRECT_MESSAGE_KIND,
+  TAG_PUBKEY,
 } from '../core/constants';
 
 export interface DecryptedMessage {
@@ -65,13 +66,6 @@ export class EncryptionManager {
    */
   public shouldAttemptEncryption(): boolean {
     return this.mode === EncryptionMode.REQUIRED;
-  }
-
-  /**
-   * Determines if we can accept unencrypted messages
-   */
-  public canAcceptUnencrypted(): boolean {
-    return this.mode !== EncryptionMode.REQUIRED;
   }
 
   /**
@@ -131,7 +125,7 @@ export class EncryptionManager {
       const giftWrap: UnsignedEvent = {
         kind: GIFT_WRAP_KIND,
         content: encryptedSeal,
-        tags: [['p', recipientPublicKey]],
+        tags: [[TAG_PUBKEY, recipientPublicKey]],
         created_at: Math.floor(Date.now() / 1000),
         pubkey: giftWrapPublicKey,
       };
@@ -162,7 +156,7 @@ export class EncryptionManager {
 
       // Check if this gift wrap is for us
       const isForUs = event.tags.some(
-        (tag) => tag[0] === 'p' && tag[1] === recipientPublicKey
+        (tag) => tag[0] === TAG_PUBKEY && tag[1] === recipientPublicKey
       );
 
       if (!isForUs) {
@@ -258,7 +252,7 @@ export class EncryptionManager {
     }
 
     return event.tags.some(
-      (tag) => tag[0] === 'p' && tag[1] === recipientPublicKey
+      (tag) => tag[0] === TAG_PUBKEY && tag[1] === recipientPublicKey
     );
   }
 

@@ -25,10 +25,16 @@ export const TAG_AMOUNT = 'amount'; // Nostr-specific notification amount/invoic
 export const TAG_INVOICE = 'invoice'; // Nostr-specific notification invoice
 export const TAG_SUPPORT_ENCRYPTION = 'support_encryption';
 export const MCPMETHODS = {
+  initialize: 'initialize',
   toolsList: 'tools/list',
   toolsCall: 'tools/call',
   resourcesList: 'resources/list',
+  resourcesTemplatesList: 'resources/templates/list',
   resourcesRead: 'resources/read',
   promptsList: 'prompts/list',
-  promptsCall: 'prompts/call',
+  promptsGet: 'prompts/get',
+  completionComplete: 'completion/complete',
+  ping: 'ping',
+  notificationsCancel: 'notifications/cancel',
+  notificationsProgress: 'notifications/progress',
 } as const;

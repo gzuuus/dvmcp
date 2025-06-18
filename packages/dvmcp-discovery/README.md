@@ -97,9 +97,13 @@ You can obtain an NWC connection string from compatible wallets like Alby or Coi
 
 ## Encryption Support
 
-DVMCP Discovery supports encrypted communication using Nostr's NIP-17 (Private Direct Messages) and NIP-59 (Gift Wrap) protocols. This enables secure, private communication when interacting with DVMs that support encryption.
+The DVMCP Discovery enables secure communication through a flexible encryption system. It offers three distinct modes:
 
-// TODO: improve docs
+- **DISABLED**: No encryption is used for communication.
+- **OPTIONAL**: (Default) Encrypted and unencrypted messages are accepted, and responses mirror the format of the incoming message. This provides maximum compatibility.
+- **REQUIRED**: Only encrypted communication is accepted and generated, ensuring high security.
+
+For a comprehensive overview of the available encryption modes and their operational behavior, including configuration examples, please refer to the [DVMCP Encryption Configuration Guide](../dvmcp-commons/src/encryption/README.md).
 
 ## Usage
 

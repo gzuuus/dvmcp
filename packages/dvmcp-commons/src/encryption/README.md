@@ -28,33 +28,24 @@ The DVMCP encryption system uses a clean `EncryptionMode` enum with three simple
 - **Use case**: High-security deployments
 - **Response behavior**: Always responds with encrypted messages, rejects unencrypted requests
 
-## Configuration
-
-### Simple Configuration
-
-```typescript
-// Default - message format mirroring
-{
-  encryption: {
-    mode: EncryptionMode.OPTIONAL; // or 'optional' as string
-  }
-}
-
-// High security - encryption required
-{
-  encryption: {
-    mode: EncryptionMode.REQUIRED; // or 'required' as string
-  }
-}
-
-// Legacy compatibility - no encryption
-{
-  encryption: {
-    mode: EncryptionMode.DISABLED; // or 'disabled' as string
-  }
-}
-```
-
 ### Default Behavior
 
 When no encryption configuration is provided, the system defaults to `EncryptionMode.OPTIONAL`, which provides the best balance of security and compatibility.
+
+### YAML Configuration
+
+For configurations using YAML files (e.g., `config.dvmcp.yml`), you can specify the encryption mode as follows:
+
+```yaml
+# Default - message format mirroring
+encryption:
+  mode: "optional"
+
+# High security - encryption required
+encryption:
+  mode: "required"
+
+# Legacy compatibility - no encryption
+encryption:
+  mode: "disabled"
+```

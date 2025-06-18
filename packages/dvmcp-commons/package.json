@@ -34,7 +34,7 @@
     "!**/*.test.js"
   ],
   "scripts": {
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "fmt": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },

@@ -62,7 +62,13 @@ npx @dvmcp/bridge --verbose
 
 ## Encryption Support
 
-DVMCP Bridge supports encrypted communication using Nostr's NIP-17 (Private Direct Messages) and NIP-59 (Gift Wrap) protocols. This allows for secure, private communication between clients and the DVM service.
+The DVMCP Bridge supports a flexible encryption system to secure communication. It offers three distinct modes:
+
+- **DISABLED**: No encryption is used for communication.
+- **OPTIONAL**: (Default) Encrypted and unencrypted messages are accepted, and responses mirror the format of the incoming message. This provides maximum compatibility.
+- **REQUIRED**: Only encrypted communication is accepted and generated, ensuring high security.
+
+For a detailed explanation of the available encryption modes and their behavior, including configuration examples, please refer to the [DVMCP Encryption Configuration Guide](../dvmcp-commons/src/encryption/README.md).
 
 ## Usage
 

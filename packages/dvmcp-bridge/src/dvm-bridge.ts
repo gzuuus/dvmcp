@@ -7,15 +7,19 @@ import {
   REQUEST_KIND,
   RESPONSE_KIND,
   NOTIFICATION_KIND,
+  GIFT_WRAP_KIND,
   TAG_METHOD,
   TAG_PUBKEY,
   TAG_EVENT_ID,
   TAG_STATUS,
   TAG_SERVER_IDENTIFIER,
+  MCPMETHODS,
 } from '@dvmcp/commons/core';
 import { loggerBridge } from '@dvmcp/commons/core';
-import type { NostrEvent } from 'nostr-tools';
+import { type NostrEvent, getEventHash } from 'nostr-tools';
 import { getServerId } from './utils';
+import { EncryptionManager, EncryptionMode } from '@dvmcp/commons/encryption';
+import { EventPublisher } from '@dvmcp/commons/nostr';
 
 import { handleToolsList, handleToolsCall } from './handlers/tool-handlers';
 import {
@@ -30,10 +34,19 @@ import {
   handleCompletionComplete,
   handlePing,
 } from './handlers';
+
+export interface ResponseContext {
+  recipientPubkey: string;
+  shouldEncrypt: boolean;
+  encryptionManager?: EncryptionManager;
+}
+
 export class DVMBridge {
   private mcpPool: MCPPool;
   private nostrAnnouncer: NostrAnnouncer;
   private relayHandler: RelayHandler;
+  private encryptionManager: EncryptionManager | null = null;
+  private eventPublisher: EventPublisher;
   private isRunning: boolean = false;
   public readonly serverId: string;
   public readonly keyManager: ReturnType<typeof createKeyManager>;
@@ -59,6 +72,23 @@ export class DVMBridge {
     if (this.config.mcp.serverId) {
       loggerBridge(`Using custom server ID from config: ${this.serverId}`);
     }
+
+    // Initialize encryption manager if encryption is configured
+    if (this.config.encryption) {
+      this.encryptionManager = new EncryptionManager(this.config.encryption);
+      loggerBridge(
+        `Encryption support enabled (${this.config.encryption.mode || 'optional'} mode)`
+      );
+    } else {
+      loggerBridge('Encryption support disabled');
+    }
+
+    // Initialize centralized event publisher
+    this.eventPublisher = new EventPublisher(
+      this.relayHandler,
+      this.keyManager,
+      this.encryptionManager || undefined
+    );
 
     this.nostrAnnouncer = new NostrAnnouncer(
       this.mcpPool,
@@ -103,8 +133,14 @@ export class DVMBridge {
       loggerBridge('Setting up request handlers...');
       const publicKey = this.keyManager.getPublicKey();
       const subscribe = () => {
+        // Subscribe to both regular and encrypted events
+        const kinds = [REQUEST_KIND, NOTIFICATION_KIND];
+        if (this.encryptionManager?.isEncryptionEnabled()) {
+          kinds.push(GIFT_WRAP_KIND);
+        }
+
         this.relayHandler.subscribeToRequests(this.handleRequest.bind(this), {
-          kinds: [REQUEST_KIND, NOTIFICATION_KIND],
+          kinds,
           '#p': [publicKey],
           since: Math.floor(Date.now() / 1000),
         });
@@ -161,16 +197,150 @@ export class DVMBridge {
     }
   }
 
+  /**
+   * Decrypt an encrypted event and extract the real sender's public key
+   * Uses centralized EncryptionManager for cleaner implementation
+   */
+  private async decryptEventAndExtractSender(
+    giftWrapEvent: NostrEvent
+  ): Promise<{
+    eventTemplate: NostrEvent;
+    realSenderPubkey: string;
+  } | null> {
+    try {
+      if (!this.encryptionManager || giftWrapEvent.kind !== GIFT_WRAP_KIND) {
+        return null;
+      }
+
+      const decryptionResult =
+        await this.encryptionManager.decryptEventAndExtractSender(
+          giftWrapEvent,
+          this.keyManager.getPrivateKey()
+        );
+
+      if (!decryptionResult) {
+        return null;
+      }
+
+      return {
+        eventTemplate: decryptionResult.decryptedEvent,
+        realSenderPubkey: decryptionResult.sender,
+      };
+    } catch (error) {
+      loggerBridge('Error in decryptEventAndExtractSender:', error);
+      return null;
+    }
+  }
+
   private async handleRequest(event: NostrEvent): Promise<void> {
     try {
-      const tags = event.tags;
-      const kind = event.kind;
-      const pubkey = event.pubkey;
-      const id = event.id;
-      const method = tags.find((tag) => tag[0] === TAG_METHOD)?.[1] || '';
-      const serverIdentifier =
-        tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
+      // Check if this is an encrypted event
+      if (
+        event.kind === GIFT_WRAP_KIND &&
+        this.encryptionManager?.isEncryptionEnabled()
+      ) {
+        loggerBridge('Received encrypted event, attempting to decrypt...');
 
+        // Try to decrypt the event and extract the real sender's pubkey
+        const decryptionResult = await this.decryptEventAndExtractSender(event);
+
+        if (!decryptionResult) {
+          loggerBridge(
+            'Failed to decrypt event - may not be intended for this server'
+          );
+          return;
+        }
+
+        // Process the decrypted event with the real sender's pubkey
+        loggerBridge('Successfully decrypted event, processing...');
+        // Construct a NostrEvent from the decrypted template and real sender pubkey
+        // The ID should be computed from the inner event content, not the gift wrap
+        const innerEventId = getEventHash({
+          ...decryptionResult.eventTemplate,
+          pubkey: decryptionResult.realSenderPubkey,
+        });
+
+        const reconstructedEvent: NostrEvent = {
+          ...decryptionResult.eventTemplate,
+          id: innerEventId, // Use computed ID of the inner event - this is what discovery client expects
+          pubkey: decryptionResult.realSenderPubkey,
+          sig: event.sig, // Use original signature (though it's from the ephemeral key)
+        };
+
+        await this.processDecryptedRequest(
+          reconstructedEvent,
+          decryptionResult.realSenderPubkey
+        );
+        return;
+      }
+
+      // Handle regular unencrypted events
+      if (this.config.encryption?.mode !== EncryptionMode.REQUIRED) {
+        await this.processRegularRequest(event);
+      }
+    } catch (error) {
+      console.error('Error handling request:', error);
+    }
+  }
+
+  private async processRegularRequest(event: NostrEvent): Promise<void> {
+    const tags = event.tags;
+    const kind = event.kind;
+    const pubkey = event.pubkey;
+    const id = event.id;
+    const method = tags.find((tag) => tag[0] === TAG_METHOD)?.[1] || '';
+    const serverIdentifier =
+      tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
+
+    await this.processRequest(
+      event,
+      kind,
+      pubkey,
+      id,
+      method,
+      serverIdentifier
+    );
+  }
+
+  private async processDecryptedRequest(
+    decryptedEvent: NostrEvent,
+    realSenderPubkey: string
+  ): Promise<void> {
+    // The decryptedEvent now contains the reconstructed DVMCP message
+    // and realSenderPubkey contains the actual sender's public key
+
+    const tags = decryptedEvent.tags;
+    const kind = decryptedEvent.kind;
+    const pubkey = realSenderPubkey; // Use the real sender's pubkey
+    const id = decryptedEvent.id;
+    const method = tags.find((tag) => tag[0] === TAG_METHOD)?.[1] || '';
+    const serverIdentifier =
+      tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
+
+    loggerBridge(
+      `Processing encrypted request from real sender: ${realSenderPubkey}`
+    );
+    await this.processRequest(
+      decryptedEvent,
+      kind,
+      pubkey,
+      id,
+      method,
+      serverIdentifier,
+      true
+    );
+  }
+
+  private async processRequest(
+    event: NostrEvent,
+    kind: number,
+    pubkey: string,
+    id: string,
+    method: string,
+    serverIdentifier: string,
+    isEncrypted: boolean = false
+  ): Promise<void> {
+    try {
       // For ping requests, if no server ID is specified, we should still respond
       // For all other methods, server ID must match
       if (
@@ -191,92 +361,116 @@ export class DVMBridge {
       }
 
       if (!this.isWhitelisted(pubkey)) {
-        const errorStatus = this.keyManager.signEvent({
-          ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
-          content: 'Unauthorized: Pubkey not in whitelist',
-          tags: [
+        const shouldEncryptResponse =
+          this.encryptionManager?.shouldEncryptResponse(isEncrypted) || false;
+
+        await this.eventPublisher.publishNotification(
+          'Unauthorized: Pubkey not in whitelist',
+          pubkey,
+          [
             [TAG_STATUS, 'error'],
             [TAG_EVENT_ID, id],
             [TAG_PUBKEY, pubkey],
           ],
-        });
-        await this.relayHandler.publishEvent(errorStatus);
+          shouldEncryptResponse
+        );
         return;
       }
+
       if (kind === REQUEST_KIND) {
+        const shouldEncryptResponse =
+          this.encryptionManager?.shouldEncryptResponse(isEncrypted) || false;
+
+        const responseContext: ResponseContext = {
+          recipientPubkey: pubkey,
+          shouldEncrypt: shouldEncryptResponse,
+          encryptionManager: this.encryptionManager || undefined,
+        };
+
         switch (method) {
-          case 'initialize':
+          case MCPMETHODS.initialize:
             break;
-          case 'ping':
-            await handlePing(event, this.keyManager, this.relayHandler);
+          case MCPMETHODS.ping:
+            await handlePing(
+              event,
+              this.keyManager,
+              this.relayHandler,
+              responseContext
+            );
             break;
-          case 'tools/list':
+          case MCPMETHODS.toolsList:
             await handleToolsList(
               event,
               this.mcpPool,
               this.keyManager,
-              this.relayHandler
+              this.relayHandler,
+              responseContext
             );
             break;
-          case 'tools/call':
+          case MCPMETHODS.toolsCall:
             await handleToolsCall(
               event,
               this.mcpPool,
               this.keyManager,
               this.relayHandler,
-              this.config
+              this.config,
+              responseContext
             );
             break;
-          case 'resources/list':
+          case MCPMETHODS.resourcesList:
             await handleResourcesList(
               event,
               this.mcpPool,
               this.keyManager,
-              this.relayHandler
+              this.relayHandler,
+              responseContext
             );
             break;
-          case 'resources/read':
+          case MCPMETHODS.resourcesRead:
             await handleResourcesRead(
               event,
               this.mcpPool,
               this.keyManager,
               this.relayHandler,
-              this.config
+              this.config,
+              responseContext
             );
             break;
-          case 'resources/templates/list':
+          case MCPMETHODS.resourcesTemplatesList:
             await handleResourceTemplatesList(
               event,
               this.mcpPool,
               this.keyManager,
-              this.relayHandler
+              this.relayHandler,
+              responseContext
             );
             break;
-          case 'prompts/list':
+          case MCPMETHODS.promptsList:
             await handlePromptsList(
               event,
               this.mcpPool,
               this.keyManager,
-              this.relayHandler
+              this.relayHandler,
+              responseContext
             );
             break;
-          case 'prompts/get':
+          case MCPMETHODS.promptsGet:
             await handlePromptsGet(
               event,
               this.mcpPool,
               this.keyManager,
               this.relayHandler,
-              this.config
+              responseContext
             );
             break;
-          case 'completion/complete':
-            const completionResponse = await handleCompletionComplete(
+          case MCPMETHODS.completionComplete:
+            await handleCompletionComplete(
               event,
               this.mcpPool,
-              this.keyManager
+              this.keyManager,
+              this.relayHandler,
+              responseContext
             );
-            if (!completionResponse) break;
-            await this.relayHandler.publishEvent(completionResponse);
             break;
           default:
             const notImpl = this.keyManager.signEvent({
@@ -293,14 +487,24 @@ export class DVMBridge {
                 [TAG_PUBKEY, pubkey],
               ],
             });
-            await this.relayHandler.publishEvent(notImpl);
+            await this.publishResponse(notImpl, responseContext);
         }
       } else if (kind === NOTIFICATION_KIND) {
-        if (method === 'notifications/cancel') {
+        if (method === MCPMETHODS.notificationsCancel) {
+          const shouldEncryptResponse =
+            this.encryptionManager?.shouldEncryptResponse(isEncrypted) || false;
+
+          const responseContext: ResponseContext = {
+            recipientPubkey: pubkey,
+            shouldEncrypt: shouldEncryptResponse,
+            encryptionManager: this.encryptionManager || undefined,
+          };
+
           await handleNotificationsCancel(
             event,
             this.keyManager,
-            this.relayHandler
+            this.relayHandler,
+            responseContext
           );
         } else {
           loggerBridge(`Received unhandled notification type: ${method}`);
@@ -309,7 +513,21 @@ export class DVMBridge {
         loggerBridge(`Received unhandled event kind: ${kind}`);
       }
     } catch (error) {
-      console.error('Error handling request:', error);
+      console.error('Error processing request:', error);
     }
+  }
+
+  /**
+   * Publishes a response using the centralized event publisher
+   */
+  private async publishResponse(
+    event: NostrEvent,
+    responseContext: ResponseContext
+  ): Promise<void> {
+    await this.eventPublisher.publishResponse(
+      event,
+      responseContext.recipientPubkey,
+      responseContext.shouldEncrypt
+    );
   }
 }

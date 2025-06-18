@@ -15,12 +15,15 @@ import {
   TAG_METHOD,
   TAG_SERVER_IDENTIFIER,
   TAG_STATUS,
+  TAG_INVOICE,
 } from '@dvmcp/commons/core';
 import { loggerDiscovery } from '@dvmcp/commons/core';
 import { NWCPaymentHandler } from './nwc-payment';
 import type { DvmcpDiscoveryConfig } from './config-schema';
 import { BaseExecutor } from './base-executor';
 import type { ExecutionContext } from './base-interfaces';
+import type { EncryptionManager } from '@dvmcp/commons/encryption';
+import type { ServerRegistry } from './server-registry'; // Import ServerRegistry
 
 export class ToolExecutor extends BaseExecutor<
   ToolCapability,
@@ -33,9 +36,17 @@ export class ToolExecutor extends BaseExecutor<
     relayHandler: RelayHandler,
     keyManager: ReturnType<typeof createKeyManager>,
     private toolRegistry: ToolRegistry,
-    private config: DvmcpDiscoveryConfig
+    protected serverRegistry: ServerRegistry, // Change to protected
+    private config: DvmcpDiscoveryConfig,
+    encryptionManager?: EncryptionManager
   ) {
-    super(relayHandler, keyManager, toolRegistry);
+    super(
+      relayHandler,
+      keyManager,
+      toolRegistry,
+      serverRegistry,
+      encryptionManager
+    );
 
     // Initialize NWC payment handler if needed
     this.initializeNWCPaymentHandler();
@@ -145,7 +156,7 @@ export class ToolExecutor extends BaseExecutor<
 
       if (status === 'payment-required') {
         try {
-          const invoice = event.tags.find((t) => t[0] === 'invoice')?.[1];
+          const invoice = event.tags.find((t) => t[0] === TAG_INVOICE)?.[1];
           if (!invoice) {
             throw new Error('No invoice found in payment-required event');
           }

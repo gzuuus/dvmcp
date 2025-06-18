@@ -1,8 +1,10 @@
 import { type Event as NostrEvent } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import { createKeyManager } from '@dvmcp/commons/nostr';
+import { EncryptionManager } from '@dvmcp/commons/encryption';
 import { PromptRegistry, type PromptCapability } from './prompt-registry';
 import { BaseExecutor } from './base-executor';
+import type { ServerRegistry } from './server-registry'; // Import ServerRegistry
 import type { ExecutionContext } from './base-interfaces';
 import {
   REQUEST_KIND,
@@ -12,6 +14,7 @@ import {
   TAG_METHOD,
   TAG_SERVER_IDENTIFIER,
   TAG_STATUS,
+  TAG_INVOICE,
 } from '@dvmcp/commons/core';
 import { loggerDiscovery } from '@dvmcp/commons/core';
 import { NWCPaymentHandler } from './nwc-payment';
@@ -32,9 +35,17 @@ export class PromptExecutor extends BaseExecutor<
     relayHandler: RelayHandler,
     keyManager: ReturnType<typeof createKeyManager>,
     private promptRegistry: PromptRegistry,
-    private config: DvmcpDiscoveryConfig
+    protected serverRegistry: ServerRegistry, // Add serverRegistry
+    private config: DvmcpDiscoveryConfig,
+    encryptionManager?: EncryptionManager
   ) {
-    super(relayHandler, keyManager, promptRegistry);
+    super(
+      relayHandler,
+      keyManager,
+      promptRegistry,
+      serverRegistry,
+      encryptionManager
+    );
 
     try {
       if (this.config.nwc?.connectionString) {
@@ -135,7 +146,7 @@ export class PromptExecutor extends BaseExecutor<
 
       if (status === 'payment-required') {
         try {
-          const invoice = event.tags.find((t) => t[0] === 'invoice')?.[1];
+          const invoice = event.tags.find((t) => t[0] === TAG_INVOICE)?.[1];
           if (!invoice) {
             throw new Error('No invoice found in payment-required event');
           }

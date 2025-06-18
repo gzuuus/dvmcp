@@ -1,5 +1,4 @@
 import { expect, test, describe, beforeAll, afterAll } from 'bun:test';
-import { join } from 'path';
 import type {
   CallToolResult,
   ReadResourceResult,

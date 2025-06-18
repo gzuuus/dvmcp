@@ -8,6 +8,7 @@ A MCP server implementation that aggregates tools from DVMs across the Nostr net
 - Provides a unified interface to access tools from multiple DVMs
 - Tool execution handling and status tracking
 - Automatic payment for paid tools using Nostr Wallet Connect (NWC)
+- Encrypted communication support using NIP-17/NIP-59
 - Configurable DVM whitelist
 - Direct connection to specific providers or servers
 - Interactive mode with built-in tools
@@ -74,25 +75,7 @@ npx dvmcp-discovery --verbose
 
 You can also configure the service using environment variables:
 
-```bash
-# Set Nostr configuration
-export DVMCP_NOSTR_PRIVATE_KEY=<hex-private-key>
-export DVMCP_NOSTR_RELAY_URLS=wss://relay1.com,wss://relay2.com
-
-# Set MCP service details
-export DVMCP_MCP_NAME="My DVMCP Service"
-export DVMCP_MCP_VERSION="1.2.0"
-export DVMCP_MCP_ABOUT="Custom description"
-
-# Set NWC configuration
-export DVMCP_NWC_CONNECTION_STRING="nostr+walletconnect:..."
-
-# Limit the number of DVMs to discover
-export DVMCP_DISCOVERY_LIMIT=5
-
-# Run the service
-npx dvmcp-discovery
-```
+// TODO: Add environment variables
 
 ### NWC Payment Configuration
 
@@ -111,6 +94,16 @@ featureFlags:
 ```
 
 You can obtain an NWC connection string from compatible wallets like Alby or Coinos. When a tool requires payment, the discovery server will automatically pay the invoice using the configured NWC wallet.
+
+## Encryption Support
+
+The DVMCP Discovery enables secure communication through a flexible encryption system. It offers three distinct modes:
+
+- **DISABLED**: No encryption is used for communication.
+- **OPTIONAL**: (Default) Encrypted and unencrypted messages are accepted, and responses mirror the format of the incoming message. This provides maximum compatibility.
+- **REQUIRED**: Only encrypted communication is accepted and generated, ensuring high security.
+
+For a comprehensive overview of the available encryption modes and their operational behavior, including configuration examples, please refer to the [DVMCP Encryption Configuration Guide](../dvmcp-commons/src/encryption/README.md).
 
 ## Usage
 

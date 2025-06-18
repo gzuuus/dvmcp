@@ -7,6 +7,8 @@ import {
   TAG_PUBKEY,
   loggerBridge,
 } from '@dvmcp/commons/core';
+import type { ResponseContext } from '../dvm-bridge.js';
+import { getResponsePublisher } from '../utils/response-publisher';
 
 /**
  * Handle ping requests from clients
@@ -15,7 +17,8 @@ import {
 export async function handlePing(
   event: NostrEvent,
   keyManager: KeyManager,
-  relayHandler: RelayHandler
+  relayHandler: RelayHandler,
+  responseContext: ResponseContext
 ): Promise<void> {
   const pubkey = event.pubkey;
   const id = event.id;
@@ -23,7 +26,6 @@ export async function handlePing(
   loggerBridge(`Handling ping request from ${pubkey}`);
 
   try {
-    // Create ping response with empty content as per DVMCP spec
     const response = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
       content: JSON.stringify({}),
@@ -33,7 +35,12 @@ export async function handlePing(
       ],
     });
 
-    await relayHandler.publishEvent(response);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(response, responseContext);
     loggerBridge(`Sent ping response to ${pubkey}`);
   } catch (error) {
     console.error('Error handling ping request:', error);
@@ -53,6 +60,11 @@ export async function handlePing(
       ],
     });
 
-    await relayHandler.publishEvent(errorResponse);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResponse, responseContext);
   }
 }

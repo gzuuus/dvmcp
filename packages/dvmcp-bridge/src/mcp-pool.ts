@@ -166,12 +166,15 @@ export class MCPPool {
 
   async listResourceTemplates(): Promise<ListResourceTemplatesResult> {
     const allResourcesTemplates: ResourceTemplate[] = [];
+
     for (const [clientName, client] of this.clients.entries()) {
       const caps = client.getServerCapabilities();
+
       if (caps && caps.resources) {
         try {
           const resObj: ListResourceTemplatesResult =
             await client.listResourceTemplates();
+
           if (resObj && resObj.resourceTemplates) {
             for (const resource of resObj.resourceTemplates) {
               if (typeof resource.uriTemplate === 'string') {
@@ -182,12 +185,13 @@ export class MCPPool {
           }
         } catch (err) {
           loggerBridge(
-            `[listResources] Failed for client '${clientName}':`,
+            `[listResourceTemplates] Failed for client '${clientName}':`,
             err
           );
         }
       }
     }
+
     return { resourceTemplates: allResourcesTemplates };
   }
 
@@ -214,51 +218,37 @@ export class MCPPool {
     return { prompts: allPrompts };
   }
 
-  private async ensureHandler<K extends string>(
-    registry: Map<K, MCPClientHandler>,
-    key: K,
-    refreshMethod: () => Promise<any>
-  ): Promise<MCPClientHandler | undefined> {
-    let handler = registry.get(key);
-    if (handler) return handler;
-
-    if (registry.size === 0 || !handler) {
-      await refreshMethod();
-      return registry.get(key);
-    }
-  }
-
   async readResource(
     resourceUri: string
   ): Promise<ReadResourceResult | undefined> {
     const handler = await this.ensureHandler(
       this.resourceRegistry,
       resourceUri,
-      () => this.listResources()
+      async () => {
+        await this.listResources();
+        await this.listResourceTemplates();
+      }
     );
 
     if (!handler) {
-      loggerBridge(
-        `[readResource] Resource handler not found for: ${resourceUri}`
-      );
+      loggerBridge(`[readResource] No handler found for: ${resourceUri}`);
       return undefined;
     }
 
     try {
-      const result: ReadResourceResult | undefined =
-        await handler.readResource(resourceUri);
+      // Normalize empty/root paths to URL-encoded format for MCP server compatibility
+      const normalizedUri = resourceUri.replace(/:\/{2,3}$/, '://%2F');
+
+      const result = await handler.readResource(normalizedUri);
       if (!result) {
-        loggerBridge(
-          `[readResource] Empty result for resource: ${resourceUri}`
-        );
-        return undefined;
+        loggerBridge(`[readResource] Empty result for: ${resourceUri}`);
       }
 
       return result;
     } catch (err: any) {
       loggerBridge(
-        `[readResource] Failed to read '${resourceUri}' from backend:`,
-        err && (err.message || err)
+        `[readResource] Failed to read '${resourceUri}':`,
+        err?.message || err
       );
       return undefined;
     }
@@ -481,5 +471,61 @@ export class MCPPool {
     await Promise.all(
       Array.from(this.clients.values()).map((client) => client.disconnect())
     );
+  }
+
+  /**
+   * Checks if a URI matches a URI template pattern
+   */
+  private matchesUriTemplate(uri: string, template: string): boolean {
+    if (uri === template) return true;
+    if (!template.includes('{')) return false;
+
+    const pattern = template
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      .replace(/\\{[^}]+\\}/g, '(.*)');
+
+    return new RegExp(`^${pattern}$`).test(uri);
+  }
+
+  /**
+   * Finds a handler for a resource URI (exact match or template match)
+   */
+  private findResourceHandler(uri: string): MCPClientHandler | undefined {
+    // Try exact match first
+    const exactMatch = this.resourceRegistry.get(uri);
+    if (exactMatch) return exactMatch;
+
+    // Try template matching
+    for (const [template, handler] of this.resourceRegistry.entries()) {
+      if (this.matchesUriTemplate(uri, template)) {
+        return handler;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Ensures a handler exists, refreshing registry if needed
+   */
+  private async ensureHandler<K extends string>(
+    registry: Map<K, MCPClientHandler>,
+    key: K,
+    refreshMethod: () => Promise<any>
+  ): Promise<MCPClientHandler | undefined> {
+    // Check if handler exists
+    const handler =
+      registry === this.resourceRegistry
+        ? this.findResourceHandler(key as string)
+        : registry.get(key);
+
+    if (handler) return handler;
+
+    // Refresh and try again
+    await refreshMethod();
+
+    return registry === this.resourceRegistry
+      ? this.findResourceHandler(key as string)
+      : registry.get(key);
   }
 }

@@ -14,6 +14,14 @@ mcp:
   # Server description
   about: "DVMCP Discovery Server for aggregating MCP tools from DVMs"
 
+# [Optional] Encryption Configuration (NIP-17/NIP-59 support)
+encryption:
+  # Encryption mode: 'disabled', 'optional' (default), or 'required'
+  # - disabled: No encryption support
+  # - optional: Message format mirroring (encrypted request -> encrypted response)
+  # - required: Only accepts encrypted communication
+  mode: "optional"
+
 # NWC (Nostr Wallet Connect) configuration for payments
 #nwc:
   # connectionString: "nostr+walletconnect:your_wallet_pubkey_here?relay=wss%3A%2F%2Frelay.example.com&secret=your_secret_here"

@@ -1,13 +1,12 @@
-import { loggerBridge } from '@dvmcp/commons/core';
+import { loggerBridge, TAG_INVOICE } from '@dvmcp/commons/core';
 import {
   TAG_AMOUNT,
   TAG_EVENT_ID,
   TAG_PUBKEY,
   TAG_STATUS,
-  NOTIFICATION_KIND,
 } from '@dvmcp/commons/core';
 import type { DvmcpBridgeConfig } from '../config-schema.js';
-import { RelayHandler } from '@dvmcp/commons/nostr';
+import { RelayHandler, EventPublisher } from '@dvmcp/commons/nostr';
 import type { KeyManager } from '@dvmcp/commons/nostr';
 import { LightningAddress } from '@getalby/lightning-tools';
 import type { Event } from 'nostr-tools/pure';
@@ -24,6 +23,9 @@ import { createNostrProvider } from '@dvmcp/commons/nostr';
  * @param config The bridge configuration
  * @param keyManager The key manager instance
  * @param relayHandler The relay handler instance
+ * @param unit The payment unit (default: 'sats')
+ * @param timeoutMs Payment timeout in milliseconds
+ * @param shouldEncrypt Whether to encrypt notifications
  * @returns A boolean indicating whether payment was successful
  */
 export async function handlePaymentFlow(
@@ -35,9 +37,12 @@ export async function handlePaymentFlow(
   keyManager: KeyManager,
   relayHandler: RelayHandler,
   unit: string = 'sats',
-  timeoutMs?: number
+  timeoutMs?: number,
+  shouldEncrypt: boolean = false
 ): Promise<boolean> {
   try {
+    const eventPublisher = new EventPublisher(relayHandler, keyManager);
+
     // Generate zap request
     const zapRequest = await generateZapRequest(
       price,
@@ -53,18 +58,18 @@ export async function handlePaymentFlow(
       return false;
     }
 
-    // Send payment required notification
-    await relayHandler.publishEvent(
-      keyManager.signEvent({
-        ...keyManager.createEventTemplate(NOTIFICATION_KIND),
-        tags: [
-          [TAG_STATUS, 'payment-required'],
-          [TAG_AMOUNT, price, unit],
-          ['invoice', zapRequest.paymentRequest],
-          [TAG_EVENT_ID, eventId],
-          [TAG_PUBKEY, pubkey],
-        ],
-      })
+    // Send payment required notification using centralized event publisher
+    await eventPublisher.publishNotification(
+      '',
+      pubkey,
+      [
+        [TAG_STATUS, 'payment-required'],
+        [TAG_AMOUNT, price, unit],
+        [TAG_INVOICE, zapRequest.paymentRequest],
+        [TAG_EVENT_ID, eventId],
+        [TAG_PUBKEY, pubkey],
+      ],
+      shouldEncrypt
     );
 
     // Verify payment with timeout
@@ -75,17 +80,17 @@ export async function handlePaymentFlow(
       timeoutMs
     );
 
-    // Send appropriate notification based on payment status
+    // Send appropriate notification based on payment status using centralized event publisher
     const status = paymentVerified ? 'payment-accepted' : 'error';
-    await relayHandler.publishEvent(
-      keyManager.signEvent({
-        ...keyManager.createEventTemplate(NOTIFICATION_KIND),
-        tags: [
-          [TAG_STATUS, status],
-          [TAG_EVENT_ID, eventId],
-          [TAG_PUBKEY, pubkey],
-        ],
-      })
+    await eventPublisher.publishNotification(
+      '',
+      pubkey,
+      [
+        [TAG_STATUS, status],
+        [TAG_EVENT_ID, eventId],
+        [TAG_PUBKEY, pubkey],
+      ],
+      shouldEncrypt
     );
 
     return paymentVerified;

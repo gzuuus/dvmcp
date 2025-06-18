@@ -1,5 +1,11 @@
 import { loggerBridge } from '@dvmcp/commons/core';
-import { TAG_EVENT_ID, TAG_PUBKEY, RESPONSE_KIND } from '@dvmcp/commons/core';
+import {
+  TAG_EVENT_ID,
+  TAG_PUBKEY,
+  RESPONSE_KIND,
+  TAG_STATUS,
+  TAG_METHOD,
+} from '@dvmcp/commons/core';
 import type { MCPPool } from '../mcp-pool';
 import type { DvmcpBridgeConfig } from '../config-schema.js';
 import type { RelayHandler } from '@dvmcp/commons/nostr';
@@ -11,6 +17,8 @@ import {
   type CallToolResult,
 } from '@modelcontextprotocol/sdk/types.js';
 import { PaymentProcessor } from './payment-processor';
+import type { ResponseContext } from '../dvm-bridge.js';
+import { getResponsePublisher } from '../utils/response-publisher';
 import { createProtocolErrorResponse } from '../utils.js';
 
 /**
@@ -20,23 +28,28 @@ export async function handleToolsList(
   event: NostrEvent,
   mcpPool: MCPPool,
   keyManager: KeyManager,
-  relayHandler: RelayHandler
+  relayHandler: RelayHandler,
+  responseContext: ResponseContext
 ): Promise<void> {
   const { success, error } = ListToolsRequestSchema.safeParse(
     JSON.parse(event.content)
   );
   if (!success) {
     loggerBridge('tools list request error', error);
-    await relayHandler.publishEvent(
-      createProtocolErrorResponse(
-        event.id,
-        event.pubkey,
-        -32700,
-        JSON.stringify(error),
-        keyManager,
-        RESPONSE_KIND
-      )
+    const errorResponse = createProtocolErrorResponse(
+      event.id,
+      event.pubkey,
+      -32700,
+      JSON.stringify(error),
+      keyManager,
+      RESPONSE_KIND
     );
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -53,7 +66,12 @@ export async function handleToolsList(
       ],
     });
     loggerBridge('tools list response', response);
-    await relayHandler.publishEvent(response);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(response, responseContext);
   } catch (err) {
     const errorResp = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -69,7 +87,12 @@ export async function handleToolsList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(errorResp);
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResp, responseContext);
   }
 }
 
@@ -81,7 +104,8 @@ export async function handleToolsCall(
   mcpPool: MCPPool,
   keyManager: KeyManager,
   relayHandler: RelayHandler,
-  config: DvmcpBridgeConfig
+  config: DvmcpBridgeConfig,
+  responseContext: ResponseContext
 ): Promise<void> {
   const {
     success,
@@ -90,16 +114,20 @@ export async function handleToolsCall(
   } = CallToolRequestSchema.safeParse(JSON.parse(event.content));
   if (!success) {
     loggerBridge('tools call request error', error);
-    await relayHandler.publishEvent(
-      createProtocolErrorResponse(
-        event.id,
-        event.pubkey,
-        -32700,
-        JSON.stringify(error),
-        keyManager,
-        RESPONSE_KIND
-      )
+    const errorResponse = createProtocolErrorResponse(
+      event.id,
+      event.pubkey,
+      -32700,
+      JSON.stringify(error),
+      keyManager,
+      RESPONSE_KIND
     );
+    const publisher = getResponsePublisher(
+      relayHandler,
+      keyManager,
+      responseContext.encryptionManager
+    );
+    await publisher.publishResponse(errorResponse, responseContext);
     return;
   }
   const id = event.id;
@@ -107,11 +135,18 @@ export async function handleToolsCall(
 
   // Processing notification will be sent by the payment processor
 
+  const publisher = getResponsePublisher(
+    relayHandler,
+    keyManager,
+    responseContext.encryptionManager
+  );
+
   // Create payment processor
   const paymentProcessor = new PaymentProcessor(
     config,
     keyManager,
-    relayHandler
+    relayHandler,
+    publisher
   );
 
   try {
@@ -124,7 +159,8 @@ export async function handleToolsCall(
       jobRequest.params.name,
       'tool',
       id,
-      pubkey
+      pubkey,
+      responseContext.shouldEncrypt
     );
 
     if (!paymentSuccessful) {
@@ -138,9 +174,6 @@ export async function handleToolsCall(
       jobRequest.params.arguments!
     );
 
-    // Send success notification
-    await paymentProcessor.sendSuccessNotification(id, pubkey);
-
     // Send response
     const response = keyManager.signEvent({
       ...keyManager.createEventTemplate(RESPONSE_KIND),
@@ -150,13 +183,18 @@ export async function handleToolsCall(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(response);
+    await publisher.publishResponse(response, responseContext);
   } catch (error) {
     // Send error notification
-    await paymentProcessor.sendErrorNotification(
-      id,
+    await publisher.publishNotification(
+      error instanceof Error ? error.message : String(error),
       pubkey,
-      error instanceof Error ? error.message : String(error)
+      [
+        [TAG_STATUS, 'error'],
+        [TAG_EVENT_ID, id],
+        [TAG_PUBKEY, pubkey],
+      ],
+      responseContext.shouldEncrypt
     );
 
     // Send error response
@@ -175,6 +213,6 @@ export async function handleToolsCall(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    await relayHandler.publishEvent(errorResp);
+    await publisher.publishResponse(errorResp, responseContext);
   }
 }

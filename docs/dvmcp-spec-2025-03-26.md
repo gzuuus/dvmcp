@@ -24,6 +24,13 @@ This document defines how Nostr and Data Vending Machines can be used to expose 
   - [Prompts](#prompts)
 - [Completions](#completions)
 - [Ping](#ping)
+- [Encryption](#encryption)
+  - [Overview](#overview-1)
+  - [Encryption Support Discovery](#encryption-support-discovery)
+  - [Message Encryption Flow](#message-encryption-flow)
+  - [Encrypted Event Structure](#encrypted-event-structure)
+  - [Key Management](#key-management)
+  - [Implementation Guidelines](#implementation-guidelines)
 - [Notifications](#notifications)
   - [MCP Notifications](#mcp-notifications)
   - [Nostr-Specific Notifications](#nostr-specific-notifications)
@@ -131,6 +138,9 @@ This specification defines these event kinds:
 | 25910 | Requests                                         |
 | 26910 | Responses                                        |
 | 21316 | Feedback/Notifications                           |
+| 1059  | Encrypted Messages (NIP-59 Gift Wrap)           |
+
+**Note on Encryption**: When encryption is enabled, ephemeral events (kinds 25910, 26910, 21316) are wrapped using NIP-17/NIP-59 encryption and published as kind 1059 events. Addressable events (kinds 31316-31319) remain unencrypted for discoverability.
 
 ## Server Discovery
 DVMCP provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability when providing a "public" or accessible service. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key or server identifier.
@@ -944,6 +954,238 @@ If a ping cannot be processed due to protocol errors:
 }
 ```
 
+## Encryption
+
+### Overview
+
+DVMCP supports optional end-to-end encryption for enhanced privacy and security using the Nostr protocol's encryption standards. This feature leverages NIP-17 (Private Direct Messages) for secure message encryption and NIP-59 (Gift Wrap) for metadata protection, ensuring that:
+
+1. **Message Content Privacy**: All DVMCP message content is encrypted using NIP-44 encryption
+2. **Metadata Protection**: Gift wrapping hides participant identities, timestamps, and message patterns
+3. **Forward Secrecy**: Messages can be configured for automatic expiration
+4. **Selective Encryption**: Clients and servers can negotiate encryption on a per-session basis
+
+Encryption in DVMCP maintains full compatibility with the standard protocol while adding an additional privacy layer. When encryption is enabled, all ephemeral events (requests, responses, and notifications) are encrypted using the NIP-17/NIP-59 pattern, while addressable events (server announcements and capability lists) remain unencrypted for discoverability.
+
+### Encryption Support Discovery
+
+Encryption support is advertised through the [`support_encryption`](docs/dvmcp-spec-2025-03-26.md:179) tag in server announcement events:
+
+```json
+{
+  "kind": 31316,
+  "pubkey": "<provider-pubkey>",
+  "tags": [
+    ["d", "<server-identifier>"],
+    ["support_encryption", "true"],
+    // ... other tags
+  ],
+  // ... rest of announcement
+}
+```
+
+Clients can discover encryption support by:
+
+1. **Public Server Discovery**: Check for the [`support_encryption`](docs/dvmcp-spec-2025-03-26.md:179) tag in server announcements (kind 31316)
+2. **Direct Discovery**: Include encryption capability in initialization requests and check server responses
+3. **Non-announced/Direct Discovery**: For servers that are not publicly announced or during direct discovery, clients wanting to use encryption should attempt to use encryption first and fall back to unencrypted communication if desired or if encryption fails
+4. **Dynamic Negotiation**: Attempt encrypted communication and fall back to unencrypted if not supported
+
+### Message Encryption Flow
+
+When encryption is enabled, DVMCP messages follow the NIP-17 pattern with NIP-59 gift wrapping:
+
+#### 1. Content Preparation
+The original DVMCP message content is prepared as usual:
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "get_weather",
+    "arguments": { "location": "New York" }
+  }
+}
+```
+
+#### 2. Seal Creation (NIP-17)
+The DVMCP content is encrypted and sealed as an unsigned kind 14 event:
+```json
+{
+  "id": "<usual hash>",
+  "pubkey": "<sender-pubkey>",
+  "created_at": "<timestamp>",
+  "kind": 14,
+  "tags": [
+    ["p", "<receiver-pubkey>"],
+    ["s", "<server-identifier>"]  // Optional: Server identifier when targeting specific server
+  ],
+  "content": "<original-dvmcp-content-as-plaintext>"
+}
+```
+
+This unsigned event is then sealed (kind 13) with NIP-44 encryption:
+```json
+{
+  "id": "<seal-hash>",
+  "pubkey": "<sender-pubkey>",
+  "created_at": "<randomized-timestamp>",
+  "kind": 13,
+  "tags": [],
+  "content": "<nip44-encrypted-kind-14>",
+  "sig": "<sender-signature>"
+}
+```
+
+#### 3. Gift Wrapping (NIP-59)
+The seal is gift-wrapped (kind 1059) with a random key:
+```json
+{
+  "id": "<gift-wrap-hash>",
+  "pubkey": "<random-pubkey>",
+  "created_at": "<randomized-timestamp>",
+  "kind": 1059,
+  "tags": [
+    ["p", "<receiver-pubkey>"]
+  ],
+  "content": "<nip44-encrypted-seal>",
+  "sig": "<random-key-signature>"
+}
+```
+
+### Encrypted Event Structure
+
+When encryption is active, DVMCP events are transformed as follows:
+
+#### Original DVMCP Request
+```json
+{
+  "kind": 25910,
+  "pubkey": "<client-pubkey>",
+  "content": "{\"method\":\"tools/call\",\"params\":{\"name\":\"get_weather\",\"arguments\":{\"location\":\"New York\"}}}",
+  "tags": [
+    ["method", "tools/call"],
+    ["p", "<provider-pubkey>"],
+    ["s", "<server-identifier>"]
+  ]
+}
+```
+
+#### Encrypted DVMCP Request
+```json
+{
+  "kind": 1059,
+  "pubkey": "<random-ephemeral-pubkey>",
+  "created_at": "<randomized-timestamp>",
+  "content": "<nip44-encrypted-seal-containing-dvmcp-message>",
+  "tags": [
+    ["p", "<provider-pubkey>"]
+  ],
+  "sig": "<ephemeral-key-signature>"
+}
+```
+
+The inner content (after decryption) maintains the original DVMCP structure with all tags and metadata intact.
+
+#### Encrypted Response Structure
+
+Server responses follow the same pattern:
+```json
+{
+  "kind": 1059,
+  "pubkey": "<random-ephemeral-pubkey>",
+  "created_at": "<randomized-timestamp>",
+  "content": "<nip44-encrypted-seal-containing-dvmcp-response>",
+  "tags": [
+    ["p", "<client-pubkey>"]
+  ],
+  "sig": "<ephemeral-key-signature>"
+}
+```
+
+The decrypted inner content contains the standard DVMCP response format.
+
+### Key Management
+
+DVMCP encryption follows Nostr's standard key management practices:
+
+#### 1. Identity Keys
+- **Client Identity**: Client's main Nostr private/public key pair
+- **Server Identity**: Provider's Nostr private/public key pair
+- **Conversation Keys**: Derived using NIP-44 key derivation between client and server keys
+
+#### 2. Ephemeral Keys
+- **Gift Wrap Keys**: Random one-time-use key pairs for each gift wrap
+- **Key Rotation**: New ephemeral keys generated for each message
+- **Key Disposal**: Ephemeral private keys discarded immediately after use
+
+#### 3. Key Discovery
+- **Public Key Exchange**: Client and server public keys exchanged during discovery/initialization
+- **Relay Preferences**: Clients should respect server's preferred relays (kind 10050) for encrypted message delivery
+
+### Implementation Guidelines
+
+#### 1. Encryption Negotiation
+- **Capability Advertisement**: Servers MUST advertise encryption support in announcements
+- **Client Detection**: Clients SHOULD attempt encrypted communication when supported
+- **Graceful Fallback**: Implementations MUST handle encryption failures gracefully
+- **Mixed Mode Support**: Systems MAY support both encrypted and unencrypted sessions simultaneously
+
+#### 2. Message Routing
+- **Relay Selection**: Use recipient's preferred relays (NIP-10050) for encrypted messages
+- **Delivery Confirmation**: Implement appropriate timeout and retry mechanisms
+- **Relay Privacy**: Choose relays that respect encrypted message privacy
+
+#### 3. Performance Considerations
+- **Encryption Overhead**: Account for additional processing time for encryption/decryption
+- **Message Size**: Encrypted messages are larger due to wrapping layers
+- **Caching**: Avoid caching decrypted content; re-decrypt as needed
+
+#### 4. Security Best Practices
+- **Key Hygiene**: Properly dispose of ephemeral keys after use
+- **Timestamp Randomization**: Randomize timestamps within 2-day windows
+- **Metadata Minimization**: Avoid leaking patterns through timing or relay selection
+- **Forward Secrecy**: Support message expiration through appropriate tagging
+
+#### 5. Error Handling
+- **Decryption Failures**: Handle gracefully with appropriate error messages
+- **Key Mismatches**: Provide clear feedback for key-related issues
+- **Relay Failures**: Implement retry logic for delivery failures
+
+#### Example Implementation Flow
+```mermaid
+sequenceDiagram
+    participant Client as DVMCP Client
+    participant Relay as Nostr Relay
+    participant Server as DVMCP Server
+
+    Note over Client,Server: Encryption Negotiation
+    Client->>Relay: Check server announcement (kind 31316)
+    Relay-->>Client: Server supports encryption (support_encryption: true)
+    
+    Note over Client,Server: Encrypted Request Flow
+    Client->>Client: Prepare DVMCP request
+    Client->>Client: Create unsigned kind 14 with DVMCP content
+    Client->>Client: Seal as kind 13 (encrypted)
+    Client->>Client: Gift wrap as kind 1059 (double encrypted)
+    Client->>Relay: Publish encrypted gift wrap
+    
+    Relay-->>Server: Deliver encrypted message
+    Server->>Server: Unwrap gift wrap (kind 1059)
+    Server->>Server: Decrypt seal (kind 13)
+    Server->>Server: Extract DVMCP request (kind 14)
+    Server->>Server: Process DVMCP request
+    
+    Note over Client,Server: Encrypted Response Flow
+    Server->>Server: Prepare DVMCP response
+    Server->>Server: Create unsigned kind 14 with response
+    Server->>Server: Seal as kind 13 (encrypted)
+    Server->>Server: Gift wrap as kind 1059 (double encrypted)
+    Server->>Relay: Publish encrypted response
+    
+    Relay-->>Client: Deliver encrypted response
+    Client->>Client: Decrypt and process response
+```
+
 ## Notifications
 
 Notifications in DVMCP are divided into two categories: MCP-compliant notifications that follow the Model Context Protocol specification, and Nostr-specific notifications that leverage Nostr's event-based architecture for features like payment handling.
@@ -1071,6 +1313,10 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 6. Process notifications according to the MCP specification
 7. Use standard Nostr tags for Nostr-specific features (like payments)
 8. Respond promptly to ping requests with empty responses
+9. Advertise encryption support through the `support_encryption` tag when available
+10. Handle both encrypted and unencrypted messages when encryption is supported
+11. Properly decrypt NIP-17/NIP-59 wrapped messages when encryption is enabled
+12. Use appropriate key management practices for encryption keys
 
 ### Clients MUST:
 
@@ -1081,6 +1327,9 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 5. Subscribe to notifications from the server is interacting with
 6. Send the initialized notification when using Direct Discovery (private servers)
 7. Handle ping requests and responses appropriately for connection health monitoring
+8. Respect server encryption capabilities and negotiate appropriately
+9. Implement proper NIP-17/NIP-59 encryption when communicating with encryption-enabled servers
+10. Handle decryption failures gracefully with appropriate fallback mechanisms
 
 ## Complete Protocol Flow
 

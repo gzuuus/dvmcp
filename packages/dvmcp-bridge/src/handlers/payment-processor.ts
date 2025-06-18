@@ -1,15 +1,15 @@
-import { loggerBridge } from '@dvmcp/commons/core';
+import { loggerBridge, MCPMETHODS } from '@dvmcp/commons/core';
+import type { DvmcpBridgeConfig, MCPPricingConfig } from '../config-schema.js';
+import type { KeyManager } from '@dvmcp/commons/nostr'; // KeyManager might still be needed for handlePaymentFlow
+import type { RelayHandler } from '@dvmcp/commons/nostr'; // RelayHandler might still be needed for handlePaymentFlow
+import { handlePaymentFlow } from './payment-handler';
+import type { ResponsePublisher } from '../utils/response-publisher.js';
 import {
   TAG_EVENT_ID,
+  TAG_METHOD,
   TAG_PUBKEY,
   TAG_STATUS,
-  TAG_METHOD,
-  NOTIFICATION_KIND,
 } from '@dvmcp/commons/core';
-import type { DvmcpBridgeConfig, MCPPricingConfig } from '../config-schema.js';
-import type { RelayHandler } from '@dvmcp/commons/nostr';
-import type { KeyManager } from '@dvmcp/commons/nostr';
-import { handlePaymentFlow } from './payment-handler';
 
 const DEFAULT_PAYMENT_TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -19,6 +19,7 @@ export class PaymentProcessor {
     private config: DvmcpBridgeConfig,
     private keyManager: KeyManager,
     private relayHandler: RelayHandler,
+    private notificationPublisher: ResponsePublisher,
     private paymentTimeoutMs: number = DEFAULT_PAYMENT_TIMEOUT_MS
   ) {}
 
@@ -30,6 +31,7 @@ export class PaymentProcessor {
    * @param capabilityType The type of capability (tool, prompt, resource)
    * @param eventId The original event ID that triggered this payment flow
    * @param pubkey The public key of the user making the request
+   * @param shouldEncrypt Whether to encrypt notifications
    * @returns A boolean indicating whether payment was successful or not required
    */
   async processPaymentIfRequired(
@@ -37,19 +39,33 @@ export class PaymentProcessor {
     capabilityName: string,
     capabilityType: 'tool' | 'prompt' | 'resource',
     eventId: string,
-    pubkey: string
+    pubkey: string,
+    shouldEncrypt: boolean = false
   ): Promise<boolean> {
-    await this.sendProcessingNotification(eventId, pubkey);
-    const capabilityId = `${capabilityType}: ${capabilityName}`;
+    const capabilityId = `${capabilityType}:${capabilityName}`;
 
     if (!pricing?.price) {
       loggerBridge(`No payment required for ${capabilityId}`);
       return true;
     }
 
+    await this.notificationPublisher.publishNotification(
+      JSON.stringify({
+        method: MCPMETHODS.notificationsProgress,
+        params: { message: 'processing payment' },
+      }),
+      pubkey,
+      [
+        [TAG_PUBKEY, pubkey],
+        [TAG_EVENT_ID, eventId],
+        [TAG_METHOD, MCPMETHODS.notificationsProgress],
+      ],
+      shouldEncrypt
+    );
+
     // Handle payment flow with timeout
     try {
-      return await Promise.race([
+      const paymentSuccessful = await Promise.race([
         handlePaymentFlow(
           pricing.price,
           capabilityId,
@@ -59,76 +75,41 @@ export class PaymentProcessor {
           this.keyManager,
           this.relayHandler,
           pricing.unit || 'sats',
-          this.paymentTimeoutMs
+          this.paymentTimeoutMs,
+          shouldEncrypt
         ),
         this.createPaymentTimeout(capabilityId),
       ]);
+
+      if (!paymentSuccessful) {
+        loggerBridge(`Payment failed or timed out for ${capabilityId}`);
+        await this.notificationPublisher.publishNotification(
+          'Payment failed or timed out',
+          pubkey,
+          [
+            [TAG_STATUS, 'error'],
+            [TAG_EVENT_ID, eventId],
+            [TAG_PUBKEY, pubkey],
+          ],
+          shouldEncrypt
+        );
+        return false;
+      }
+      return true;
     } catch (error) {
       loggerBridge(`Payment error for ${capabilityId} - ${error}`);
-      await this.sendErrorNotification(
-        eventId,
+      await this.notificationPublisher.publishNotification(
+        error instanceof Error ? error.message : String(error),
         pubkey,
-        error instanceof Error ? error.message : String(error)
+        [
+          [TAG_STATUS, 'error'],
+          [TAG_EVENT_ID, eventId],
+          [TAG_PUBKEY, pubkey],
+        ],
+        shouldEncrypt
       );
       return false;
     }
-  }
-
-  private async sendProcessingNotification(
-    eventId: string,
-    pubkey: string
-  ): Promise<void> {
-    const processingStatus = this.keyManager.signEvent({
-      ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
-      content: JSON.stringify({
-        method: 'notifications/progress',
-        params: { message: 'processing' },
-      }),
-      tags: [
-        [TAG_PUBKEY, pubkey],
-        [TAG_EVENT_ID, eventId],
-        [TAG_METHOD, 'notifications/progress'],
-      ],
-    });
-    await this.relayHandler.publishEvent(processingStatus);
-  }
-
-  /**
-   * Send a success notification to the client
-   */
-  async sendSuccessNotification(
-    eventId: string,
-    pubkey: string
-  ): Promise<void> {
-    const successStatus = this.keyManager.signEvent({
-      ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
-      tags: [
-        [TAG_STATUS, 'success'],
-        [TAG_EVENT_ID, eventId],
-        [TAG_PUBKEY, pubkey],
-      ],
-    });
-    await this.relayHandler.publishEvent(successStatus);
-  }
-
-  /**
-   * Send an error notification to the client
-   */
-  async sendErrorNotification(
-    eventId: string,
-    pubkey: string,
-    reason?: string
-  ): Promise<void> {
-    const errorStatus = this.keyManager.signEvent({
-      ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
-      content: reason || 'Unknown error',
-      tags: [
-        [TAG_STATUS, 'error'],
-        [TAG_EVENT_ID, eventId],
-        [TAG_PUBKEY, pubkey],
-      ],
-    });
-    await this.relayHandler.publishEvent(errorStatus);
   }
 
   private createPaymentTimeout(capabilityId: string): Promise<boolean> {

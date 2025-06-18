@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/commons",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Shared utilities for DVMCP packages",
   "type": "module",
   "main": "./src/index.ts",
@@ -17,6 +17,9 @@
     "./nostr": {
       "import": "./src/nostr/index.ts"
     },
+    "./encryption": {
+      "import": "./src/encryption/index.ts"
+    },
     "./nostr/mock-relay": {
       "import": "./src/nostr/mock-relay.ts"
     },
@@ -31,7 +34,7 @@
     "!**/*.test.js"
   ],
   "scripts": {
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "fmt": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },

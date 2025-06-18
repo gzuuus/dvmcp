@@ -305,6 +305,46 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
   }
 
   /**
+   * Find a resource template that matches the given URI
+   * @param uri - URI to match against resource templates
+   * @returns Resource template ID and capability if found
+   */
+  public findResourceTemplateByUri(
+    uri: string
+  ): { templateId: string; template: ResourceTemplateCapability } | undefined {
+    for (const [templateId, templateInfo] of this.resourceTemplates.entries()) {
+      const template = templateInfo.item;
+      if (this.matchesUriTemplate(uri, template.uriTemplate)) {
+        return { templateId, template };
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Check if a URI matches a URI template pattern
+   * Uses regex-based matching for URI templates with parameters
+   * @param uri - The URI to test
+   * @param template - The URI template pattern (e.g., "proxy://{path}")
+   * @returns true if the URI matches the template pattern
+   */
+  private matchesUriTemplate(uri: string, template: string): boolean {
+    // Fast path: exact match
+    if (uri === template) return true;
+
+    // Fast path: no template variables means no match if not exact
+    if (!template.includes('{')) return false;
+
+    // Convert URI template to regex pattern
+    // Escape regex special characters, then replace {param} with capture groups
+    const pattern = template
+      .replace(/[.*+?^${}()|[\]\\]/g, '\\$&') // Escape special chars
+      .replace(/\\{[^}]+\\}/g, '[^/]*'); // Replace {param} with non-slash matcher
+
+    return new RegExp(`^${pattern}$`).test(uri);
+  }
+
+  /**
    * Register a resource template with the MCP server
    * @param templateId - ID of the resource template
    * @param template - Resource template capability
@@ -320,16 +360,16 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
         async (uri: URL | string, params: Record<string, any>) => {
           try {
             const uriString = typeof uri === 'string' ? uri : uri.toString();
-            loggerDiscovery(
-              `Executing resource template ${templateId} with URI: ${uriString}`
-            );
 
-            const result = await this.executionCallback?.(templateId, {
+            const result = await this.executionCallback?.(uriString, {
               uri: uriString,
               arguments: params,
             });
-            if (!result)
+
+            if (!result) {
               throw new Error(`No result for resource template ${templateId}`);
+            }
+
             return result;
           } catch (error) {
             loggerDiscovery(`Error executing resource template: ${error}`);
@@ -386,7 +426,7 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
-            console.error(
+            loggerDiscovery(
               `Error executing resource ${resourceId}:`,
               errorMessage
             );
@@ -408,7 +448,7 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
 
       loggerDiscovery('Resource registered successfully:', resourceId);
     } catch (error) {
-      console.error('Error registering resource:', resourceId, error);
+      loggerDiscovery('Error registering resource:', resourceId, error);
     }
   }
 

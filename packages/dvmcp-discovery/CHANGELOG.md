@@ -1,5 +1,14 @@
 # @dvmcp/discovery
 
+## 0.2.4
+
+### Patch Changes
+
+- feat: encryption features
+- f79d9a4: implement ping capability
+- Updated dependencies
+  - @dvmcp/commons@0.2.6
+
 ## 0.2.3
 
 ### Patch Changes

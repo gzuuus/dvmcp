@@ -11,39 +11,43 @@ Shared utilities and components used across DVMCP packages.
 ## Installation & Usage
 **Prerequisite:** Ensure you have [Bun](https://bun.sh/) installed.
 
-### Quick Start with NPX (No Installation)
-You can run the packages directly using `npx` without installing them:
+### Quick Start with Bunx (No Installation)
+You can run the packages directly using `bunx` without installing them:
 ```bash
 # Run the bridge
-npx @dvmcp/bridge
+bunx dvmcp-bridge
 # Run the discovery service
-npx @dvmcp/discovery
+bunx dvmcp-discovery
 ```
 The interactive CLI will guide you through configuration setup on first run.
+
 ### Global Installation
 ```bash
 # Install the packages globally
-npm install -g @dvmcp/bridge @dvmcp/discovery
+bun install -g @dvmcp/bridge @dvmcp/discovery
 # Run the commands
 dvmcp-bridge
 dvmcp-discovery
 ```
+
 ## Setting Up a Bridge
 To expose your MCP server as a DVM on Nostr:
 1. Navigate to the directory where you want to configure the bridge
-2. Run: `npx @dvmcp/bridge`
+2. Run: `bunx dvmcp-bridge`
 3. Follow the interactive setup to configure:
-- Your MCP server path
-- Nostr private key (or generate a new one)
-- Relays to connect to
+   - Your MCP server path
+   - Nostr private key (or generate a new one)
+   - Relays to connect to
 4. The bridge will start and begin proxying requests between Nostr and your MCP server
+
 ## Setting Up a Discovery Service
 To aggregate MCP tools from DVMs:
 1. Navigate to your desired directory
-2. Run: `npx @dvmcp/discovery`
+2. Run: `bunx dvmcp-discovery`
 3. Follow the setup to configure:
-- Nostr private key
-- Relays to monitor
+   - Nostr private key
+   - Relays to monitor
+
 ## Development
 For contributors to this repository:
 ```bash
@@ -57,15 +61,3 @@ bun run dev --cwd packages/dvmcp-bridge
 # Start the discovery service in development mode
 bun run dev --cwd packages/dvmcp-discovery
 ```
-## Documentation
-- [DVMCP Specification](./docs/dvmcp-spec.md)
-- [Bridge Package](./packages/dvmcp-bridge/README.md)
-- [Discovery Package](./packages/dvmcp-discovery/README.md)
-- [Commons Package](./packages/dvmcp-commons/README.md)
-## Contributing
-Contributions are welcome! Please feel free to submit pull requests or create issues.
-## License
-[MIT License](LICENSE)
-## Related Projects
-- [Model Context Protocol](https://modelcontextprotocol.io)
-- [Nostr Protocol](https://github.com/nostr-protocol/nips)

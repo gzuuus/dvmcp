@@ -1,6 +1,8 @@
 import { type Event as NostrEvent } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import { type KeyManager } from '@dvmcp/commons/nostr';
+import { EncryptionManager } from '@dvmcp/commons/encryption';
+import type { ServerRegistry } from './server-registry'; // Import ServerRegistry
 import {
   type ReadResourceRequest,
   type ReadResourceResult,
@@ -16,6 +18,7 @@ import {
   TAG_METHOD,
   TAG_SERVER_IDENTIFIER,
   TAG_STATUS,
+  TAG_INVOICE,
 } from '@dvmcp/commons/core';
 import { loggerDiscovery } from '@dvmcp/commons/core';
 import { NWCPaymentHandler } from './nwc-payment';
@@ -32,9 +35,17 @@ export class ResourceExecutor extends BaseExecutor<
     relayHandler: RelayHandler,
     keyManager: KeyManager,
     private resourceRegistry: ResourceRegistry,
-    private config: DvmcpDiscoveryConfig
+    protected serverRegistry: ServerRegistry, // Add serverRegistry
+    private config: DvmcpDiscoveryConfig,
+    encryptionManager?: EncryptionManager
   ) {
-    super(relayHandler, keyManager, resourceRegistry);
+    super(
+      relayHandler,
+      keyManager,
+      resourceRegistry,
+      serverRegistry,
+      encryptionManager
+    );
 
     try {
       if (this.config.nwc?.connectionString) {
@@ -50,9 +61,8 @@ export class ResourceExecutor extends BaseExecutor<
   }
 
   /**
-   * Execute a resource with the given ID, and parameters
-   * @param resourceId - ID of the resource to execute
-   * @param resource - Resource definition
+   * Execute a resource with the given ID and parameters
+   * @param resourceId - ID of the resource to execute (can be resource ID or URI)
    * @param params - Parameters to pass to the resource
    * @returns Resource execution result
    */
@@ -60,9 +70,82 @@ export class ResourceExecutor extends BaseExecutor<
     resourceId: string,
     params: ReadResourceRequest['params']
   ): Promise<ReadResourceResult> {
+    // First try to find a regular resource by exact ID match
     const resource = this.resourceRegistry.getResource(resourceId);
-    if (!resource) throw new Error('Resource not found');
-    return this.execute(resourceId, resource as ResourceCapability, params);
+    if (resource) {
+      return this.execute(resourceId, resource as ResourceCapability, params);
+    }
+
+    // If no regular resource found, try to execute as a resource template
+    return this.executeResourceTemplate(resourceId, params);
+  }
+  // TODO: Improve this, we shouldn't need to register the temporary resource template
+  /**
+   * Execute a resource template by URI pattern matching
+   * @param uri - URI to match against resource templates
+   * @param params - Parameters to pass to the resource
+   * @returns Resource execution result
+   */
+  private async executeResourceTemplate(
+    uri: string,
+    params: ReadResourceRequest['params']
+  ): Promise<ReadResourceResult> {
+    const templateMatch = this.resourceRegistry.findResourceTemplateByUri(uri);
+    if (!templateMatch) {
+      throw new Error(`Resource not found: ${uri}`);
+    }
+
+    const { templateId, template } = templateMatch;
+    const templateInfo =
+      this.resourceRegistry.getResourceTemplateInfo(templateId);
+    if (!templateInfo) {
+      throw new Error(`Template info not found for: ${templateId}`);
+    }
+
+    // Convert resource template to resource capability for execution
+    const resourceCapability: ResourceCapability = {
+      id: uri,
+      name: template.name,
+      description: template.description,
+      uri: uri,
+      type: 'resource',
+      pricing: template.pricing,
+    };
+
+    // Execute with temporary registration to provide provider info to createRequest
+    return this.executeWithTemporaryRegistration(
+      uri,
+      resourceCapability,
+      templateInfo.providerPubkey || '',
+      templateInfo.serverId,
+      params
+    );
+  }
+
+  /**
+   * Execute a resource with temporary registration for provider info lookup
+   */
+  private async executeWithTemporaryRegistration(
+    resourceId: string,
+    resourceCapability: ResourceCapability,
+    providerPubkey: string,
+    serverId: string | undefined,
+    params: ReadResourceRequest['params']
+  ): Promise<ReadResourceResult> {
+    // Temporarily register the resource capability
+    this.resourceRegistry.registerResource(
+      resourceId,
+      resourceCapability,
+      providerPubkey,
+      serverId
+    );
+
+    try {
+      return await this.execute(resourceId, resourceCapability, params);
+    } finally {
+      // Always clean up the temporary registration
+      this.resourceRegistry.removeResource(resourceId);
+    }
   }
 
   public cleanup(): void {
@@ -126,7 +209,7 @@ export class ResourceExecutor extends BaseExecutor<
 
       if (status === 'payment-required') {
         try {
-          const invoice = event.tags.find((t) => t[0] === 'invoice')?.[1];
+          const invoice = event.tags.find((t) => t[0] === TAG_INVOICE)?.[1];
           if (!invoice) {
             throw new Error('No invoice found in payment-required event');
           }

@@ -17,6 +17,7 @@ import {
   type ListResourceTemplatesResult,
 } from '@modelcontextprotocol/sdk/types.js';
 
+// FIXME TODO: If a configured server doesnt have tools the initialization fails, for example a server with just resources: 'Failed to start DVM Bridge: 1021'
 export class MCPClientHandler {
   private client: Client;
   private transport: StdioClientTransport;

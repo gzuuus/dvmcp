@@ -1,9 +1,10 @@
 - [x] Add flag `--config-path` to cli
 - [x] Add one command, configless, quick run mode in discovery package
-- [ ] Review for 2025-03-26
-- [ ] Add payments (#10)
-- [ ] Add env variables(#7)
-- [ ] Add resources to bridge package
-- [ ] Add sessions
-- [ ] Add encryption
-- [ ] Discovery cli to bootstrap configuration
+- [x] Review for 2025-03-26
+- [x] Add payments (#10)
+- [x] Add env variables(#7)
+- [x] Add resources to bridge package
+- [x] Add encryption
+- [x] Discovery cli to bootstrap configuration
+- [ ] Unannounced/Private servers
+- [ ] Improve docs

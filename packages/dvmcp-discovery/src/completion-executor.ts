@@ -1,6 +1,7 @@
 import { type Event as NostrEvent } from 'nostr-tools';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import { createKeyManager } from '@dvmcp/commons/nostr';
+import { EncryptionManager } from '@dvmcp/commons/encryption';
 import { BaseExecutor } from './base-executor';
 import type { ExecutionContext, Capability } from './base-interfaces';
 import {
@@ -26,11 +27,18 @@ export class CompletionExecutor extends BaseExecutor<
   constructor(
     relayHandler: RelayHandler,
     keyManager: ReturnType<typeof createKeyManager>,
-    private promptRegistry: PromptRegistry,
-    private resourceRegistry: ResourceRegistry,
-    private serverRegistry: ServerRegistry
+    protected promptRegistry: PromptRegistry,
+    protected resourceRegistry: ResourceRegistry,
+    protected serverRegistry: ServerRegistry,
+    encryptionManager?: EncryptionManager
   ) {
-    super(relayHandler, keyManager, promptRegistry);
+    super(
+      relayHandler,
+      keyManager,
+      promptRegistry,
+      serverRegistry,
+      encryptionManager
+    );
   }
 
   /**

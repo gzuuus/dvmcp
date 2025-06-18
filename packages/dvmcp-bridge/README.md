@@ -9,6 +9,7 @@ A bridge implementation that connects Model Context Protocol (MCP) servers to No
 - Tool discovery and execution through DVM kind:5910/6910 events
 - Job status updates and payment handling via kind:7000 events
 - Service announcement deletion using NIP-09
+- Encrypted communication support using NIP-17/NIP-59
 - Comprehensive error handling
 
 ## Configuration
@@ -39,58 +40,17 @@ npx dvmcp-bridge --config-path /path/to/custom/config.yml
 
 You can configure the bridge using environment variables. The following variables are supported:
 
-```
-DVMCP_NOSTR_PRIVATE_KEY=<hex-private-key>
-DVMCP_NOSTR_RELAY_URLS=wss://relay1.com,wss://relay2.com
-DVMCP_MCP_NAME="My DVM Bridge"
-DVMCP_MCP_ABOUT="My custom DVM bridge description"
-DVMCP_MCP_CLIENT_NAME="My Client"
-DVMCP_MCP_CLIENT_VERSION="1.0.0"
-DVMCP_MCP_PICTURE="https://example.com/picture.jpg"
-DVMCP_MCP_WEBSITE="https://example.com"
-DVMCP_MCP_BANNER="https://example.com/banner.jpg"
-DVMCP_WHITELIST_ALLOWED_PUBKEYS=pubkey1,pubkey2
-DVMCP_LIGHTNING_ADDRESS="your-lightning-address@provider.com"
-DVMCP_LIGHTNING_ZAP_RELAYS=wss://relay1.com,wss://relay2.com
-```
+// TODO: Improve docs, add env variables
 
 ### Command-Line Arguments
 
 You can also configure the bridge using command-line arguments, which have the highest priority:
 
-```bash
-npx @dvmcp/bridge \
-  --nostr-private-key <hex-private-key> \
-  --nostr-relay-urls wss://relay1.com,wss://relay2.com \
-  --mcp-name "My DVM Bridge" \
-  --mcp-about "My custom DVM bridge description" \
-  --mcp-client-name "My Client" \
-  --mcp-client-version "1.0.0" \
-  --mcp-picture "https://example.com/picture.jpg" \
-  --mcp-website "https://example.com" \
-  --mcp-banner "https://example.com/banner.jpg" \
-  --whitelist-allowed-pubkeys pubkey1,pubkey2 \
-  --lightning-address "your-lightning-address@provider.com" \
-  --lightning-zap-relays wss://relay1.com,wss://relay2.com
-```
+// TODO: Add command line arguments
 
 Shorthand flags are available for some options:
 
-- `-c` for `--config-path`
-- `-r` for `--nostr-relay-urls`
-- `-v` for `--verbose`
-- `-h` for `--help`
-
-### Configuration Priority
-
-When multiple configuration sources provide values for the same setting, the priority order is:
-
-1. Command-line arguments (highest priority)
-2. Environment variables
-3. Configuration file
-4. Default values (lowest priority)
-
-This means that command-line arguments will override environment variables, which will override values from the configuration file, which will override default values.
+...
 
 ### Viewing Configuration
 
@@ -99,6 +59,16 @@ Use the `--verbose` or `-v` flag to display the current configuration:
 ```bash
 npx @dvmcp/bridge --verbose
 ```
+
+## Encryption Support
+
+The DVMCP Bridge supports a flexible encryption system to secure communication. It offers three distinct modes:
+
+- **DISABLED**: No encryption is used for communication.
+- **OPTIONAL**: (Default) Encrypted and unencrypted messages are accepted, and responses mirror the format of the incoming message. This provides maximum compatibility.
+- **REQUIRED**: Only encrypted communication is accepted and generated, ensuring high security.
+
+For a detailed explanation of the available encryption modes and their behavior, including configuration examples, please refer to the [DVMCP Encryption Configuration Guide](../dvmcp-commons/src/encryption/README.md).
 
 ## Usage
 

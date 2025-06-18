@@ -6,30 +6,57 @@ import type { ValidationError } from './types';
  * @returns Object with default values
  */
 export function getDefaults(schema: any): any {
-  if (!schema) return undefined;
+  // Base case: if schema is null, undefined, or not an object, it has no defaults.
+  if (!schema || typeof schema !== 'object') {
+    return undefined;
+  }
 
-  if (schema.type === 'object') {
-    const result: any = {};
-    if (schema.fields) {
+  // Case 1: schema is a ConfigFieldMeta object (it has a 'type' property).
+  if ('type' in schema) {
+    // If the field itself has an explicit 'default' value, that takes precedence.
+    if ('default' in schema) {
+      return schema.default;
+    }
+
+    // If it's an 'object' type with 'fields', recurse to build defaults for its children.
+    if (schema.type === 'object' && schema.fields) {
+      const subDefaults: Record<string, any> = {};
+      let hasSubContent = false;
       for (const key in schema.fields) {
-        const field = schema.fields[key];
-        if ('default' in field) {
-          result[key] = field.default;
-        } else {
-          const value = getDefaults(field);
-          if (value !== undefined) {
-            result[key] = value;
+        if (Object.prototype.hasOwnProperty.call(schema.fields, key)) {
+          const fieldValue = getDefaults(schema.fields[key]); // Recursive call
+          if (fieldValue !== undefined) {
+            subDefaults[key] = fieldValue;
+            hasSubContent = true;
           }
         }
       }
+      return hasSubContent ? subDefaults : undefined;
     }
-    return result; // Always return the result object even if empty
+
+    // If it's an 'array' type (and no explicit 'default' was found above), default to an empty array.
+    if (schema.type === 'array') {
+      return [];
+    }
+
+    // Other types (string, number, boolean) without an explicit 'default' have no default value.
+    return undefined;
   }
-  if (schema.type === 'array') {
-    return [];
+  // Case 2: schema is the root ConfigSchema (a plain object of ConfigFieldMeta, no 'type' property).
+  else {
+    const rootDefaults: Record<string, any> = {};
+    let hasRootContent = false;
+    for (const key in schema) {
+      if (Object.prototype.hasOwnProperty.call(schema, key)) {
+        const fieldValue = getDefaults(schema[key]); // Recursive call for each top-level field
+        if (fieldValue !== undefined) {
+          rootDefaults[key] = fieldValue;
+          hasRootContent = true;
+        }
+      }
+    }
+    return hasRootContent ? rootDefaults : undefined;
   }
-  if ('default' in schema) return schema.default;
-  return undefined;
 }
 
 /**

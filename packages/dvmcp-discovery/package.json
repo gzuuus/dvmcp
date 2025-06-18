@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/discovery",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Discovery service for MCP tools in the Nostr DVM ecosystem",
   "module": "index.ts",
   "type": "module",
@@ -19,7 +19,7 @@
     "dev": "bun --watch index.ts",
     "start": "bun run cli.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "bun run typecheck && bun run format",
+    "lint": "bun run typecheck && bun run fmt",
     "test": "bun test",
     "prepublishOnly": "bun run lint && bun run test"
   },
@@ -35,7 +35,7 @@
     "@modelcontextprotocol/sdk": "^1.11.4",
     "nostr-tools": "^2.13.0",
     "yaml": "^2.8.0",
-    "@dvmcp/commons": "^0.2.5",
+    "@dvmcp/commons": "^0.2.6",
     "yargs": "^17.7.2",
     "@types/yargs": "^17.0.33"
   },

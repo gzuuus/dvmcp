@@ -1,5 +1,11 @@
 # @dvmcp/commons
 
+## 0.2.6
+
+### Patch Changes
+
+- feat: encryption features
+
 ## 0.2.5
 
 ### Patch Changes

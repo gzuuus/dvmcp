@@ -1,10 +1,7 @@
-import type { NostrEvent } from 'nostr-tools';
+import type { EventTemplate, NostrEvent } from 'nostr-tools';
 import type { RelayHandler } from './relay-handler';
 import type { KeyManager } from './key-manager';
-import type {
-  EncryptionManager,
-  EventTemplate,
-} from '../encryption/encryption-manager';
+import type { EncryptionManager } from '../encryption/encryption-manager';
 
 export interface PublishOptions {
   encrypt?: boolean;

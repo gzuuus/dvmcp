@@ -27,12 +27,18 @@ export class CompletionExecutor extends BaseExecutor<
   constructor(
     relayHandler: RelayHandler,
     keyManager: ReturnType<typeof createKeyManager>,
-    private promptRegistry: PromptRegistry,
-    private resourceRegistry: ResourceRegistry,
-    private serverRegistry: ServerRegistry,
+    protected promptRegistry: PromptRegistry,
+    protected resourceRegistry: ResourceRegistry,
+    protected serverRegistry: ServerRegistry,
     encryptionManager?: EncryptionManager
   ) {
-    super(relayHandler, keyManager, promptRegistry, encryptionManager);
+    super(
+      relayHandler,
+      keyManager,
+      promptRegistry,
+      serverRegistry,
+      encryptionManager
+    );
   }
 
   /**

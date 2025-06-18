@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/bridge",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Bridge connecting MCP servers to Nostr's DVM ecosystem",
   "module": "index.ts",
   "type": "module",
@@ -16,11 +16,11 @@
     "config.example.yml"
   ],
   "scripts": {
-    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "fmt": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "dev": "bun --watch index.ts",
     "start": "DEBUG=* bun run cli.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "bun run typecheck && bun run format",
+    "lint": "bun run typecheck && bun run fmt",
     "test": "bun test",
     "prepublishOnly": "bun run lint && bun run test"
   },
@@ -32,7 +32,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@dvmcp/commons": "^0.2.5",
+    "@dvmcp/commons": "^0.2.6",
     "@getalby/lightning-tools": "^5.1.2",
     "@modelcontextprotocol/sdk": "^1.11.4",
     "@types/yargs": "^17.0.33",

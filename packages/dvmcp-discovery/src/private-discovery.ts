@@ -8,6 +8,7 @@ import {
   TAG_SERVER_IDENTIFIER,
   GIFT_WRAP_KIND,
   loggerDiscovery,
+  TAG_UNIQUE_IDENTIFIER,
 } from '@dvmcp/commons/core';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import type { Event } from 'nostr-tools/pure';
@@ -136,7 +137,7 @@ export class PrivateDiscovery {
     const serverId =
       cfg.serverId ||
       initResp.tags.find(
-        (t: string[]) => t[0] === TAG_SERVER_IDENTIFIER
+        (t: string[]) => t[0] === TAG_UNIQUE_IDENTIFIER
       )?.[1] ||
       'unknown-server';
 

@@ -38,7 +38,9 @@ import { PromptExecutor } from './prompt-executor';
 import { ServerRegistry } from './server-registry';
 import { loggerDiscovery } from '@dvmcp/commons/core';
 import { initBuiltInTools } from './built-in-tools';
+import { PrivateDiscovery } from './private-discovery';
 import { createCapabilityId } from '@dvmcp/commons/core';
+import { UnifiedRegistration } from './unified-registration';
 
 export class DiscoveryServer {
   private mcpServer: McpServer;
@@ -55,8 +57,10 @@ export class DiscoveryServer {
   private serverRegistry: ServerRegistry;
   private completionExecutor: CompletionExecutor;
   private pingExecutor: PingExecutor;
+  private privateDiscovery: PrivateDiscovery | null = null;
   private config: DvmcpDiscoveryConfig;
   private integratedRelays: Set<string> = new Set();
+  private unifiedRegistration: UnifiedRegistration;
 
   constructor(config: DvmcpDiscoveryConfig) {
     this.config = config;
@@ -136,7 +140,26 @@ export class DiscoveryServer {
       return this.promptExecutor.executePrompt(promptId, args);
     });
 
+    // Initialize unified registration
+    this.unifiedRegistration = new UnifiedRegistration(
+      this.toolRegistry,
+      this.resourceRegistry,
+      this.promptRegistry,
+      this.serverRegistry
+    );
+
     // Initialize built-in tools if interactive mode is enabled
+    // Setup private discovery helper if configured
+    if (this.config.discovery?.privateServers?.length) {
+      this.privateDiscovery = new PrivateDiscovery(
+        this.relayHandler,
+        this.keyManager,
+        this,
+        this.config.discovery.privateServers,
+        this.encryptionManager || undefined
+      );
+    }
+
     if (this.config.featureFlags?.interactive) {
       loggerDiscovery('Interactive mode enabled: Registering built-in tools.');
       initBuiltInTools(this.mcpServer, this.toolRegistry, this);
@@ -227,7 +250,7 @@ export class DiscoveryServer {
     }
   }
 
-  private registerToolsFromAnnouncement(
+  public registerToolsFromAnnouncement(
     pubkey: string,
     tools: Tool[],
     serverId?: string
@@ -395,12 +418,32 @@ export class DiscoveryServer {
         toolsList = content.tools;
       } catch (error) {
         console.error('Error parsing tools list content:', error);
+        return;
       }
 
       if (toolsList.length > 0) {
-        this.registerToolsFromAnnouncement(event.pubkey, toolsList, serverId);
+        // Get server info to determine encryption support
+        const serverInfo = this.serverRegistry.getServer(serverId);
+        const supportsEncryption = serverInfo?.supportsEncryption ?? false;
+
+        const source = UnifiedRegistration.createEventSource(
+          event.pubkey,
+          serverId,
+          supportsEncryption,
+          event
+        );
+
+        const capabilities = {
+          tools: toolsList,
+        };
+
+        const stats = await this.unifiedRegistration.registerServerCapabilities(
+          source,
+          capabilities
+        );
+
         loggerDiscovery(
-          `Registered ${toolsList.length} tools from server ${serverId}`
+          `Registered ${stats.toolsCount} tools from server ${serverId}`
         );
       } else {
         loggerDiscovery(`No tools found in tools list from server ${serverId}`);
@@ -443,16 +486,32 @@ export class DiscoveryServer {
         resourcesList = content.resources;
       } catch (error) {
         console.error('Error parsing resources list content:', error);
+        return;
       }
 
       if (resourcesList.length > 0) {
-        this.resourceRegistry.registerServerResources(
+        // Get server info to determine encryption support
+        const serverInfo = this.serverRegistry.getServer(serverId);
+        const supportsEncryption = serverInfo?.supportsEncryption ?? false;
+
+        const source = UnifiedRegistration.createEventSource(
+          event.pubkey,
           serverId,
-          resourcesList,
-          event.pubkey
+          supportsEncryption,
+          event
         );
+
+        const capabilities = {
+          resources: resourcesList,
+        };
+
+        const stats = await this.unifiedRegistration.registerServerCapabilities(
+          source,
+          capabilities
+        );
+
         loggerDiscovery(
-          `Registered ${resourcesList.length} resources from server ${serverId} (provider: ${event.pubkey})`
+          `Registered ${stats.resourcesCount} resources from server ${serverId} (provider: ${event.pubkey})`
         );
       } else {
         loggerDiscovery(
@@ -483,15 +542,32 @@ export class DiscoveryServer {
         resourceTemplatesList = content.resourceTemplates;
       } catch (error) {
         console.error('Error parsing resource templates list content:', error);
+        return;
       }
+
       if (resourceTemplatesList.length > 0) {
-        this.resourceRegistry.registerServerResourceTemplates(
+        // Get server info to determine encryption support
+        const serverInfo = this.serverRegistry.getServer(serverId);
+        const supportsEncryption = serverInfo?.supportsEncryption ?? false;
+
+        const source = UnifiedRegistration.createEventSource(
+          event.pubkey,
           serverId,
-          resourceTemplatesList,
-          event.pubkey
+          supportsEncryption,
+          event
         );
+
+        const capabilities = {
+          resourceTemplates: resourceTemplatesList,
+        };
+
+        const stats = await this.unifiedRegistration.registerServerCapabilities(
+          source,
+          capabilities
+        );
+
         loggerDiscovery(
-          `Registered ${resourceTemplatesList.length} resource templates from server ${serverId} (provider: ${event.pubkey})`
+          `Registered ${stats.resourceTemplatesCount} resource templates from server ${serverId} (provider: ${event.pubkey})`
         );
       } else {
         loggerDiscovery(
@@ -546,21 +622,35 @@ export class DiscoveryServer {
       let promptsList: Prompt[] = [];
       try {
         const content: ListPromptsResult = JSON.parse(event.content);
-
         promptsList = content.prompts;
       } catch (error) {
         console.error('Error parsing prompts list content:', error);
+        return;
       }
 
-      // Register prompts with the registry
       if (promptsList.length > 0) {
-        this.promptRegistry.registerServerPrompts(
+        // Get server info to determine encryption support
+        const serverInfo = this.serverRegistry.getServer(serverId);
+        const supportsEncryption = serverInfo?.supportsEncryption ?? false;
+
+        const source = UnifiedRegistration.createEventSource(
+          event.pubkey,
           serverId,
-          promptsList,
-          event.pubkey
+          supportsEncryption,
+          event
         );
+
+        const capabilities = {
+          prompts: promptsList,
+        };
+
+        const stats = await this.unifiedRegistration.registerServerCapabilities(
+          source,
+          capabilities
+        );
+
         loggerDiscovery(
-          `Registered ${promptsList.length} prompts from server ${serverId} (provider: ${event.pubkey})`
+          `Registered ${stats.promptsCount} prompts from server ${serverId} (provider: ${event.pubkey})`
         );
       } else {
         loggerDiscovery(
@@ -680,102 +770,6 @@ export class DiscoveryServer {
     return removedTools;
   }
 
-  public async registerDirectServerTools(
-    pubkey: string,
-    announcement: InitializeResult,
-    serverId: string
-  ) {
-    loggerDiscovery(
-      'Starting discovery server with direct server capabilities...'
-    );
-
-    if (announcement.serverInfo) {
-      this.serverRegistry.registerServer(
-        serverId,
-        pubkey,
-        JSON.stringify({
-          protocolVersion: announcement.protocolVersion || '2025-03-26',
-          capabilities: announcement.capabilities || {},
-          serverInfo: announcement.serverInfo,
-          instructions: announcement.instructions,
-        }),
-        // For direct servers, assuming no explicit 'support_encryption' tag in InitializeResult.
-        // If the MCP protocol or InitializeResult type is extended to include encryption info,
-        // this logic would need to be updated to extract it.
-        // For now, we default to false for direct servers unless explicitly handled.
-        false // Defaulting to false for direct server encryption support
-      );
-      loggerDiscovery(
-        `Registered direct server: ${announcement.serverInfo.name || serverId} (${serverId})`
-      );
-    }
-
-    const tools: Tool[] = Array.isArray(announcement.tools)
-      ? (announcement.tools as Tool[])
-      : Array.isArray(announcement.capabilities?.tools)
-        ? (announcement.capabilities.tools as Tool[])
-        : [];
-    if (tools.length > 0) {
-      this.registerToolsFromAnnouncement(pubkey, tools, serverId);
-      loggerDiscovery(`Registered ${tools.length} tools from direct server`);
-    } else {
-      loggerDiscovery('No tools found in server announcement');
-    }
-
-    const resources: Resource[] = Array.isArray(announcement.resources)
-      ? (announcement.resources as Resource[])
-      : [];
-    if (resources.length > 0) {
-      this.resourceRegistry.registerServerResources(
-        serverId,
-        resources,
-        pubkey
-      );
-      loggerDiscovery(
-        `Registered ${resources.length} resources from direct server`
-      );
-    }
-
-    const resourceTemplates: ResourceTemplate[] = Array.isArray(
-      announcement.resourceTemplates
-    )
-      ? (announcement.resourceTemplates as ResourceTemplate[])
-      : [];
-    if (resourceTemplates.length > 0) {
-      this.resourceRegistry.registerServerResourceTemplates(
-        serverId,
-        resourceTemplates,
-        pubkey
-      );
-      loggerDiscovery(
-        `Registered ${resourceTemplates.length} resource templates from direct server`
-      );
-    }
-
-    const prompts: Prompt[] = Array.isArray(announcement.prompts)
-      ? (announcement.prompts as Prompt[])
-      : [];
-    if (prompts.length > 0) {
-      this.promptRegistry.registerServerPrompts(serverId, prompts, pubkey);
-      loggerDiscovery(
-        `Registered ${prompts.length} prompts from direct server`
-      );
-    }
-
-    loggerDiscovery(
-      `Direct server registration complete: ` +
-        `${this.toolRegistry.listTools().length} tools, ` +
-        `${this.resourceRegistry.listResources().length} resources, ` +
-        `${this.resourceRegistry.listResourceTemplates().length} resource templates, ` +
-        `${this.promptRegistry.listPrompts().length} prompts`
-    );
-
-    const transport = new StdioServerTransport();
-    await this.mcpServer.connect(transport);
-
-    loggerDiscovery('DVMCP Discovery Server started');
-  }
-
   public async start(options?: { forceDiscovery?: boolean }) {
     const isInteractive = this.config.featureFlags?.interactive === true;
     const forceDiscovery = options?.forceDiscovery === true;
@@ -786,6 +780,12 @@ export class DiscoveryServer {
     loggerDiscovery(
       `Relay URLs: ${this.config.nostr.relayUrls.length > 0 ? this.config.nostr.relayUrls.join(', ') : 'none'}`
     );
+
+    // First, perform private server discovery if configured
+    if (this.privateDiscovery) {
+      loggerDiscovery('Starting private server discovery...');
+      await this.privateDiscovery.discover();
+    }
 
     if (!isInteractive || forceDiscovery) {
       if (this.config.nostr.relayUrls.length > 0) {
@@ -827,8 +827,20 @@ export class DiscoveryServer {
    * Get the server registry instance
    * @returns The server registry
    */
+  public getToolRegistry(): ToolRegistry {
+    return this.toolRegistry;
+  }
+  public getResourceRegistry(): ResourceRegistry {
+    return this.resourceRegistry;
+  }
+  public getPromptRegistry(): PromptRegistry {
+    return this.promptRegistry;
+  }
   public getServerRegistry(): ServerRegistry {
     return this.serverRegistry;
+  }
+  public getUnifiedRegistration(): UnifiedRegistration {
+    return this.unifiedRegistration;
   }
 
   /**

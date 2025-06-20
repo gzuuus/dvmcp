@@ -33,6 +33,7 @@ import {
   handleNotificationsCancel,
   handleCompletionComplete,
   handlePing,
+  handleInitialize,
 } from './handlers';
 
 export interface ResponseContext {
@@ -95,10 +96,12 @@ export class DVMBridge {
       config,
       this.relayHandler,
       this.serverId,
-      this.keyManager
+      this.keyManager,
+      config.mcp.isPrivateServer || false
     );
 
-    loggerBridge('public key:', publicKey);
+    loggerBridge('Public key:', publicKey);
+    loggerBridge('Server id:', this.serverId);
   }
 
   private isWhitelisted(pubkey: string): boolean {
@@ -120,14 +123,18 @@ export class DVMBridge {
       const tools = await this.mcpPool.listTools();
       loggerBridge(`Available MCP tools across all servers: ${tools.length}`);
 
-      loggerBridge('Announcing service to Nostr network...');
-      try {
-        await this.nostrAnnouncer.updateAnnouncement();
-      } catch (error) {
-        console.warn('Failed to announce service to Nostr network:', error);
-        loggerBridge(
-          '⚠️ Warning: Failed to announce service to Nostr network. The bridge will still function, but will not be discoverable via Nostr.'
-        );
+      if (!this.config.mcp.isPrivateServer) {
+        loggerBridge('Announcing service to Nostr network...');
+        try {
+          await this.nostrAnnouncer.announce();
+        } catch (error) {
+          console.warn('Failed to announce service to Nostr network:', error);
+          loggerBridge(
+            '⚠️ Warning: Failed to announce service to Nostr network. The bridge will still function, but will not be discoverable via Nostr.'
+          );
+        }
+      } else {
+        loggerBridge('Private server mode: Skipping public announcement.');
       }
 
       loggerBridge('Setting up request handlers...');
@@ -389,6 +396,15 @@ export class DVMBridge {
 
         switch (method) {
           case MCPMETHODS.initialize:
+            await handleInitialize(
+              event,
+              this.mcpPool,
+              this.keyManager,
+              this.relayHandler,
+              responseContext,
+              this.config,
+              this.serverId
+            );
             break;
           case MCPMETHODS.ping:
             await handlePing(
@@ -471,6 +487,10 @@ export class DVMBridge {
               this.relayHandler,
               responseContext
             );
+            break;
+          case MCPMETHODS.notificationsInitialized:
+            // Do nothing yet
+            loggerBridge(`Received ${method} from ${pubkey}`);
             break;
           default:
             const notImpl = this.keyManager.signEvent({

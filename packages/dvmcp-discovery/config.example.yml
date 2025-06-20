@@ -1,18 +1,18 @@
 nostr:
   # Your private key (32-byte hex string)
-  privateKey: "your_private_key_here"
+  privateKey: 'your_private_key_here'
   # List of relays to connect to
   relayUrls:
-    - "wss://relay1.com"
-    - "wss://relay2.net"
+    - 'wss://relay1.com'
+    - 'wss://relay2.net'
 
 mcp:
   # Server name
-  name: "DVMCP Discovery"
+  name: 'DVMCP Discovery'
   # Server version
-  version: "1.0.0"
+  version: '1.0.0'
   # Server description
-  about: "DVMCP Discovery Server for aggregating MCP tools from DVMs"
+  about: 'DVMCP Discovery Server for aggregating MCP tools from DVMs'
 
 # [Optional] Encryption Configuration (NIP-17/NIP-59 support)
 encryption:
@@ -20,11 +20,21 @@ encryption:
   # - disabled: No encryption support
   # - optional: Message format mirroring (encrypted request -> encrypted response)
   # - required: Only accepts encrypted communication
-  mode: "optional"
-
+  mode: 'optional'
 # NWC (Nostr Wallet Connect) configuration for payments
 #nwc:
-  # connectionString: "nostr+walletconnect:your_wallet_pubkey_here?relay=wss%3A%2F%2Frelay.example.com&secret=your_secret_here"
+# connectionString: "nostr+walletconnect:your_wallet_pubkey_here?relay=wss%3A%2F%2Frelay.example.com&secret=your_secret_here"
+
+# Discovery configuration
+#discovery:
+#   # Optional: Limit the number of DVMs to discover from public announcements
+#   limit: 100
+#   # Optional: Private servers to connect to directly
+#   privateServers:
+#     - providerPubkey: "provider_pubkey_1_here"
+#       serverId: "server_id_1"  # Optional: target specific server
+#     - providerPubkey: "provider_pubkey_2_here"
+#       # serverId omitted: discovers all servers from this provider
 
 # whitelist:
 #   # Optional: List of allowed DVM pubkeys

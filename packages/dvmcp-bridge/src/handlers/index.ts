@@ -5,3 +5,4 @@ export * from './prompt-handlers';
 export * from './notification-handlers';
 export * from './completion-handlers';
 export * from './ping-handlers';
+export * from './initialize-handlers';

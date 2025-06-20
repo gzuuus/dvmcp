@@ -64,11 +64,13 @@ The integration preserves the security model of both protocols while enabling ne
 DVMCP leverages Nostr's public key cryptography to ensure message authenticity and integrity:
 
 1. **Message Verification**: Every message is cryptographically signed by the sender's private key and can be verified using their public key, ensuring that:
+
    - Server announcements come from legitimate providers
    - Client requests are from authorized users
    - Responses are from the expected servers
 
 2. **Identity Management**: Public keys serve as persistent identifiers for all actors in the system:
+
    - Providers can maintain consistent identities across relays
    - Clients can be uniquely identified for authorization purposes
    - Server identifiers are associated with provider public keys
@@ -84,14 +86,16 @@ DVMCP bridges MCP and Nostr protocols through a consistent message structure and
 The protocol uses these key design principles for message handling:
 
 1. **Content Field Structure**: The `content` field of Nostr events contains stringified simplified MCP messages that:
+
    - Omit the `jsonrpc` version field
    - Omit the `id` field
    - For requests: Contain only `method` and `params` fields
    - For responses: Contain the response data directly at the root level without nesting inside a `result` field
-   
+
    This approach maintains protocol integrity while enabling translation between the two systems.
 
 2. **Nostr Metadata in Tags**: All Nostr-specific metadata uses event tags:
+
    - `d`: Unique server identifier, defined by the provider
    - `s`: Server identifier for targeting specific servers, should be the `d` tag of the server being targeted
    - `p`: Public key for addressing providers or clients
@@ -100,12 +104,14 @@ The protocol uses these key design principles for message handling:
    - `cap`: Capability name tag for tools, resources, and prompts to enhance discoverability, filtering, and provide nostr related metadata
 
 3. **Event Kind Separation**: Different event kinds are used for different message categories with specific storage characteristics:
+
    - `31316`-`31319`: Server announcements and capability listings (addressable events)
    - `25910`: Client requests (ephemeral events)
    - `26910`: Server responses (ephemeral events)
    - `21316`: Notifications and feedback (ephemeral events)
-   
+
    These event kinds follow Nostr's conventions in [NIP-01](https://github.com/nostr-protocol/nips/blob/master/01.md#kinds):
+
    - For kind n such that 20000 <= n < 30000, events are ephemeral, which means they are not expected to be stored by relays for a long period, but rather just transmitted.
    - For kind n such that 30000 <= n < 40000, events are addressable by their kind, pubkey and d tag value -- which means that, for each combination of kind, pubkey and the d tag value, only the latest event MUST be stored by relays, older versions MAY be discarded.
 
@@ -121,6 +127,7 @@ There are four main actors in this workflow:
 ### Protocol Flow
 
 The protocol consists of three main phases:
+
 1. **Discovery**: Finding available MCP servers in Nostr and retrieving available capabilities
 2. **Capability Execution/Read**: Requesting tool execution, reading resources, or prompts, and receiving results
 3. **Capability Feedback**: Status updates, notifications, and payment handling
@@ -129,20 +136,21 @@ The protocol consists of three main phases:
 
 This specification defines these event kinds:
 
-| Kind  | Description                                      |
-| ----- | ------------------------------------------------ |
-| 31316 | Server Announcement                              |
-| 31317 | Tools List                                       |
-| 31318 | Resources List                                   |
-| 31319 | Prompts List                                     |
-| 25910 | Requests                                         |
-| 26910 | Responses                                        |
-| 21316 | Feedback/Notifications                           |
-| 1059  | Encrypted Messages (NIP-59 Gift Wrap)           |
+| Kind  | Description                           |
+| ----- | ------------------------------------- |
+| 31316 | Server Announcement                   |
+| 31317 | Tools List                            |
+| 31318 | Resources List                        |
+| 31319 | Prompts List                          |
+| 25910 | Requests                              |
+| 26910 | Responses                             |
+| 21316 | Feedback/Notifications                |
+| 1059  | Encrypted Messages (NIP-59 Gift Wrap) |
 
 **Note on Encryption**: When encryption is enabled, ephemeral events (kinds 25910, 26910, 21316) are wrapped using NIP-17/NIP-59 encryption and published as kind 1059 events. Addressable events (kinds 31316-31319) remain unencrypted for discoverability.
 
 ## Server Discovery
+
 DVMCP provides two methods of server discovery, the main differences between these two methods being the visibility of the servers and the way they are advertised. Public servers can advertise themselves and their capabilities to improve discoverability when providing a "public" or accessible service. Private servers may not advertise themselves and their capabilities, but they can be discovered by clients that know the provider's public key or server identifier.
 
 ### Discovery via Server Announcements (Public Servers)
@@ -160,115 +168,117 @@ After a client discovers a server through these announcements, it can immediatel
   "kind": 31316,
   "pubkey": "<provider-pubkey>",
   "content": {
-      "protocolVersion": "2025-03-26",
-      "capabilities": {
-        "prompts": {
-          "listChanged": true
-        },
-        "resources": {
-          "subscribe": true,
-          "listChanged": true
-        },
-        "tools": {
-          "listChanged": true
-        }
+    "protocolVersion": "2025-03-26",
+    "capabilities": {
+      "prompts": {
+        "listChanged": true
       },
-      "serverInfo": {
-        "name": "ExampleServer",
-        "version": "1.0.0"
+      "resources": {
+        "subscribe": true,
+        "listChanged": true
       },
-      "instructions": "Optional instructions for the client"
+      "tools": {
+        "listChanged": true
+      }
     },
+    "serverInfo": {
+      "name": "ExampleServer",
+      "version": "1.0.0"
+    },
+    "instructions": "Optional instructions for the client"
+  },
   "tags": [
-    ["d", "<server-identifier>"],          // Required: Unique identifier for the server
-    ["k", "25910"],                        // Required: Accepted event kinds (for requests)
-    ["name", "Example Server"],            // Optional: Human-readable server name
-    ["about", "Server description"],       // Optional: Server description
-    ["picture", "https://example.com/server.png"],  // Optional: Server icon/avatar URL
-    ["website", "https://example.com"],    // Optional: Server website
-    ["support_encryption", "true"]         // Optional: Whether server supports encrypted messages
+    ["d", "<server-identifier>"], // Required: Unique identifier for the server
+    ["k", "25910"], // Required: Accepted event kinds (for requests)
+    ["name", "Example Server"], // Optional: Human-readable server name
+    ["about", "Server description"], // Optional: Server description
+    ["picture", "https://example.com/server.png"], // Optional: Server icon/avatar URL
+    ["website", "https://example.com"], // Optional: Server website
+    ["support_encryption", "true"] // Optional: Whether server supports encrypted messages
   ]
 }
 ```
 
 #### Tools List Event
+
 ```json
 {
   "kind": 31317,
   "pubkey": "<provider-pubkey>",
   "content": {
-        "tools": [
-          {
-            "name": "get_weather",
-            "description": "Get current weather information for a location",
-            "inputSchema": {
-              "type": "object",
-              "properties": {
-                "location": {
-                  "type": "string",
-                  "description": "City name or zip code"
-                }
-              },
-              "required": ["location"]
+    "tools": [
+      {
+        "name": "get_weather",
+        "description": "Get current weather information for a location",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string",
+              "description": "City name or zip code"
             }
-          }
-        ]
-      },
+          },
+          "required": ["location"]
+        }
+      }
+    ]
+  },
   "tags": [
-    ["d", "<unique-identifier>"],        // Required: Unique identifier for the tools list
-    ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
-    ["cap", "get_weather"]               // Required: One cap tag per tool name
+    ["d", "<unique-identifier>"], // Required: Unique identifier for the tools list
+    ["s", "<server-identifier>"], // Required: Reference to the server it belongs to
+    ["cap", "get_weather"] // Required: One cap tag per tool name
   ]
 }
 ```
 
 #### Resources List Event
+
 Static resources list event
+
 ```json
 {
   "kind": 31318,
   "pubkey": "<provider-pubkey>",
   "content": {
-        "resources": [
-          {
-            "uri": "file:///project/src/main.rs",
-            "name": "main.rs",
-            "description": "Primary application entry point",
-            "mimeType": "text/x-rust"
-          }
-        ]
-      },
+    "resources": [
+      {
+        "uri": "file:///project/src/main.rs",
+        "name": "main.rs",
+        "description": "Primary application entry point",
+        "mimeType": "text/x-rust"
+      }
+    ]
+  },
   "tags": [
-    ["d", "<unique-identifier>"],        // Required: Unique identifier for the resources list
-    ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
-    ["cap", "main.rs"]                   // Optional: One cap tag per resource name
+    ["d", "<unique-identifier>"], // Required: Unique identifier for the resources list
+    ["s", "<server-identifier>"], // Required: Reference to the server it belongs to
+    ["cap", "main.rs"] // Optional: One cap tag per resource name
   ]
 }
-
 ```
 
 Resource template list event
+
 ```json
 {
   "kind": 31318,
   "pubkey": "<provider-pubkey>",
   "content": {
-        "resourceTemplates": [
-          {
-            "uriTemplate": "file:///{path}",
-            "name": "Project Files",
-            "description": "Access files in the project directory",
-            "mimeType": "application/octet-stream"
-          }
-        ]
-      },
+    "resourceTemplates": [
+      {
+        "uriTemplate": "file:///{path}",
+        "name": "Project Files",
+        "description": "Access files in the project directory",
+        "mimeType": "application/octet-stream"
+      }
+    ]
+  },
   "tags": [
-    ["d", "<unique-identifier>"],        // Required: Unique identifier for the resource templates list
-    ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
-    ["cap", "Project Files"]             // Optional: One cap tag per resource template name
+    ["d", "<unique-identifier>"], // Required: Unique identifier for the resource templates list
+    ["s", "<server-identifier>"], // Required: Reference to the server it belongs to
+    ["cap", "Project Files"] // Optional: One cap tag per resource template name
   ]
 }
-
 ```
 
 #### Prompts List Event
@@ -278,24 +288,24 @@ Resource template list event
   "kind": 31319,
   "pubkey": "<provider-pubkey>",
   "content": {
-        "prompts": [
+    "prompts": [
+      {
+        "name": "code_review",
+        "description": "Asks the LLM to analyze code quality and suggest improvements",
+        "arguments": [
           {
-            "name": "code_review",
-            "description": "Asks the LLM to analyze code quality and suggest improvements",
-            "arguments": [
-              {
-                "name": "code",
-                "description": "The code to review",
-                "required": true
-              }
-            ]
+            "name": "code",
+            "description": "The code to review",
+            "required": true
           }
         ]
-      },
+      }
+    ]
+  },
   "tags": [
-    ["d", "<unique-identifier>"],        // Required: Unique identifier for the prompts list
-    ["s", "<server-identifier>"],        // Required: Reference to the server it belongs to
-    ["cap", "code_review"]               // Optional: One cap tag per prompt name
+    ["d", "<unique-identifier>"], // Required: Unique identifier for the prompts list
+    ["s", "<server-identifier>"], // Required: Reference to the server it belongs to
+    ["cap", "code_review"] // Optional: One cap tag per prompt name
   ]
 }
 ```
@@ -313,6 +323,7 @@ Pricing information is conveyed using the `cap` tag with the following format:
 ```
 
 Where:
+
 - `<capability-identifier>` is the name of the tool, prompt, or resource URI
 - `<price>` is a string representing the numerical amount (e.g., "100")
 - `<currency-unit>` is the currency symbol (e.g., "sats", "usd")
@@ -364,24 +375,24 @@ For servers that are not publicly announced, clients MUST use the MCP initializa
 {
   "kind": 25910,
   "content": {
-      "method": "initialize",
-      "params": {
-        "protocolVersion": "2025-03-26",
-        "capabilities": {
-          "roots": {
-            "listChanged": true
-          },
-          "sampling": {}
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "capabilities": {
+        "roots": {
+          "listChanged": true
         },
-        "clientInfo": {
-          "name": "ExampleClient",
-          "version": "1.0.0"
-        }
+        "sampling": {}
+      },
+      "clientInfo": {
+        "name": "ExampleClient",
+        "version": "1.0.0"
       }
-    },
+    }
+  },
   "tags": [
     ["p", "<provider-pubkey>"],
-    ["s", "<server-identifier>"],
+    ["s", "<server-identifier>"], // Optional field, if ommited all the servers from the providers SHOULD respond
     ["method", "initialize"]
   ]
 }
@@ -399,29 +410,30 @@ For servers that are not publicly announced, clients MUST use the MCP initializa
   "kind": 26910,
   "pubkey": "<provider-pubkey>",
   "content": {
-        "protocolVersion": "2025-03-26",
-        "capabilities": {
-          "logging": {},
-          "prompts": {
-            "listChanged": true
-          },
-          "resources": {
-            "subscribe": true,
-            "listChanged": true
-          },
-          "tools": {
-            "listChanged": true
-          }
-        },
-        "serverInfo": {
-          "name": "ExampleServer",
-          "version": "1.0.0"
-        },
-        "instructions": "Optional instructions for the client"
+    "protocolVersion": "2025-03-26",
+    "capabilities": {
+      "logging": {},
+      "prompts": {
+        "listChanged": true
+      },
+      "resources": {
+        "subscribe": true,
+        "listChanged": true
+      },
+      "tools": {
+        "listChanged": true
+      }
     },
+    "serverInfo": {
+      "name": "ExampleServer",
+      "version": "1.0.0"
+    },
+    "instructions": "Optional instructions for the client"
+  },
   "tags": [
     ["e", "<client-init-request-id>"],
-    ["d", "<server-identifier>"]
+    ["d", "<server-identifier>"],
+    ["support_encryption", "true"] // Whether or not the server supports encryption.
   ]
 }
 ```
@@ -444,9 +456,9 @@ After receiving the server initialization response, the client MUST send an init
     "method": "notifications/initialized"
   },
   "tags": [
-    ["p", "<provider-pubkey>"],                   // Required: Target provider public key
-    ["s", "<server-identifier>"],                  // Required: Server identifier
-    ["method", "notifications/initialized"]        // Required: Same as method in content
+    ["p", "<provider-pubkey>"], // Required: Target provider public key
+    ["s", "<server-identifier>"], // Required: Server identifier
+    ["method", "notifications/initialized"] // Required: Same as method in content
   ]
 }
 ```
@@ -469,15 +481,15 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
   "pubkey": "<client-pubkey>",
   "id": "<request-event-id>",
   "content": {
-    "method": "<capability>/list",  // tools/list, resources/list, or prompts/list
+    "method": "<capability>/list", // tools/list, resources/list, or prompts/list
     "params": {
       "cursor": "optional-cursor-value"
     }
   },
   "tags": [
-    ["method", "<capability>/list"],  // Required: Same as method in content for filtering
-    ["p", "<provider-pubkey>"],       // Required: Provider's public key
-    ["s", "<server-identifier>"]      // Required: Server identifier
+    ["method", "<capability>/list"], // Required: Same as method in content for filtering
+    ["p", "<provider-pubkey>"], // Required: Provider's public key
+    ["s", "<server-identifier>"] // Required: Server identifier
   ]
 }
 ```
@@ -489,13 +501,14 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
   "kind": 26910,
   "pubkey": "<provider-pubkey>",
   "content": {
-        "<items>": [  // "tools", "resources", or "prompts" based on capability
-          // Capability-specific item objects
-        ],
-        "nextCursor": "next-page-cursor"
-    },
+    "<items>": [
+      // "tools", "resources", or "prompts" based on capability
+      // Capability-specific item objects
+    ],
+    "nextCursor": "next-page-cursor"
+  },
   "tags": [
-    ["e", "<request-event-id>"]        // Required: Reference to the request event
+    ["e", "<request-event-id>"] // Required: Reference to the request event
   ]
 }
 ```
@@ -505,6 +518,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 #### Capability-Specific Item Examples
 
 **Tool Item:**
+
 ```json
 {
   "name": "get_weather",
@@ -521,7 +535,6 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
   }
 }
 ```
-
 
 #### Call Tool Request
 
@@ -554,22 +567,21 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
   "pubkey": "<provider-pubkey>",
   "content": {
     "content": [
-        {
-          "type": "text",
-          "text": "Current weather in New York:\nTemperature: 72°F\nConditions: Partly cloudy"
-        }
-      ],
+      {
+        "type": "text",
+        "text": "Current weather in New York:\nTemperature: 72°F\nConditions: Partly cloudy"
+      }
+    ],
     "isError": false
   },
-  "tags": [
-    ["e", "<request-event-id>"],
-  ]
+  "tags": [["e", "<request-event-id>"]]
 }
 ```
 
 ### Resources
 
 **Resource Item Example:**
+
 ```json
 {
   "uri": "file:///project/src/main.rs",
@@ -607,15 +619,15 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
   "pubkey": "<provider-pubkey>",
   "content": {
     "contents": [
-        {
-          "uri": "file:///project/src/main.rs",
-          "mimeType": "text/x-rust",
-          "text": "fn main() {\n    println!(\"Hello world!\");\n}"
-        }
-      ]
+      {
+        "uri": "file:///project/src/main.rs",
+        "mimeType": "text/x-rust",
+        "text": "fn main() {\n    println!(\"Hello world!\");\n}"
+      }
+    ]
   },
   "tags": [
-    ["e", "<request-event-id>"]        // Required: Reference to the request event
+    ["e", "<request-event-id>"] // Required: Reference to the request event
   ]
 }
 ```
@@ -623,6 +635,7 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
 ### Prompts
 
 **Prompt Item Example:**
+
 ```json
 {
   "name": "code_review",
@@ -668,17 +681,17 @@ DVMCP provides a consistent pattern for listing capabilities (tools, resources, 
   "pubkey": "<provider-pubkey>",
   "content": {
     "messages": [
-        {
-          "role": "user",
-          "content": {
-            "type": "text",
-            "text": "Please review this Python code:\ndef hello():\n    print('world')"
-          }
+      {
+        "role": "user",
+        "content": {
+          "type": "text",
+          "text": "Please review this Python code:\ndef hello():\n    print('world')"
         }
-      ]
+      }
+    ]
   },
   "tags": [
-    ["e", "<request-event-id>"]        // Required: Reference to the request event
+    ["e", "<request-event-id>"] // Required: Reference to the request event
   ]
 }
 ```
@@ -696,18 +709,18 @@ Completions in DVMCP enable servers to deliver argument and URI autocompletion f
 To advertise completion support, servers must include the `"completions"` capability in both announcement and initialization response events.
 
 - **Server Announcement Event Example (public servers, kind 31316):**
-    ```json
-    {
-      "protocolVersion": "2025-03-26",
-      "capabilities": {
-        "tools": { "listChanged": true },
-        "resources": { "subscribe": true, "listChanged": true },
-        "prompts": { "listChanged": true },
-        "completions": {}        // Announce completions support
-      },
-      "serverInfo": { "name": "ExampleServer", "version": "1.0.0" }
-    }
-    ```
+  ```json
+  {
+    "protocolVersion": "2025-03-26",
+    "capabilities": {
+      "tools": { "listChanged": true },
+      "resources": { "subscribe": true, "listChanged": true },
+      "prompts": { "listChanged": true },
+      "completions": {} // Announce completions support
+    },
+    "serverInfo": { "name": "ExampleServer", "version": "1.0.0" }
+  }
+  ```
 
 Be sure to always signal the completions capability if the server supports it, so clients know to offer dynamic argument suggestions.
 
@@ -716,43 +729,43 @@ Be sure to always signal the completions capability if the server supports it, s
 Clients use the `completion/complete` method to obtain autocompletion suggestions. All request/response pairs use the standard DVMCP pattern with simplified JSON-RPC content fields.
 
 - **Completion Request Event (kind 25910):**
-    ```json
-    {
-      "kind": 25910,
-      "pubkey": "<client-pubkey>",
-      "content": "{\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/prompt\",\"name\":\"code_review\"},\"argument\":{\"name\":\"language\",\"value\":\"py\"}}}",
-      "tags": [
-        ["method", "completion/complete"],
-        ["p", "<provider-pubkey>"],
-        ["s", "<server-identifier>"]
-      ]
-    }
-    ```
+
+  ```json
+  {
+    "kind": 25910,
+    "pubkey": "<client-pubkey>",
+    "content": "{\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/prompt\",\"name\":\"code_review\"},\"argument\":{\"name\":\"language\",\"value\":\"py\"}}}",
+    "tags": [
+      ["method", "completion/complete"],
+      ["p", "<provider-pubkey>"],
+      ["s", "<server-identifier>"]
+    ]
+  }
+  ```
+
   - The `ref` field identifies the target (either prompt or resource).
   - The `argument` object contains `name` (argument key being completed) and the partial `value` (the current, possibly incomplete, user input).
   - All tag requirements and event fields mirror core DVMCP conventions.
 
 - **Completion Response Event (kind 26910):**
-    ```json
-    {
-      "kind": 26910,
-      "pubkey": "<provider-pubkey>",
-      "content": "{\"completion\":{\"values\":[\"python\",\"pytorch\",\"pyside\"],\"total\":10,\"hasMore\":true}}",
-      "tags": [
-        ["e", "<request-event-id>"]
-      ]
-    }
-    ```
+  ```json
+  {
+    "kind": 26910,
+    "pubkey": "<provider-pubkey>",
+    "content": "{\"completion\":{\"values\":[\"python\",\"pytorch\",\"pyside\"],\"total\":10,\"hasMore\":true}}",
+    "tags": [["e", "<request-event-id>"]]
+  }
+  ```
   - The response includes a `completion` object with an array of suggestion values, the optional total number of matches, and a `hasMore` flag for paging or indicating more results exist.
 
 ##### Reference Types
 
 The protocol distinguishes two reference types:
 
-| Type           | Description                 | Example                                             |
+| Type           | Description                | Example                                             |
 | -------------- | -------------------------- | --------------------------------------------------- |
-| `ref/prompt`   | Reference a prompt by name  | `{"type": "ref/prompt", "name": "code_review"}`     |
-| `ref/resource` | Reference a resource URI    | `{"type": "ref/resource", "uri": "file:///readme"}` |
+| `ref/prompt`   | Reference a prompt by name | `{"type": "ref/prompt", "name": "code_review"}`     |
+| `ref/resource` | Reference a resource URI   | `{"type": "ref/resource", "uri": "file:///readme"}` |
 
 ##### Completion Results
 
@@ -781,30 +794,29 @@ The lifecycle for completions in DVMCP includes:
 **Scenario:** A client is completing the `language` argument for a prompt called "code_review".
 
 1. **Client initiates completion:**
-    ```json
-    {
-      "kind": 25910,
-      "pubkey": "abc...",
-      "content": "{\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/prompt\",\"name\":\"code_review\"},\"argument\":{\"name\":\"language\",\"value\":\"py\"}}}",
-      "tags": [
-        ["method", "completion/complete"],
-        ["p", "provider123"],
-        ["s", "server456"]
-      ]
-    }
-    ```
+
+   ```json
+   {
+     "kind": 25910,
+     "pubkey": "abc...",
+     "content": "{\"method\":\"completion/complete\",\"params\":{\"ref\":{\"type\":\"ref/prompt\",\"name\":\"code_review\"},\"argument\":{\"name\":\"language\",\"value\":\"py\"}}}",
+     "tags": [
+       ["method", "completion/complete"],
+       ["p", "provider123"],
+       ["s", "server456"]
+     ]
+   }
+   ```
 
 2. **Server responds:**
-    ```json
-    {
-      "kind": 26910,
-      "pubkey": "provider123",
-      "content": "{\"completion\":{\"values\":[\"python\",\"pytorch\",\"pyside\"],\"total\":12,\"hasMore\":true}}",
-      "tags": [
-        ["e", "<client-request-event-id>"]
-      ]
-    }
-    ```
+   ```json
+   {
+     "kind": 26910,
+     "pubkey": "provider123",
+     "content": "{\"completion\":{\"values\":[\"python\",\"pytorch\",\"pyside\"],\"total\":12,\"hasMore\":true}}",
+     "tags": [["e", "<client-request-event-id>"]]
+   }
+   ```
    The client displays `"python"`, `"pytorch"`, `"pyside"` as suggested completions for the `language` argument.
 
 #### Error Handling
@@ -819,6 +831,7 @@ All completion/complete requests and responses use DVMCP error conventions:
   - `-32603`: Internal server error
 
 **Example error response:**
+
 ```json
 {
   "kind": 26910,
@@ -829,9 +842,7 @@ All completion/complete requests and responses use DVMCP error conventions:
       "message": "Completion capability not supported"
     }
   },
-  "tags": [
-    ["e", "<request-event-id>"]
-  ]
+  "tags": [["e", "<request-event-id>"]]
 }
 ```
 
@@ -872,9 +883,9 @@ Ping requests follow the standard DVMCP message structure using the simplified J
     "method": "ping"
   },
   "tags": [
-    ["method", "ping"],                      // Required: Method name for filtering
-    ["p", "<recipient-pubkey>"],             // Required: Target public key (provider or client)
-    ["s", "<server-identifier>"]             // Optional: Server identifier when targeting specific server
+    ["method", "ping"], // Required: Method name for filtering
+    ["p", "<recipient-pubkey>"], // Required: Target public key (provider or client)
+    ["s", "<server-identifier>"] // Optional: Server identifier when targeting specific server
   ]
 }
 ```
@@ -889,7 +900,7 @@ The receiver **MUST** respond promptly with an empty response following DVMCP's 
   "pubkey": "<recipient-pubkey>",
   "content": {},
   "tags": [
-    ["e", "<ping-request-event-id>"]         // Required: Reference to the ping request event
+    ["e", "<ping-request-event-id>"] // Required: Reference to the ping request event
   ]
 }
 ```
@@ -899,6 +910,7 @@ The receiver **MUST** respond promptly with an empty response following DVMCP's 
 1. **Prompt Response**: The receiver **MUST** respond promptly with an empty response as shown above.
 
 2. **Timeout Handling**: If no response is received within a reasonable timeout period, the sender **MAY**:
+
    - Consider the connection stale
    - Terminate the connection
    - Attempt reconnection procedures
@@ -917,22 +929,22 @@ sequenceDiagram
 
     Sender->>Receiver: ping request (kind 25910)
     Receiver->>Sender: empty response (kind 26910)
-    
+
     Note over Sender,Receiver: Connection verified as healthy
 ```
 
 ### Implementation Considerations
 
-* Implementations **MAY** periodically issue pings to detect connection health
-* Timeouts **SHOULD** be appropriate for the network environment (recommended: 10-15 seconds)
-* Excessive pinging **SHOULD** be avoided to reduce network overhead and relay load
+- Implementations **MAY** periodically issue pings to detect connection health
+- Timeouts **SHOULD** be appropriate for the network environment (recommended: 10-15 seconds)
+- Excessive pinging **SHOULD** be avoided to reduce network overhead and relay load
 
 ### Error Handling
 
-* **Timeouts**: **SHOULD** be treated as connection failures
-* **Multiple Failed Pings**: **MAY** trigger connection reset or server unavailability status
-* **Protocol Errors**: If a ping request is malformed, standard DVMCP error responses should be used
-* **Logging**: Implementations **SHOULD** log ping failures for diagnostics
+- **Timeouts**: **SHOULD** be treated as connection failures
+- **Multiple Failed Pings**: **MAY** trigger connection reset or server unavailability status
+- **Protocol Errors**: If a ping request is malformed, standard DVMCP error responses should be used
+- **Logging**: Implementations **SHOULD** log ping failures for diagnostics
 
 #### Example Error Response
 
@@ -948,9 +960,7 @@ If a ping cannot be processed due to protocol errors:
       "message": "Internal error processing ping"
     }
   },
-  "tags": [
-    ["e", "<ping-request-event-id>"]
-  ]
+  "tags": [["e", "<ping-request-event-id>"]]
 }
 ```
 
@@ -977,9 +987,9 @@ Encryption support is advertised through the [`support_encryption`](docs/dvmcp-s
   "pubkey": "<provider-pubkey>",
   "tags": [
     ["d", "<server-identifier>"],
-    ["support_encryption", "true"],
+    ["support_encryption", "true"]
     // ... other tags
-  ],
+  ]
   // ... rest of announcement
 }
 ```
@@ -996,7 +1006,9 @@ Clients can discover encryption support by:
 When encryption is enabled, DVMCP messages follow the NIP-17 pattern with NIP-59 gift wrapping:
 
 #### 1. Content Preparation
+
 The original DVMCP message content is prepared as usual:
+
 ```json
 {
   "method": "tools/call",
@@ -1008,7 +1020,9 @@ The original DVMCP message content is prepared as usual:
 ```
 
 #### 2. Seal Creation (NIP-17)
+
 The DVMCP content is encrypted and sealed as an unsigned kind 14 event:
+
 ```json
 {
   "id": "<usual hash>",
@@ -1017,13 +1031,14 @@ The DVMCP content is encrypted and sealed as an unsigned kind 14 event:
   "kind": 14,
   "tags": [
     ["p", "<receiver-pubkey>"],
-    ["s", "<server-identifier>"]  // Optional: Server identifier when targeting specific server
+    ["s", "<server-identifier>"] // Optional: Server identifier when targeting specific server
   ],
   "content": "<original-dvmcp-content-as-plaintext>"
 }
 ```
 
 This unsigned event is then sealed (kind 13) with NIP-44 encryption:
+
 ```json
 {
   "id": "<seal-hash>",
@@ -1037,16 +1052,16 @@ This unsigned event is then sealed (kind 13) with NIP-44 encryption:
 ```
 
 #### 3. Gift Wrapping (NIP-59)
+
 The seal is gift-wrapped (kind 1059) with a random key:
+
 ```json
 {
   "id": "<gift-wrap-hash>",
   "pubkey": "<random-pubkey>",
   "created_at": "<randomized-timestamp>",
   "kind": 1059,
-  "tags": [
-    ["p", "<receiver-pubkey>"]
-  ],
+  "tags": [["p", "<receiver-pubkey>"]],
   "content": "<nip44-encrypted-seal>",
   "sig": "<random-key-signature>"
 }
@@ -1057,6 +1072,7 @@ The seal is gift-wrapped (kind 1059) with a random key:
 When encryption is active, DVMCP events are transformed as follows:
 
 #### Original DVMCP Request
+
 ```json
 {
   "kind": 25910,
@@ -1071,15 +1087,14 @@ When encryption is active, DVMCP events are transformed as follows:
 ```
 
 #### Encrypted DVMCP Request
+
 ```json
 {
   "kind": 1059,
   "pubkey": "<random-ephemeral-pubkey>",
   "created_at": "<randomized-timestamp>",
   "content": "<nip44-encrypted-seal-containing-dvmcp-message>",
-  "tags": [
-    ["p", "<provider-pubkey>"]
-  ],
+  "tags": [["p", "<provider-pubkey>"]],
   "sig": "<ephemeral-key-signature>"
 }
 ```
@@ -1089,15 +1104,14 @@ The inner content (after decryption) maintains the original DVMCP structure with
 #### Encrypted Response Structure
 
 Server responses follow the same pattern:
+
 ```json
 {
   "kind": 1059,
   "pubkey": "<random-ephemeral-pubkey>",
   "created_at": "<randomized-timestamp>",
   "content": "<nip44-encrypted-seal-containing-dvmcp-response>",
-  "tags": [
-    ["p", "<client-pubkey>"]
-  ],
+  "tags": [["p", "<client-pubkey>"]],
   "sig": "<ephemeral-key-signature>"
 }
 ```
@@ -1109,49 +1123,58 @@ The decrypted inner content contains the standard DVMCP response format.
 DVMCP encryption follows Nostr's standard key management practices:
 
 #### 1. Identity Keys
+
 - **Client Identity**: Client's main Nostr private/public key pair
 - **Server Identity**: Provider's Nostr private/public key pair
 - **Conversation Keys**: Derived using NIP-44 key derivation between client and server keys
 
 #### 2. Ephemeral Keys
+
 - **Gift Wrap Keys**: Random one-time-use key pairs for each gift wrap
 - **Key Rotation**: New ephemeral keys generated for each message
 - **Key Disposal**: Ephemeral private keys discarded immediately after use
 
 #### 3. Key Discovery
+
 - **Public Key Exchange**: Client and server public keys exchanged during discovery/initialization
 - **Relay Preferences**: Clients should respect server's preferred relays (kind 10050) for encrypted message delivery
 
 ### Implementation Guidelines
 
 #### 1. Encryption Negotiation
+
 - **Capability Advertisement**: Servers MUST advertise encryption support in announcements
 - **Client Detection**: Clients SHOULD attempt encrypted communication when supported
 - **Graceful Fallback**: Implementations MUST handle encryption failures gracefully
 - **Mixed Mode Support**: Systems MAY support both encrypted and unencrypted sessions simultaneously
 
 #### 2. Message Routing
+
 - **Relay Selection**: Use recipient's preferred relays (NIP-10050) for encrypted messages
 - **Delivery Confirmation**: Implement appropriate timeout and retry mechanisms
 - **Relay Privacy**: Choose relays that respect encrypted message privacy
 
 #### 3. Performance Considerations
+
 - **Encryption Overhead**: Account for additional processing time for encryption/decryption
 - **Message Size**: Encrypted messages are larger due to wrapping layers
 - **Caching**: Avoid caching decrypted content; re-decrypt as needed
 
 #### 4. Security Best Practices
+
 - **Key Hygiene**: Properly dispose of ephemeral keys after use
 - **Timestamp Randomization**: Randomize timestamps within 2-day windows
 - **Metadata Minimization**: Avoid leaking patterns through timing or relay selection
 - **Forward Secrecy**: Support message expiration through appropriate tagging
 
 #### 5. Error Handling
+
 - **Decryption Failures**: Handle gracefully with appropriate error messages
 - **Key Mismatches**: Provide clear feedback for key-related issues
 - **Relay Failures**: Implement retry logic for delivery failures
 
 #### Example Implementation Flow
+
 ```mermaid
 sequenceDiagram
     participant Client as DVMCP Client
@@ -1161,27 +1184,27 @@ sequenceDiagram
     Note over Client,Server: Encryption Negotiation
     Client->>Relay: Check server announcement (kind 31316)
     Relay-->>Client: Server supports encryption (support_encryption: true)
-    
+
     Note over Client,Server: Encrypted Request Flow
     Client->>Client: Prepare DVMCP request
     Client->>Client: Create unsigned kind 14 with DVMCP content
     Client->>Client: Seal as kind 13 (encrypted)
     Client->>Client: Gift wrap as kind 1059 (double encrypted)
     Client->>Relay: Publish encrypted gift wrap
-    
+
     Relay-->>Server: Deliver encrypted message
     Server->>Server: Unwrap gift wrap (kind 1059)
     Server->>Server: Decrypt seal (kind 13)
     Server->>Server: Extract DVMCP request (kind 14)
     Server->>Server: Process DVMCP request
-    
+
     Note over Client,Server: Encrypted Response Flow
     Server->>Server: Prepare DVMCP response
     Server->>Server: Create unsigned kind 14 with response
     Server->>Server: Seal as kind 13 (encrypted)
     Server->>Server: Gift wrap as kind 1059 (double encrypted)
     Server->>Relay: Publish encrypted response
-    
+
     Relay-->>Client: Deliver encrypted response
     Client->>Client: Decrypt and process response
 ```
@@ -1206,32 +1229,36 @@ The direction of the notifications is determined by the `p` tag used. Client to 
   "pubkey": "<provider-pubkey>",
   "content": {
     "method": "notifications/<type>",
-    "params": { /* Optional parameters */ }
+    "params": {
+      /* Optional parameters */
+    }
   },
   "tags": [
-    ["p", "<client-pubkey>"],                    // Required: Target public key (recipient)
-    ["method", "notifications/<type>"],          // Required: Same as method in content
-    ["s", "<server-identifier>"],                // Optional: Server identifier (for Client to Server notifications)
-    ["e", "<request-event-id>"]                  // Optional: Reference to the request (for progress/cancel)
+    ["p", "<client-pubkey>"], // Required: Target public key (recipient)
+    ["method", "notifications/<type>"], // Required: Same as method in content
+    ["s", "<server-identifier>"], // Optional: Server identifier (for Client to Server notifications)
+    ["e", "<request-event-id>"] // Optional: Reference to the request (for progress/cancel)
   ]
 }
 ```
 
 #### Common MCP Notifications
 
-| Notification Type | Method | Direction | Parameters | Description |
-|------------------|--------|-----------|------------|-------------|
-| Initialized | `notifications/initialized` | Client → Server | None | Sent after initialization to indicate client is ready (required for Direct Discovery) |
-| Tools List Changed | `notifications/tools/list_changed` | Server → Client | None | Sent when the list of available tools changes |
-| Resources List Changed | `notifications/resources/list_changed` | Server → Client | None | Sent when the list of available resources changes |
-| Resource Updated | `notifications/resources/updated` | Server → Client | `uri`: Resource URI | Sent when a specific resource is updated |
-| Prompts List Changed | `notifications/prompts/list_changed` | Server → Client | None | Sent when the list of available prompts changes |
-| Progress | `notifications/progress` | Server → Client | `id`: Request ID<br>`message`: Status message | Indicates progress on long-running operations |
-| Cancel | `notifications/cancel` | Client → Server | `id`: Request ID | Cancels an in-progress operation |
+| Notification Type      | Method                                 | Direction       | Parameters                                    | Description                                                                           |
+| ---------------------- | -------------------------------------- | --------------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Initialized            | `notifications/initialized`            | Client → Server | None                                          | Sent after initialization to indicate client is ready (required for Direct Discovery) |
+| Tools List Changed     | `notifications/tools/list_changed`     | Server → Client | None                                          | Sent when the list of available tools changes                                         |
+| Resources List Changed | `notifications/resources/list_changed` | Server → Client | None                                          | Sent when the list of available resources changes                                     |
+| Resource Updated       | `notifications/resources/updated`      | Server → Client | `uri`: Resource URI                           | Sent when a specific resource is updated                                              |
+| Prompts List Changed   | `notifications/prompts/list_changed`   | Server → Client | None                                          | Sent when the list of available prompts changes                                       |
+| Progress               | `notifications/progress`               | Server → Client | `id`: Request ID<br>`message`: Status message | Indicates progress on long-running operations                                         |
+| Cancel                 | `notifications/cancel`                 | Client → Server | `id`: Request ID                              | Cancels an in-progress operation                                                      |
 
 **Note:** Progress notifications include an additional `e` tag referencing the request event ID:
+
 ```json
-["e", "<request-id>"]  // Only for progress notifications
+["e", "<request-id>"]
+ // Only for progress notifications
 ```
 
 For long-running jobs, servers should send progress notifications frequently to indicate the job is still processing and to prevent client timeout.
@@ -1248,9 +1275,9 @@ For Nostr-specific features like payment handling, we use the event tags while k
   "pubkey": "<provider-pubkey>",
   "content": "",
   "tags": [
-    ["status", "payment-required"],              // Required: Indicates payment is needed
-    ["amount", "1000", "lnbc..."],               // Required: Amount in sats and Lightning invoice
-    ["e", "<job-request-id>"],                   // Required: Reference to the original request
+    ["status", "payment-required"], // Required: Indicates payment is needed
+    ["amount", "1000", "lnbc..."], // Required: Amount in sats and Lightning invoice
+    ["e", "<job-request-id>"] // Required: Reference to the original request
   ]
 }
 ```
@@ -1261,9 +1288,9 @@ DVMCP handles two types of errors: protocol errors and execution errors.
 
 ### Error Types
 
-| Error Type | Description | Format |
-|------------|-------------|--------|
-| Protocol Error | JSON-RPC protocol-level errors (invalid method, params, etc.) | Error object in content with error code and message |
+| Error Type      | Description                                                        | Format                                                   |
+| --------------- | ------------------------------------------------------------------ | -------------------------------------------------------- |
+| Protocol Error  | JSON-RPC protocol-level errors (invalid method, params, etc.)      | Error object in content with error code and message      |
 | Execution Error | Errors during tool execution (API failures, business logic errors) | Object with `isError: true` and error details in content |
 
 ### Error Response Template
@@ -1275,7 +1302,7 @@ DVMCP handles two types of errors: protocol errors and execution errors.
   "content": {
     // Either an error object (protocol error):
     "error": {
-      "code": -32602,  // Standard JSON-RPC error code
+      "code": -32602, // Standard JSON-RPC error code
       "message": "Error description"
     },
     // Or a direct response with isError flag (execution error):
@@ -1288,12 +1315,13 @@ DVMCP handles two types of errors: protocol errors and execution errors.
     "isError": true
   },
   "tags": [
-    ["e", "<request-event-id>"],                  // Required: Reference to the request event
+    ["e", "<request-event-id>"] // Required: Reference to the request event
   ]
 }
 ```
 
 **Common Error Codes:**
+
 - `-32700`: Parse error
 - `-32600`: Invalid request
 - `-32601`: Method not found
@@ -1343,7 +1371,7 @@ sequenceDiagram
     rect rgb(240, 240, 240)
         Note over Client,Server: Discovery Path A: Public Server
         Note over Relay: Server events already published to relay
-        
+
         Client->>Relay: Subscribe to kind:31316 events (Server Announcements)
         Relay-->>Client: Server announcements
         Client->>Relay: Subscribe to kind:31317 events (Tools List)
@@ -1361,25 +1389,25 @@ sequenceDiagram
         Server-->>DVM: Capability response
         DVM-->>Client: kind:26910, Server capabilities
         Client->>DVM: kind:21316, method:notifications/initialized
-        
+
         Note over Client,DVM: Direct capability requests
         Client->>DVM: kind:25910, method:tools/list
         DVM->>Server: Request tools list
         Server-->>DVM: Tools list
         DVM-->>Client: kind:26910, Tools list
-        
+
         Note over Client,DVM: (Similar flows for resources/list and prompts/list)
     end
 
     Note over Client,Server: Tool Execution (Same for both paths)
     Client->>DVM: kind:25910, method:tools/call
-    
+
     rect rgb(230, 240, 255)
         Note over Client,DVM: Optional Payment Flow
         DVM-->>Client: kind:21316, status:payment-required
         Client->>DVM: Payment
     end
-    
+
     DVM->>Server: Execute Tool
     Server-->>DVM: Results
     DVM-->>Client: kind:26910, Tool results
@@ -1412,6 +1440,7 @@ Unlike direct MCP connections, Nostr's pub/sub model requires special handling f
 1. **Connection Persistence**: Clients and servers SHOULD maintain relay connections to receive notifications for subscribed resources.
 
 2. **Progress Notifications**: For long-running operations, servers SHOULD send progress notifications as defined in the protocol to:
+
    - Indicate processing status
    - Prevent client timeouts
    - Maintain subscription activity

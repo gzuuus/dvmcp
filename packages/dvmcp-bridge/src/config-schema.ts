@@ -146,6 +146,12 @@ export interface MCPConfig {
    * @minItems 1
    */
   servers: MCPServerConfig[];
+  /**
+   * If true, server will not announce itself publicly to Nostr relays.
+   * Clients must use direct initialization to connect.
+   * @default false
+   */
+  isPrivateServer?: boolean;
 }
 
 /**
@@ -291,7 +297,7 @@ export const dvmcpBridgeConfigSchema: ConfigSchema = {
             keyType: 'string',
             valueType: 'string',
             required: false,
-            doc: 'Environment variables (key-value map) for the server process.',
+            doc: 'Environment variables for the server process.',
           },
           tools: {
             type: 'array',
@@ -366,6 +372,12 @@ export const dvmcpBridgeConfigSchema: ConfigSchema = {
             },
           },
         },
+      },
+      isPrivateServer: {
+        type: 'boolean',
+        required: false,
+        default: false,
+        doc: 'If true, server will not announce itself publicly to Nostr relays. Clients must use direct initialization to connect.',
       },
     },
   },

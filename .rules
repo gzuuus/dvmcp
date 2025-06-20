@@ -1,0 +1,34 @@
+# DVMCP agent guidelines
+DVMCP is a bun monorepo. Each package has its own directory and can be installed and run independently. To execute commands for all packages, run them from the root directory
+
+## Build/Test Commands
+
+- **Install**: `bun install`
+- **Run**: `bun start` (specific package)
+- **Typecheck**: `bun typecheck` (run in root directory)
+- **Test**: `bun test` (runs all tests)
+- **Single test**: `bun test path/to/file.test.ts` (specific test file)
+
+## Code Style
+
+- **Runtime**: Bun with TypeScript ESM modules
+- **Imports**: Use relative imports for local modules, named imports preferred
+- **Types**: Zod schemas for validation, TypeScript interfaces for structure
+- **Naming**: camelCase for variables/functions, PascalCase for classes/namespaces
+- **Error handling**: Use Result patterns, avoid throwing exceptions in tools
+- **File structure**: Namespace-based organization
+
+## IMPORTANT
+
+- Try to keep things in one function unless composable or reusable
+- DO NOT do unnecessary destructuring of variables
+- DO NOT use `else` statements unless necessary
+- DO NOT use `try`/`catch` if it can be avoided
+- AVOID `try`/`catch` where possible
+- AVOID `else` statements
+- AVOID using `any` type
+- AVOID `let` statements
+- PREFER single word variable names where possible
+- If necessary, for external libraries like `modelcontextprotocol/sdk` or questions about the Bun runtime, use context7 to access up-to-date, version-specific documentation and code examples directly from the source.
+- Constants such as kind numbers, MCP methods, and other relevant constants are defined in the constants.ts file within the commons/core package. Use these when available, and only create new constants if necessary.
+- If necessary, for understanding the DVMCP specification refer to the specification at docs/dvmcp-spec-2025-03-26.md

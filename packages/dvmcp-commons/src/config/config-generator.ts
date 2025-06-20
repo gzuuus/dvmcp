@@ -125,7 +125,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
           if (
             await this.promptYesNo(
               `${CONFIG_EMOJIS.SERVER} Add ${fieldName} price?`,
-              false
+              fieldConfig.default || false
             )
           ) {
             const value = await this.handleField(fieldName, fieldConfig, false);
@@ -135,7 +135,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
           if (
             await this.promptYesNo(
               `${CONFIG_EMOJIS.SERVER} Add environment variables?`,
-              false
+              fieldConfig.default || false
             )
           ) {
             const env: Record<string, string> = {};
@@ -176,7 +176,6 @@ export class ConfigGenerator<T extends Record<string, any>> {
   private async handleField(
     fieldName: string,
     config: FieldConfig,
-    showFieldName = true,
     currentValue?: any
   ): Promise<any> {
     const emoji = config.emoji || CONFIG_EMOJIS.PROMPT;
@@ -195,7 +194,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
 
       const keepCurrent = await this.promptYesNo(
         `${emoji} Keep current ${description}?`,
-        true
+        config.default || false
       );
 
       if (keepCurrent) {
@@ -218,7 +217,10 @@ export class ConfigGenerator<T extends Record<string, any>> {
       hex: async () => {
         if (
           config.generator &&
-          (await this.promptYesNo(`${emoji} Generate new ${description}?`))
+          (await this.promptYesNo(
+            `${emoji} Generate new ${description}?`,
+            config.required || false
+          ))
         ) {
           const value = config.generator();
           console.log(`${CONFIG_EMOJIS.PROMPT} ${value}`);
@@ -260,7 +262,12 @@ export class ConfigGenerator<T extends Record<string, any>> {
           }
         }
 
-        if (await this.promptYesNo(`${emoji} Add ${description}?`, true)) {
+        if (
+          await this.promptYesNo(
+            `${emoji} Add ${description}?`,
+            (config.default && config.required) || false
+          )
+        ) {
           while (true) {
             const item = await this.promptWithValidation(
               `${emoji} Enter value for ${description} (empty to finish):`,
@@ -277,7 +284,12 @@ export class ConfigGenerator<T extends Record<string, any>> {
 
       set: async () => {
         const items: string[] = Array.from(currentValue || []);
-        if (await this.promptYesNo('Would you like to add items?', false)) {
+        if (
+          await this.promptYesNo(
+            'Would you like to add items?',
+            (config.default && config.required) || false
+          )
+        ) {
           while (true) {
             const item = await this.promptWithValidation(
               'Enter item (empty to finish):',
@@ -312,7 +324,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
           console.log('');
           const keepCurrent = await this.promptYesNo(
             `${emoji} Keep current ${fieldName}?`,
-            true
+            (config.default && config.required) || false
           );
           if (!keepCurrent) {
             array = [];
@@ -321,7 +333,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
             if (
               await this.promptYesNo(
                 `${emoji} Remove any existing ${fieldName}?`,
-                false
+                (config.default && config.required) || false
               )
             ) {
               while (true) {
@@ -344,7 +356,12 @@ export class ConfigGenerator<T extends Record<string, any>> {
           }
         }
 
-        if (await this.promptYesNo(`${emoji} Add new ${fieldName}?`, true)) {
+        if (
+          await this.promptYesNo(
+            `${emoji} Add new ${fieldName}?`,
+            (config.default && config.required) || false
+          )
+        ) {
           while (true) {
             const item = await this.handleObjectArrayItem(
               config.fields!,
@@ -370,7 +387,6 @@ export class ConfigGenerator<T extends Record<string, any>> {
             nestedObj[key] = await this.handleField(
               key,
               fieldConfig,
-              true,
               currentValue?.[key]
             );
           }
@@ -378,7 +394,8 @@ export class ConfigGenerator<T extends Record<string, any>> {
         return nestedObj;
       },
 
-      boolean: async () => false,
+      boolean: async () =>
+        this.promptYesNo(`${emoji} ${description}:`, config.default || false),
       url: async () =>
         this.promptWithValidation(
           `${emoji} Enter URL:`,
@@ -456,7 +473,6 @@ export class ConfigGenerator<T extends Record<string, any>> {
       config[fieldName] = await this.handleField(
         fieldName,
         fieldConfig,
-        true,
         currentValue
       );
     }

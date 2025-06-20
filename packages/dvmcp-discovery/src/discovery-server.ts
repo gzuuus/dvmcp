@@ -148,7 +148,6 @@ export class DiscoveryServer {
       this.serverRegistry
     );
 
-    // Initialize built-in tools if interactive mode is enabled
     // Setup private discovery helper if configured
     if (this.config.discovery?.privateServers?.length) {
       this.privateDiscovery = new PrivateDiscovery(
@@ -160,6 +159,7 @@ export class DiscoveryServer {
       );
     }
 
+    // Initialize built-in tools if interactive mode is enabled
     if (this.config.featureFlags?.interactive) {
       loggerDiscovery('Interactive mode enabled: Registering built-in tools.');
       initBuiltInTools(this.mcpServer, this.toolRegistry, this);

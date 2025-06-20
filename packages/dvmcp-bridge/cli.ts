@@ -183,13 +183,6 @@ const cliMain = async () => {
     return;
   }
 
-  if (!existsSync(configPath)) {
-    console.log(
-      `${CONFIG_EMOJIS.INFO} No configuration file found. Starting setup...`
-    );
-    await configure();
-  }
-
   if (args.verbose) {
     const { default: yaml } = await import('yaml');
     console.log('\n📋 DVMCP Bridge Configuration:');

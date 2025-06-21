@@ -1,5 +1,11 @@
 # @dvmcp/commons
 
+## 0.2.7
+
+### Patch Changes
+
+- 5d7c3fb: feat: private servers
+
 ## 0.2.6
 
 ### Patch Changes

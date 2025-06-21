@@ -1,6 +1,6 @@
 {
   "name": "@dvmcp/commons",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Shared utilities for DVMCP packages",
   "type": "module",
   "main": "./src/index.ts",

@@ -9,6 +9,7 @@ import {
   GIFT_WRAP_KIND,
   loggerDiscovery,
   TAG_UNIQUE_IDENTIFIER,
+  TAG_SUPPORT_ENCRYPTION,
 } from '@dvmcp/commons/core';
 import { RelayHandler } from '@dvmcp/commons/nostr';
 import type { Event } from 'nostr-tools/pure';
@@ -144,11 +145,14 @@ export class PrivateDiscovery {
     // Update cfg with encryption support from server response
     const serverSupportsEncryption =
       initResp.tags.find(
-        (t: string[]) => t[0] === 'support_encryption'
+        (t: string[]) => t[0] === TAG_SUPPORT_ENCRYPTION
       )?.[1] === 'true';
     cfg.supportsEncryption = serverSupportsEncryption;
 
-    // 3. Fetch detailed capability lists and collect them for unified registration
+    // Send notifications/initialized
+    await this.sendInitializedNotification(cfg, serverId);
+
+    // Fetch detailed capability lists and collect them for unified registration
     const allCapabilities: {
       tools?: Tool[];
       resources?: Resource[];
@@ -203,7 +207,7 @@ export class PrivateDiscovery {
       }
     );
 
-    // 4. Use unified registration for all capabilities including server info
+    // Use unified registration for all capabilities including server info
     const source = UnifiedRegistration.createPrivateSource(
       initResp.pubkey,
       serverId,
@@ -224,9 +228,6 @@ export class PrivateDiscovery {
         `${stats.toolsCount} tools, ${stats.resourcesCount} resources, ` +
         `${stats.promptsCount} prompts, server registered: ${stats.serverRegistered}`
     );
-
-    // 5. Send notifications/initialized (after lists) with encryption if server supports it
-    await this.sendInitializedNotification(cfg, serverId);
 
     loggerDiscovery(`Completed private discovery for server ${serverId}`);
   }

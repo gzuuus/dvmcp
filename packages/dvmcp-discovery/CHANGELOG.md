@@ -1,5 +1,13 @@
 # @dvmcp/discovery
 
+## 0.2.5
+
+### Patch Changes
+
+- 5d7c3fb: feat: private servers
+- Updated dependencies [5d7c3fb]
+  - @dvmcp/commons@0.2.7
+
 ## 0.2.4
 
 ### Patch Changes

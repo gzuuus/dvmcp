@@ -7,6 +7,7 @@ import {
   REQUEST_KIND,
   RESPONSE_KIND,
   NOTIFICATION_KIND,
+  TAG_METHOD,
 } from '../core/constants';
 import { logger } from '../core/logger';
 import { EventEmitter } from 'node:events';
@@ -74,7 +75,9 @@ export class RelayHandler {
 
     const sub = this.pool.subscribeMany(this.relayUrls, filters, {
       onevent(event) {
-        logger(`Event received(${event.kind}), id: ${event.id.slice(0, 12)}`);
+        logger(
+          `Event received(${event.kind}), id: ${event.id.slice(0, 12)}, pubkey: ${event.pubkey.slice(0, 12)}, method: ${event.tags.find(([tag]) => tag === TAG_METHOD)?.[1]}`
+        );
         onRequest(event);
       },
       oneose() {

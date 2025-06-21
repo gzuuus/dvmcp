@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'path';
 import process from 'process';
 import yargs from 'yargs';
@@ -336,6 +337,24 @@ const cliMain = async (): Promise<void> => {
     await configure();
     return;
   }
+
+  if (!existsSync(configPath)) {
+    console.log(
+      `${CONFIG_EMOJIS.INFO} No configuration file found at ${configPath}`
+    );
+    console.log(
+      `${CONFIG_EMOJIS.INFO} You can create one by copying config.example.yml to config.dvmcp.yml and editing it.`
+    );
+    console.log(
+      `${CONFIG_EMOJIS.INFO} Alternatively, you can run with --configure to set up a new configuration.`
+    );
+    console.log(`${CONFIG_EMOJIS.INFO} Starting configuration wizard...`);
+    await configure();
+    console.log(
+      `${CONFIG_EMOJIS.INFO} Configuration created, attempting to load...`
+    );
+  }
+
   if (args.provider) {
     await setupFromProvider(args.provider as string);
     await runApp();

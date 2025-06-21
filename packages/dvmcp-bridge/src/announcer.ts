@@ -42,19 +42,22 @@ export class NostrAnnouncer {
   private config: DvmcpBridgeConfig;
   public readonly keyManager: KeyManager;
   private readonly serverId: string;
+  private readonly isPrivateServer: boolean;
 
   constructor(
     mcpPool: MCPPool,
     config: DvmcpBridgeConfig,
     relayHandler: RelayHandler,
     serverId: string,
-    keyManager: KeyManager
+    keyManager: KeyManager,
+    isPrivateServer: boolean
   ) {
     this.relayHandler = relayHandler;
     this.mcpPool = mcpPool;
     this.config = config;
     this.serverId = serverId;
     this.keyManager = keyManager;
+    this.isPrivateServer = isPrivateServer;
   }
 
   async announceRelayList() {
@@ -245,7 +248,11 @@ export class NostrAnnouncer {
     loggerBridge('Prompts list announced');
   }
 
-  async updateAnnouncement() {
+  async announce() {
+    if (this.isPrivateServer) {
+      loggerBridge('Private server: Skipping public updates to announcement.');
+      return;
+    }
     const serverInfo = await this.announceServer();
     if (!serverInfo) return;
 

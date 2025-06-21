@@ -73,6 +73,28 @@ export interface WhitelistConfig {
 }
 
 /**
+ * Private server configuration for direct connection
+ */
+export interface PrivateServerConfig {
+  /**
+   * Public key of the private server provider
+   */
+  providerPubkey: string;
+
+  /**
+   * Optional server identifier to target a specific server
+   * If omitted, discovers all servers from the provider
+   */
+  serverId?: string;
+
+  /**
+   * Indicates if the private server supports encryption.
+   * This is determined during the handshake process.
+   */
+  supportsEncryption?: boolean;
+}
+
+/**
  * Discovery configuration
  */
 export interface DiscoveryConfig {
@@ -80,6 +102,11 @@ export interface DiscoveryConfig {
    * Limit the number of DVMs to discover
    */
   limit?: number;
+
+  /**
+   * Private servers to connect to directly
+   */
+  privateServers?: PrivateServerConfig[];
 }
 
 /**
@@ -202,6 +229,29 @@ export const dvmcpDiscoveryConfigSchema: ConfigSchema = {
         type: 'number',
         required: false,
         doc: 'Limit the number of DVMs to discover',
+      },
+      privateServers: {
+        type: 'array',
+        required: false,
+        itemType: 'object',
+        doc: 'Private servers to connect to directly',
+        fields: {
+          providerPubkey: {
+            type: 'string',
+            required: true,
+            doc: 'Public key of the private server provider',
+          },
+          serverId: {
+            type: 'string',
+            required: false,
+            doc: 'Optional server identifier to target a specific server',
+          },
+          supportsEncryption: {
+            type: 'string',
+            required: false,
+            doc: 'Optional, if the private server supports encryption, determine this beforehand to improve handshake efficiency',
+          },
+        },
       },
     },
   },

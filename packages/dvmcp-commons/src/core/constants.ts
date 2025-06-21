@@ -37,4 +37,5 @@ export const MCPMETHODS = {
   ping: 'ping',
   notificationsCancel: 'notifications/cancel',
   notificationsProgress: 'notifications/progress',
+  notificationsInitialized: 'notifications/initialized',
 } as const;

@@ -2,6 +2,7 @@ import type { EventTemplate, NostrEvent } from 'nostr-tools';
 import type { RelayHandler } from './relay-handler';
 import type { KeyManager } from './key-manager';
 import type { EncryptionManager } from '../encryption/encryption-manager';
+import { NOTIFICATION_KIND } from '../core';
 
 export interface PublishOptions {
   encrypt?: boolean;
@@ -98,7 +99,7 @@ export class EventPublisher {
 
     // Publish unencrypted notification
     const notificationEvent = this.keyManager.signEvent({
-      ...this.keyManager.createEventTemplate(21316), // NOTIFICATION_KIND
+      ...this.keyManager.createEventTemplate(NOTIFICATION_KIND),
       content,
       tags,
     });

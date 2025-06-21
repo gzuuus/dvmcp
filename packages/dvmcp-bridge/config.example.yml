@@ -1,85 +1,87 @@
 # Nostr Configuration
 nostr:
   # [Required] Your private key in hex format (32-byte hex string)
-  privateKey: "your_private_key_here"
+  privateKey: 'your_private_key_here'
   # [Required] List of relay URLs (must start with ws:// or wss://)
   relayUrls:
-    - "wss://relay1.com"
-    - "wss://relay2.net"
+    - 'wss://relay1.com'
+    - 'wss://relay2.net'
 
 # MCP Service Configuration
 mcp:
   # Service information
-  name: "DVM MCP Bridge"
-  about: "MCP-enabled DVM providing AI and computational tools"
+  name: 'DVM MCP Bridge'
+  about: 'MCP-enabled DVM providing AI and computational tools'
   # [Optional] instructions for using this MCP server (included in the server announcement)
   # instructions: "This server provides AI and computational tools. Use the available tools to perform various tasks."
   # [Optional] custom server ID (if not provided, will be derived from name and public key)
   # serverId: "custom-server-id"
   # [Required] client version information
-  clientVersion: "1.0.0"
+  clientVersion: '1.0.0'
   # [Optional] optional metadata
-  picture: "https://image.nostr.build/5bf2e2eb3b858bf72c23e53ed1f41ed0f65b2c8a805eaa48dd506b7cfec4ab88.png"
-  website: "https://github.com/gzuuus/dvmcp"
+  picture: 'https://image.nostr.build/5bf2e2eb3b858bf72c23e53ed1f41ed0f65b2c8a805eaa48dd506b7cfec4ab88.png'
+  website: 'https://github.com/gzuuus/dvmcp'
+  # [Optional] Private server configuration
+  # isPrivateServer: true;
   # [Required] MCP Servers Configuration accepts multiple servers
   servers:
-    - command: "node"
-      args: 
-        - "run"
-        - "src/external-mcp-server1.ts"
+    - command: 'node'
+      args:
+        - 'run'
+        - 'src/external-mcp-server1.ts'
       # [Optional] Environment variables to pass to the server process
       env:
-        API_KEY: "your_api_key_here"
-        DEBUG: "true"
-        NODE_ENV: "production"
+        API_KEY: 'your_api_key_here'
+        DEBUG: 'true'
+        NODE_ENV: 'production'
       # [Optional] Capability pricing configuration
       # Tool pricing
       tools:
-        - name: "tool-from-server1"
-          price: "1000"
-          unit: "sats"
-        - name: "another-tool-from-server1"
-          price: "2000"
-          unit: "sats"
+        - name: 'tool-from-server1'
+          price: '1000'
+          unit: 'sats'
+        - name: 'another-tool-from-server1'
+          price: '2000'
+          unit: 'sats'
       # Prompt pricing
       prompts:
-        - name: "prompt-from-server1"
-          price: "500"
-          unit: "sats"
+        - name: 'prompt-from-server1'
+          price: '500'
+          unit: 'sats'
       # Resource pricing
       resources:
-        - uri: "resource-uri-from-server1"
-          price: "750"
-          unit: "sats"
-    
-    - command: "python"
+        - uri: 'resource-uri-from-server1'
+          price: '750'
+          unit: 'sats'
+
+    - command: 'python'
       args:
-        - "src/external-mcp-server2.py"
+        - 'src/external-mcp-server2.py'
       # [Optional] Capability pricing configuration
       # Tool pricing
       tools:
-        - name: "tool-from-server2"
-          price: "500"
-          unit: "sats"
+        - name: 'tool-from-server2'
+          price: '500'
+          unit: 'sats'
       # Prompt pricing
       prompts:
-        - name: "prompt-from-server2"
-          price: "250"
-          unit: "sats"
+        - name: 'prompt-from-server2'
+          price: '250'
+          unit: 'sats'
       # Resource pricing
       resources:
-        - uri: "resource-uri-from-server2"
-          price: "300"
-          unit: "sats"
+        - uri: 'resource-uri-from-server2'
+          price: '300'
+          unit: 'sats'
 
 # [Optional] Lightning Payment Configuration (required if pricing is configured)
 lightning:
   # Lightning Address for generating invoices
-  address: "your_lightning_address@getalby.com"
+  address: 'your_lightning_address@getalby.com'
   # Dedicated relays for zap receipt subscriptions (optional)
   zapRelays:
-    - "wss://relay.damus.io"
-    - "wss://nostr.mutinywallet.com"
+    - 'wss://relay.damus.io'
+    - 'wss://nostr.mutinywallet.com'
 
 # [Optional] Encryption Configuration (NIP-17/NIP-59 support)
 encryption:
@@ -87,9 +89,8 @@ encryption:
   # - disabled: No encryption support
   # - optional: Message format mirroring (encrypted request -> encrypted response)
   # - required: Only accepts encrypted communication
-  mode: "optional"
-
+  mode: 'optional'
 # [Optional] Whitelist Configuration
 # whitelist:
-  # List of allowed public keys (leave empty for no restrictions)
-  # allowedPubkeys: []
+# List of allowed public keys (leave empty for no restrictions)
+# allowedPubkeys: []

@@ -87,9 +87,85 @@ export class ConfigGenerator<T extends Record<string, any>> {
     const answer = await this.prompt(
       `${question} (${defaultValue ? 'Y/n' : 'y/N'})`
     );
-    return answer.trim() === ''
-      ? defaultValue
-      : answer.toLowerCase().startsWith('y');
+    const normalizedAnswer = answer.trim().toLowerCase();
+    if (normalizedAnswer === '') {
+      return defaultValue;
+    }
+    return normalizedAnswer.startsWith('y');
+  }
+
+  private async handleServerItem(
+    fields: Record<string, FieldConfig>
+  ): Promise<Record<string, any> | null> {
+    const item: Record<string, any> = {};
+
+    console.log(`\n${CONFIG_EMOJIS.SERVER} Adding a new MCP server`);
+
+    const command = await this.prompt(
+      `${CONFIG_EMOJIS.SERVER} Command to run the server (e.g., node, python, npx):`
+    );
+    if (!command) return null;
+    item.command = command;
+
+    const args: string[] = [];
+    console.log(`${CONFIG_EMOJIS.SERVER} Add command arguments:`);
+    while (true) {
+      const arg = await this.prompt(
+        `${CONFIG_EMOJIS.SERVER} Argument (empty to finish):`
+      );
+      if (!arg) break;
+      args.push(arg);
+    }
+    item.args = args;
+
+    for (const [fieldName, fieldConfig] of Object.entries(fields)) {
+      if (['command', 'args'].includes(fieldName)) continue;
+
+      if (fieldConfig.type === 'object-array') {
+        const effectiveDefault =
+          fieldConfig.default !== undefined && fieldConfig.default !== null
+            ? fieldConfig.default
+            : false;
+        if (
+          await this.promptYesNo(
+            `${CONFIG_EMOJIS.SERVER} Add ${fieldName} price?`,
+            effectiveDefault
+          )
+        ) {
+          const value = await this.handleField(
+            fieldName,
+            fieldConfig,
+            undefined
+          );
+          if (value !== null) item[fieldName] = value;
+        }
+      } else if (fieldConfig.type === 'nested' && fieldName === 'env') {
+        const effectiveDefault =
+          fieldConfig.default !== undefined && fieldConfig.default !== null
+            ? fieldConfig.default
+            : false;
+        if (
+          await this.promptYesNo(
+            `${CONFIG_EMOJIS.SERVER} Add environment variables?`,
+            effectiveDefault
+          )
+        ) {
+          const env: Record<string, string> = {};
+          while (true) {
+            const key = await this.prompt(
+              `${CONFIG_EMOJIS.SERVER} Environment variable name (empty to finish):`
+            );
+            if (!key) break;
+            const value = await this.prompt(
+              `${CONFIG_EMOJIS.SERVER} Value for ${key}:`
+            );
+            env[key] = value;
+          }
+          item.env = env;
+        }
+      }
+    }
+    return item;
   }
 
   private async handleObjectArrayItem(
@@ -99,60 +175,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
     const item: Record<string, any> = {};
 
     if (arrayName === 'servers') {
-      console.log(`\n${CONFIG_EMOJIS.SERVER} Adding a new MCP server`);
-
-      const command = await this.prompt(
-        `${CONFIG_EMOJIS.SERVER} Command to run the server (e.g., node, python, npx):`
-      );
-      if (!command) return null;
-      item.command = command;
-
-      const args: string[] = [];
-      console.log(`${CONFIG_EMOJIS.SERVER} Add command arguments:`);
-      while (true) {
-        const arg = await this.prompt(
-          `${CONFIG_EMOJIS.SERVER} Argument (empty to finish):`
-        );
-        if (!arg) break;
-        args.push(arg);
-      }
-      item.args = args;
-
-      for (const [fieldName, fieldConfig] of Object.entries(fields)) {
-        if (['command', 'args'].includes(fieldName)) continue;
-
-        if (fieldConfig.type === 'object-array') {
-          if (
-            await this.promptYesNo(
-              `${CONFIG_EMOJIS.SERVER} Add ${fieldName} price?`,
-              fieldConfig.default || false
-            )
-          ) {
-            const value = await this.handleField(fieldName, fieldConfig, false);
-            if (value !== null) item[fieldName] = value;
-          }
-        } else if (fieldConfig.type === 'nested' && fieldName === 'env') {
-          if (
-            await this.promptYesNo(
-              `${CONFIG_EMOJIS.SERVER} Add environment variables?`,
-              fieldConfig.default || false
-            )
-          ) {
-            const env: Record<string, string> = {};
-            while (true) {
-              const key = await this.prompt(
-                `${CONFIG_EMOJIS.SERVER} Environment variable name (empty to finish):`
-              );
-              if (!key) break;
-              const value = await this.prompt(
-                `${CONFIG_EMOJIS.SERVER} Value for ${key}:`
-              );
-              env[key] = value;
-            }
-            item.env = env;
-          }
-        }
-      }
+      return this.handleServerItem(fields);
     } else {
       const name = await this.prompt(
         `${CONFIG_EMOJIS.PROMPT} Name (empty to finish):`
@@ -164,7 +187,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
       for (const [fieldName, fieldConfig] of Object.entries(fields)) {
         if (fieldName === 'name') continue;
 
-        const value = await this.handleField(fieldName, fieldConfig, false);
+        const value = await this.handleField(fieldName, fieldConfig, undefined);
         if (value === null) return null;
         item[fieldName] = value;
       }
@@ -181,28 +204,34 @@ export class ConfigGenerator<T extends Record<string, any>> {
     const emoji = config.emoji || CONFIG_EMOJIS.PROMPT;
     const description = config.description || fieldName;
 
-    if (currentValue !== undefined) {
-      if (config.type !== 'nested' && config.type !== 'object-array') {
-        console.log(
-          `${CONFIG_EMOJIS.INFO} ${fieldName}: ${
-            typeof currentValue === 'object'
-              ? JSON.stringify(currentValue)
-              : currentValue
-          }`
-        );
-      }
+    const effectiveValue =
+      currentValue !== undefined && currentValue !== null
+        ? currentValue
+        : config.default;
 
-      const keepCurrent = await this.promptYesNo(
-        `${emoji} Keep current ${description}?`,
-        config.default || false
-      );
-
-      if (keepCurrent) {
-        return currentValue;
+    let displayValue: string | undefined;
+    if (effectiveValue !== undefined && effectiveValue !== null) {
+      if (typeof effectiveValue === 'object') {
+        const stringified = JSON.stringify(effectiveValue);
+        if (stringified !== '{}' && stringified !== '[]') {
+          displayValue = stringified;
+        }
+      } else if (effectiveValue === '') {
+        displayValue = '(empty string)';
+      } else {
+        displayValue = String(effectiveValue);
       }
     }
 
-    if (config.type === 'nested') {
+    if (displayValue) {
+      console.log(`${CONFIG_EMOJIS.INFO} ${description}: ${displayValue}`);
+    }
+
+    if (fieldName === 'supportsEncryption') {
+      return this.promptYesNo(`${emoji} ${description}:`, true);
+    }
+
+    if (config.type === 'nested' && description) {
       console.log(`\n${emoji} ${description}`);
     }
 
@@ -211,34 +240,49 @@ export class ConfigGenerator<T extends Record<string, any>> {
         this.promptWithValidation(
           `${emoji} ${description}:`,
           config,
-          currentValue || config.default
+          effectiveValue
         ),
 
       hex: async () => {
-        if (
-          config.generator &&
-          (await this.promptYesNo(
-            `${emoji} Generate new ${description}?`,
-            config.required || false
-          ))
-        ) {
-          const value = config.generator();
-          console.log(`${CONFIG_EMOJIS.PROMPT} ${value}`);
-          return value;
-        }
+        while (true) {
+          let promptSuffix = [];
+          if (config.generator) {
+            promptSuffix.push("'g' to generate");
+          }
+          if (effectiveValue) {
+            promptSuffix.push(`current: ${effectiveValue}`);
+          } else if (config.default) {
+            promptSuffix.push(`default: ${config.default}`);
+          }
+          const question = `${emoji} Enter ${description}${promptSuffix.length > 0 ? ` (${promptSuffix.join(', ')})` : ''}:`;
 
-        const existingValue = currentValue || config.default;
-        existingValue &&
-          console.log(`${CONFIG_EMOJIS.PROMPT} ${existingValue}`);
-        return this.promptWithValidation(
-          `${emoji} Enter ${description}:`,
-          config,
-          existingValue
-        );
+          const rawInput = await this.prompt(question);
+          let valueToValidate = rawInput;
+
+          if (rawInput.toLowerCase() === 'g' && config.generator) {
+            valueToValidate = config.generator();
+            console.log(
+              `${CONFIG_EMOJIS.PROMPT} Generated: ${valueToValidate}`
+            );
+          } else if (rawInput === '' && effectiveValue) {
+            valueToValidate = String(effectiveValue);
+          } else if (rawInput === '' && config.default) {
+            valueToValidate = config.default;
+          }
+
+          if (!valueToValidate && config.required) {
+            console.log('❌ Input is required. Please try again.');
+            continue;
+          }
+
+          if (await this.validateInput(valueToValidate, config, true)) {
+            return valueToValidate;
+          }
+        }
       },
 
       array: async () => {
-        const array: string[] = currentValue || [];
+        let array: string[] = currentValue || [];
         if (array.length > 0) {
           console.log('\nCurrent items:');
           array.forEach((item: string, index: number) => {
@@ -247,35 +291,55 @@ export class ConfigGenerator<T extends Record<string, any>> {
             );
           });
 
-          if (await this.promptYesNo(`${emoji} Remove any items?`, false)) {
-            while (true) {
-              const index =
-                parseInt(
-                  await this.prompt('Enter index to remove (0 to finish):')
-                ) - 1;
-              if (isNaN(index) || index < 0) break;
-              if (index < array.length) {
-                array.splice(index, 1);
-                console.log('Item removed');
-              }
-            }
+          const keepExisting = await this.promptYesNo(
+            `${emoji} Keep current ${description} list?`,
+            true
+          ); // Default to keeping
+          if (!keepExisting) {
+            array = []; // Clear the array if not keeping
+            console.log(
+              `${CONFIG_EMOJIS.INFO} Cleared existing ${description} list.`
+            );
           }
         }
 
-        if (
-          await this.promptYesNo(
-            `${emoji} Add ${description}?`,
-            (config.default && config.required) || false
-          )
-        ) {
+        let shouldAddItems = true;
+
+        // If array is required and currently empty, we MUST add items.
+        // The prompt to add items should effectively be forced to 'yes'.
+        if (config.required && array.length === 0) {
+          console.log(
+            `${CONFIG_EMOJIS.INFO} This field is required. You must add at least one item.`
+          );
+          shouldAddItems = true; // Force adding items
+        } else {
+          // Otherwise, prompt the user if they want to add new items
+          shouldAddItems = await this.promptYesNo(
+            `${emoji} Add new ${description}?`,
+            false // Default to 'no' for adding, as it's not required or already has items
+          );
+        }
+
+        if (shouldAddItems) {
           while (true) {
+            const allowEmptyForPrompt = !(
+              config.required && array.length === 0
+            );
+
             const item = await this.promptWithValidation(
               `${emoji} Enter value for ${description} (empty to finish):`,
               config,
               '',
-              true
+              allowEmptyForPrompt
             );
-            if (!item) break;
+
+            if (!item) {
+              if (config.required && array.length === 0) {
+                console.log('❌ At least one item is required.');
+                continue;
+              }
+              break;
+            }
             array.push(item);
           }
         }
@@ -283,21 +347,59 @@ export class ConfigGenerator<T extends Record<string, any>> {
       },
 
       set: async () => {
-        const items: string[] = Array.from(currentValue || []);
-        if (
-          await this.promptYesNo(
-            'Would you like to add items?',
-            (config.default && config.required) || false
-          )
-        ) {
+        let items: string[] = Array.from(currentValue || []);
+
+        if (items.length > 0) {
+          console.log('\nCurrent items:');
+          items.forEach((item: string, index: number) => {
+            console.log(
+              `${CONFIG_EMOJIS.INFO} ${index + 1}. ${JSON.stringify(item)}`
+            );
+          });
+          const keepExisting = await this.promptYesNo(
+            `${emoji} Keep current ${description} set?`,
+            true
+          );
+          if (!keepExisting) {
+            items = [];
+            console.log(
+              `${CONFIG_EMOJIS.INFO} Cleared existing ${description} set.`
+            );
+          }
+        }
+
+        let shouldAddItems = true;
+        if (config.required && items.length === 0) {
+          console.log(
+            `${CONFIG_EMOJIS.INFO} This field is required. You must add at least one item.`
+          );
+          shouldAddItems = true;
+        } else {
+          shouldAddItems = await this.promptYesNo(
+            `${emoji} Add new ${description}?`,
+            false
+          );
+        }
+
+        if (shouldAddItems) {
           while (true) {
+            const allowEmptyForPrompt = !(
+              config.required && items.length === 0
+            );
             const item = await this.promptWithValidation(
-              'Enter item (empty to finish):',
+              `${emoji} Enter value for ${description} (empty to finish):`,
               config,
               '',
-              true
+              allowEmptyForPrompt
             );
-            if (!item) break;
+
+            if (!item) {
+              if (config.required && items.length === 0) {
+                console.log('❌ At least one item is required.');
+                continue;
+              }
+              break;
+            }
             items.push(item);
           }
         }
@@ -322,27 +424,29 @@ export class ConfigGenerator<T extends Record<string, any>> {
             }
           });
           console.log('');
-          const keepCurrent = await this.promptYesNo(
-            `${emoji} Keep current ${fieldName}?`,
-            (config.default && config.required) || false
+
+          const manageExisting = await this.promptYesNo(
+            `${emoji} Manage existing ${fieldName} items?`,
+            false // Default to No, keep existing items
           );
-          if (!keepCurrent) {
-            array = [];
-            console.log(`${CONFIG_EMOJIS.INFO} Cleared existing ${fieldName}.`);
-          } else {
+
+          if (manageExisting) {
             if (
               await this.promptYesNo(
-                `${emoji} Remove any existing ${fieldName}?`,
-                (config.default && config.required) || false
+                `${emoji} Clear all existing ${fieldName}? (y/N)`,
+                false
               )
             ) {
+              array = [];
+              console.log(
+                `${CONFIG_EMOJIS.INFO} Cleared all existing ${fieldName}.`
+              );
+            } else {
               while (true) {
-                const index =
-                  parseInt(
-                    await this.prompt(
-                      `Enter ${fieldName} number to remove (0 to finish):`
-                    )
-                  ) - 1;
+                const indexInput = await this.prompt(
+                  `Enter ${fieldName} number to remove (0 to finish):`
+                );
+                const index = parseInt(indexInput) - 1;
                 if (isNaN(index) || index < 0) break;
                 if (index < array.length) {
                   const itemName = array[index].name || 'item';
@@ -350,24 +454,61 @@ export class ConfigGenerator<T extends Record<string, any>> {
                     `${CONFIG_EMOJIS.INFO} Removed ${fieldName}: ${itemName}`
                   );
                   array.splice(index, 1);
+                  // Display remaining items after removal for clarity
+                  console.log(`\nRemaining ${fieldName}:`);
+                  if (array.length > 0) {
+                    array.forEach((item: ArrayItem, idx: number) => {
+                      if (fieldName === 'servers') {
+                        console.log(
+                          `${CONFIG_EMOJIS.INFO} ${idx + 1}. ${item.name} (${item.command} ${item.args?.join(' ') || ''})`
+                        );
+                      } else if (item.name) {
+                        console.log(
+                          `${CONFIG_EMOJIS.INFO} ${idx + 1}. ${item.name}`
+                        );
+                      } else {
+                        console.log(
+                          `${CONFIG_EMOJIS.INFO} ${idx + 1}. ${JSON.stringify(item)}`
+                        );
+                      }
+                    });
+                  } else {
+                    console.log(`${CONFIG_EMOJIS.INFO} No items remaining.`);
+                  }
+                } else {
+                  console.log('Invalid number. Please try again.');
                 }
               }
             }
           }
         }
 
-        if (
-          await this.promptYesNo(
+        let shouldAddItems = true;
+        if (config.required && array.length === 0) {
+          console.log(
+            `${CONFIG_EMOJIS.INFO} This field is required. You must add at least one item.`
+          );
+          shouldAddItems = true;
+        } else {
+          shouldAddItems = await this.promptYesNo(
             `${emoji} Add new ${fieldName}?`,
-            (config.default && config.required) || false
-          )
-        ) {
+            false
+          );
+        }
+
+        if (shouldAddItems) {
           while (true) {
             const item = await this.handleObjectArrayItem(
               config.fields!,
               fieldName
             );
-            if (!item) break;
+            if (!item) {
+              if (config.required && array.length === 0) {
+                console.log('❌ At least one item is required.');
+                continue;
+              }
+              break;
+            }
             array.push(item as ArrayItem);
             const itemName = item.name || 'item';
             console.log(
@@ -437,10 +578,7 @@ export class ConfigGenerator<T extends Record<string, any>> {
   }
 
   /**
-   * Remove empty values from an object recursively
-   *
-   * @param obj The object to clean
-   * @returns The cleaned object with empty values removed
+   * Recursively removes empty strings, empty arrays, and empty objects from an object.
    */
   private cleanEmptyValues(obj: Record<string, any>): Record<string, any> {
     const result: Record<string, any> = {};

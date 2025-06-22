@@ -30,7 +30,7 @@ export class MCPClientHandler {
     const envVars = config.env ? { ...config.env } : undefined;
 
     this.transport = new StdioClientTransport({
-      command: config.command,
+      command: config.command.trim(),
       args: config.args,
       env: envVars,
     });

@@ -75,13 +75,13 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
   public removeTool(toolId: string): boolean {
     const toolInfo = this.getItemInfo(toolId);
     if (!toolInfo) {
-      loggerDiscovery(`Tool not found for removal: ${toolId}`);
+      loggerDiscovery.warn(`Tool not found for removal: ${toolId}`);
       return false;
     }
 
     const result = this.removeItem(toolId);
     if (result) {
-      loggerDiscovery(`Tool removed from registry: ${toolId}`);
+      loggerDiscovery.info(`Tool removed from registry: ${toolId}`);
     }
     return result;
   }
@@ -98,7 +98,9 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
       if (info.providerPubkey === providerPubkey) {
         this.removeItem(id);
         removedToolIds.push(id);
-        loggerDiscovery(`Removed tool ${id} from provider ${providerPubkey}`);
+        loggerDiscovery.info(
+          `Removed tool ${id} from provider ${providerPubkey}`
+        );
       }
     }
 
@@ -117,7 +119,7 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
       if (pattern.test(id)) {
         this.removeItem(id);
         removedToolIds.push(id);
-        loggerDiscovery(`Removed tool ${id} matching pattern ${pattern}`);
+        loggerDiscovery.info(`Removed tool ${id} matching pattern ${pattern}`);
       }
     }
 
@@ -162,7 +164,7 @@ export class ToolRegistry extends BaseRegistry<ToolCapability> {
 
       this.storeRegisteredRef(toolId, registeredTool);
 
-      loggerDiscovery('Tool registered successfully:', toolId);
+      loggerDiscovery.info('Tool registered successfully:', toolId);
     } catch (error) {
       // TODO: Handle collisions more intelligently
       console.error('Error registering tool:', toolId, error);

@@ -54,7 +54,9 @@ export async function handlePaymentFlow(
     );
 
     if (!zapRequest) {
-      loggerBridge(`Failed to generate zap request for ${capabilityName}`);
+      loggerBridge.error(
+        `Failed to generate zap request for ${capabilityName}`
+      );
       return false;
     }
 
@@ -95,7 +97,7 @@ export async function handlePaymentFlow(
 
     return paymentVerified;
   } catch (error) {
-    loggerBridge(
+    loggerBridge.error(
       `Payment flow error: ${error instanceof Error ? error.message : String(error)}`
     );
     return false;
@@ -117,10 +119,12 @@ function subscribeToRelays(
   const relayUrls = relays.length > 0 ? relays : config.nostr.relayUrls;
   const relayHandler = new RelayHandler(relayUrls);
 
-  loggerBridge(`Setting up subscription on relays: ${relayUrls.join(', ')}`);
+  loggerBridge.info(
+    `Setting up subscription on relays: ${relayUrls.join(', ')}`
+  );
 
   const sub = relayHandler.subscribeToRequests((event) => {
-    loggerBridge(
+    loggerBridge.debug(
       `Event received(${event.kind}) from relay, id: ${event.id.slice(0, 12)}`
     );
     onEvent(event);
@@ -153,7 +157,7 @@ export async function generateZapRequest(
   try {
     // Validate lightning configuration
     if (!config.lightning?.address) {
-      loggerBridge(
+      loggerBridge.error(
         'No Lightning Address configured. Cannot generate zap request.'
       );
       return undefined;
@@ -165,7 +169,7 @@ export async function generateZapRequest(
 
     // Verify nostr pubkey is available
     if (!ln.nostrPubkey) {
-      loggerBridge(
+      loggerBridge.error(
         'Lightning Address does not have a nostr pubkey. Cannot create zap request.'
       );
       return undefined;
@@ -189,7 +193,7 @@ export async function generateZapRequest(
     )) as ZapInvoiceResponse;
 
     const zapRequestId = invoice.id || invoice.paymentHash;
-    loggerBridge(
+    loggerBridge.info(
       `Generated zap request: ${zapRequestId.slice(0, 10)}..., invoice: ${invoice.paymentRequest.slice(0, 15)}...`
     );
 
@@ -200,7 +204,7 @@ export async function generateZapRequest(
       nostrPubkey: ln.nostrPubkey,
     };
   } catch (error) {
-    loggerBridge('Error generating zap request:', error);
+    loggerBridge.error('Error generating zap request:', error);
     return undefined;
   }
 }
@@ -220,7 +224,7 @@ export async function verifyZapPayment(
           ? config.lightning.zapRelays
           : config.nostr.relayUrls;
 
-    loggerBridge(
+    loggerBridge.info(
       `Subscribing to zap receipts on relays: ${zapRelays.join(', ')}`
     );
 
@@ -243,12 +247,14 @@ export async function verifyZapPayment(
             )?.[1];
 
             if (bolt11Tag === paymentRequest) {
-              loggerBridge(`Payment verified: ${bolt11Tag.slice(0, 20)}...`);
+              loggerBridge.info(
+                `Payment verified: ${bolt11Tag.slice(0, 20)}...`
+              );
               cleanup(true);
             }
           }
         } catch (error) {
-          loggerBridge('Error processing zap receipt:', error);
+          loggerBridge.error('Error processing zap receipt:', error);
         }
       },
       { kinds: [9735], since: Math.floor(Date.now() / 1000) - 10 }
@@ -256,7 +262,7 @@ export async function verifyZapPayment(
 
     // Set up timeout for automatic cleanup
     const timeoutId = setTimeout(() => {
-      loggerBridge('Payment verification timeout reached');
+      loggerBridge.warn('Payment verification timeout reached');
       cleanup(false);
     }, timeoutMs);
 
@@ -284,7 +290,9 @@ export async function generateInvoice(
 > {
   try {
     if (!config.lightning?.address) {
-      loggerBridge('No Lightning Address configured. Cannot generate invoice.');
+      loggerBridge.error(
+        'No Lightning Address configured. Cannot generate invoice.'
+      );
       return undefined;
     }
 
@@ -301,7 +309,7 @@ export async function generateInvoice(
       paymentHash: invoice.paymentHash,
     };
   } catch (error) {
-    loggerBridge('Error generating invoice:', error);
+    loggerBridge.error('Error generating invoice:', error);
     return undefined;
   }
 }

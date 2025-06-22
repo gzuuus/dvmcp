@@ -19,7 +19,9 @@ async function main(
     const config = preloadedConfig || (await loadDiscoveryConfig());
     const server = new DiscoveryServer(config);
     if (directServerInfo) {
-      logger(`Using direct server with pubkey: ${directServerInfo.pubkey}`);
+      logger.info(
+        `Using direct server with pubkey: ${directServerInfo.pubkey}`
+      );
 
       // Use unified registration for direct servers
       const source = UnifiedRegistration.createDirectSource(
@@ -63,7 +65,7 @@ async function main(
         .getUnifiedRegistration()
         .registerServerCapabilities(source, capabilities);
 
-      logger(
+      logger.info(
         `Direct server registration complete: ` +
           `${stats.toolsCount} tools, ` +
           `${stats.resourcesCount} resources, ` +
@@ -77,8 +79,8 @@ async function main(
       await server.start();
     }
 
-    logger(`DVMCP Discovery Server (${config.mcp.version}) started`);
-    logger(`Connected to ${config.nostr.relayUrls.length} relays`);
+    logger.info(`DVMCP Discovery Server (${config.mcp.version}) started`);
+    logger.info(`Connected to ${config.nostr.relayUrls.length} relays`);
 
     const cleanup = () => {
       server.cleanup();

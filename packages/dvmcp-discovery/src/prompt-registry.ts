@@ -119,14 +119,14 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
 
     // If prompt doesn't exist, return false
     if (!promptInfo) {
-      loggerDiscovery(`Prompt not found for removal: ${promptId}`);
+      loggerDiscovery.warn(`Prompt not found for removal: ${promptId}`);
       return false;
     }
 
     // Use the base class method to remove the item
     const result = this.removeItem(promptId);
     if (result) {
-      loggerDiscovery(`Prompt removed from registry: ${promptId}`);
+      loggerDiscovery.info(`Prompt removed from registry: ${promptId}`);
     }
 
     // Note: The MCP server doesn't have a direct method to remove prompts
@@ -165,7 +165,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
     providerPubkey: string
   ): void {
     this.serverPrompts.set(serverId, prompts);
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Registered ${prompts.length} prompts for server ${serverId}`
     );
 
@@ -205,11 +205,13 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
           zodSchema[arg.name] = isRequired ? z.string() : z.string().optional();
         }
 
-        loggerDiscovery(
+        loggerDiscovery.debug(
           `Created schema for prompt ${promptId} with ${prompt.arguments.length} arguments`
         );
       } else {
-        loggerDiscovery(`Warning: Prompt ${promptId} has no arguments defined`);
+        loggerDiscovery.warn(
+          `Warning: Prompt ${promptId} has no arguments defined`
+        );
       }
 
       const registeredPrompt = this.mcpServer.prompt(
@@ -255,7 +257,7 @@ export class PromptRegistry extends BaseRegistry<PromptCapability> {
       // Store the reference to the registered prompt
       this.storeRegisteredRef(promptId, registeredPrompt);
 
-      loggerDiscovery('Prompt registered successfully:', promptId);
+      loggerDiscovery.info('Prompt registered successfully:', promptId);
     } catch (error) {
       console.error('Error registering prompt:', promptId, error);
     }

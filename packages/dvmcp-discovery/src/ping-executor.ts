@@ -54,7 +54,7 @@ export class PingExecutor extends BaseExecutor<
   ): Promise<PingResult> {
     const startTime = Date.now();
 
-    loggerDiscovery(
+    loggerDiscovery.debug(
       `Sending ping to server ${serverPubkey}${serverId ? ` (${serverId})` : ''}`
     );
 
@@ -75,7 +75,7 @@ export class PingExecutor extends BaseExecutor<
     } catch (error) {
       const responseTime = Date.now() - startTime;
 
-      loggerDiscovery(`Ping failed to ${serverPubkey}: ${error}`);
+      loggerDiscovery.error(`Ping failed to ${serverPubkey}: ${error}`);
 
       return {
         success: false,
@@ -150,6 +150,6 @@ export class PingExecutor extends BaseExecutor<
 
   public cleanup(): void {
     super.cleanup();
-    loggerDiscovery('PingExecutor cleaned up');
+    loggerDiscovery.debug('PingExecutor cleaned up');
   }
 }

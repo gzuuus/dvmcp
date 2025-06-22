@@ -45,7 +45,7 @@ export class PaymentProcessor {
     const capabilityId = `${capabilityType}:${capabilityName}`;
 
     if (!pricing?.price) {
-      loggerBridge(`No payment required for ${capabilityId}`);
+      loggerBridge.info(`No payment required for ${capabilityId}`);
       return true;
     }
 
@@ -82,7 +82,7 @@ export class PaymentProcessor {
       ]);
 
       if (!paymentSuccessful) {
-        loggerBridge(`Payment failed or timed out for ${capabilityId}`);
+        loggerBridge.warn(`Payment failed or timed out for ${capabilityId}`);
         await this.notificationPublisher.publishNotification(
           'Payment failed or timed out',
           pubkey,
@@ -97,7 +97,7 @@ export class PaymentProcessor {
       }
       return true;
     } catch (error) {
-      loggerBridge(`Payment error for ${capabilityId} - ${error}`);
+      loggerBridge.error(`Payment error for ${capabilityId} - ${error}`);
       await this.notificationPublisher.publishNotification(
         error instanceof Error ? error.message : String(error),
         pubkey,
@@ -115,7 +115,7 @@ export class PaymentProcessor {
   private createPaymentTimeout(capabilityId: string): Promise<boolean> {
     return new Promise((resolve) => {
       setTimeout(() => {
-        loggerBridge(
+        loggerBridge.warn(
           `Payment timeout for ${capabilityId} after ${this.paymentTimeoutMs}ms`
         );
         resolve(false);

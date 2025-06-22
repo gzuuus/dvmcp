@@ -89,7 +89,7 @@ export class UnifiedRegistration {
       serverRegistered: false,
     };
 
-    loggerDiscovery(
+    loggerDiscovery.debug(
       `Starting unified registration for server ${source.serverId} from ${source.pubkey} (source: ${source.source}, encryption: ${source.supportsEncryption})`
     );
 
@@ -131,7 +131,7 @@ export class UnifiedRegistration {
       );
     }
 
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Unified registration complete for server ${source.serverId}: ` +
         `${stats.toolsCount} tools, ${stats.resourcesCount} resources, ` +
         `${stats.resourceTemplatesCount} resource templates, ${stats.promptsCount} prompts`
@@ -161,7 +161,7 @@ export class UnifiedRegistration {
       source.supportsEncryption
     );
 
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Registered server info: ${serverInfo.serverInfo?.name || source.serverId} ` +
         `(${source.serverId}) with encryption support: ${source.supportsEncryption}`
     );
@@ -183,7 +183,7 @@ export class UnifiedRegistration {
 
         // Check if tool is already registered to avoid duplicates
         if (this.toolRegistry.getTool(toolId)) {
-          loggerDiscovery(
+          loggerDiscovery.debug(
             `Tool ${tool.name} (${toolId}) already registered, skipping`
           );
           continue;
@@ -197,12 +197,12 @@ export class UnifiedRegistration {
         );
         registeredCount++;
       } catch (error) {
-        loggerDiscovery(`Error registering tool ${tool.name}: ${error}`);
+        loggerDiscovery.error(`Error registering tool ${tool.name}: ${error}`);
       }
     }
 
     if (registeredCount > 0) {
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Registered ${registeredCount} tools from ${source.source} server ${source.serverId}`
       );
     }
@@ -224,13 +224,13 @@ export class UnifiedRegistration {
         source.pubkey
       );
 
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Registered ${resources.length} resources from ${source.source} server ${source.serverId}`
       );
 
       return resources.length;
     } catch (error) {
-      loggerDiscovery(`Error registering resources: ${error}`);
+      loggerDiscovery.error(`Error registering resources: ${error}`);
       return 0;
     }
   }
@@ -249,13 +249,13 @@ export class UnifiedRegistration {
         source.pubkey
       );
 
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Registered ${resourceTemplates.length} resource templates from ${source.source} server ${source.serverId}`
       );
 
       return resourceTemplates.length;
     } catch (error) {
-      loggerDiscovery(`Error registering resource templates: ${error}`);
+      loggerDiscovery.error(`Error registering resource templates: ${error}`);
       return 0;
     }
   }
@@ -274,13 +274,13 @@ export class UnifiedRegistration {
         source.pubkey
       );
 
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Registered ${prompts.length} prompts from ${source.source} server ${source.serverId}`
       );
 
       return prompts.length;
     } catch (error) {
-      loggerDiscovery(`Error registering prompts: ${error}`);
+      loggerDiscovery.error(`Error registering prompts: ${error}`);
       return 0;
     }
   }

@@ -36,7 +36,7 @@ export async function handleResourcesList(
     JSON.parse(event.content)
   );
   if (!success) {
-    loggerBridge('resources list request error', error);
+    loggerBridge.error('resources list request error', error);
     const errorResponse = createProtocolErrorResponse(
       event.id,
       event.pubkey,
@@ -167,7 +167,7 @@ export async function handleResourcesRead(
     error,
   } = ReadResourceRequestSchema.safeParse(JSON.parse(event.content));
   if (!success) {
-    loggerBridge('resources read request error', error);
+    loggerBridge.error('resources read request error', error);
     const errorResponse = createProtocolErrorResponse(
       event.id,
       event.pubkey,

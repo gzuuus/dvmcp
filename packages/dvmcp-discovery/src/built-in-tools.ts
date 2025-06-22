@@ -24,7 +24,7 @@ export function initBuiltInTools(
     'Lists all currently registered tools, including built-in and discovered tools.',
     {},
     async () => {
-      loggerDiscovery('Executing built-in tool: list_tools');
+      loggerDiscovery.info('Executing built-in tool: list_tools');
       const tools = toolRegistry.listToolsWithIds();
 
       let responseContent = 'Registered Tools:\n';
@@ -59,11 +59,14 @@ export function initBuiltInTools(
     },
     async (args) => {
       const { toolId, pattern, author } = args;
-      loggerDiscovery(`Executing built-in tool: remove_tool with params:`, {
-        toolId,
-        pattern,
-        author,
-      });
+      loggerDiscovery.info(
+        `Executing built-in tool: remove_tool with params:`,
+        {
+          toolId,
+          pattern,
+          author,
+        }
+      );
 
       try {
         if (toolId) {
@@ -195,7 +198,7 @@ export function initBuiltInTools(
       matchThreshold = 1,
       integrate = true,
     }) => {
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Executing built-in tool: discover with keywords: ${keywords || 'none'}, relay: ${relay || 'default'}, limit: ${limit || 'none'}, matchThreshold: ${matchThreshold}, integrate: ${integrate}`
       );
 
@@ -214,9 +217,9 @@ export function initBuiltInTools(
           filter.limit = limit;
         }
 
-        loggerDiscovery('Querying Nostr relays for tool announcements...');
+        loggerDiscovery.info('Querying Nostr relays for tool announcements...');
         const events = await relayHandler.queryEvents(filter);
-        loggerDiscovery(
+        loggerDiscovery.info(
           `Received ${events.length} tool announcement events from relays`
         );
         const discoveredTools: Array<{
@@ -249,7 +252,7 @@ export function initBuiltInTools(
               }
             }
           } catch (error) {
-            loggerDiscovery(
+            loggerDiscovery.error(
               `Error processing tool announcement event: ${error instanceof Error ? error.message : String(error)}`
             );
           }
@@ -275,7 +278,7 @@ export function initBuiltInTools(
               (t) => t[0] === TAG_SERVER_IDENTIFIER
             )?.[1];
             if (!serverId) {
-              loggerDiscovery(
+              loggerDiscovery.warn(
                 `Tool announcement missing server identifier: ${event.id}`
               );
               continue;

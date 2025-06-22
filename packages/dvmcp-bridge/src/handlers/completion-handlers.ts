@@ -51,7 +51,7 @@ export async function handleCompletionComplete(
     );
     await publisher.publishResponse(response, responseContext);
   } catch (error) {
-    loggerBridge('[handleCompletionComplete] Error:', error);
+    loggerBridge.error('[handleCompletionComplete] Error:', error);
     return undefined;
   }
 }

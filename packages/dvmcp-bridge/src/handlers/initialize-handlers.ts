@@ -42,7 +42,7 @@ export async function handleInitialize(
   config: DvmcpBridgeConfig,
   actualServerId: string
 ): Promise<void> {
-  loggerBridge(`Handling MCP Method: ${MCPMETHODS.initialize}`);
+  loggerBridge.info(`Handling MCP Method: ${MCPMETHODS.initialize}`);
 
   const eventTags = event.tags;
   const eventId = event.id;
@@ -56,7 +56,7 @@ export async function handleInitialize(
 
   // If a specific server ID was requested and it does not match this bridge's server ID do not respond
   if (requestedServerId && requestedServerId !== actualServerId) {
-    loggerBridge(
+    loggerBridge.debug(
       `Initialize request for server ID '${requestedServerId}' does not match ` +
         `this bridge's server ID '${actualServerId}'. Not responding.`
     );
@@ -65,7 +65,7 @@ export async function handleInitialize(
 
   const mainClient = mcpPool.getDefaultClient();
   if (!mainClient) {
-    loggerBridge(
+    loggerBridge.error(
       'No MCP server client available to handle initialize request.'
     );
     // Respond with an error if no MCP client is available
@@ -138,5 +138,5 @@ export async function handleInitialize(
     senderPubkey,
     responseContext.shouldEncrypt
   );
-  loggerBridge(`Sent initialize response to ${senderPubkey}`);
+  loggerBridge.info(`Sent initialize response to ${senderPubkey}`);
 }

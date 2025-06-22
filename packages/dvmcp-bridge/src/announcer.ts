@@ -67,13 +67,15 @@ export class NostrAnnouncer {
     });
 
     await this.relayHandler.publishEvent(event);
-    loggerBridge('Announced relay list metadata');
+    loggerBridge.info('Announced relay list metadata');
   }
 
   async announceServer() {
     const mainClient = this.mcpPool.getDefaultClient();
     if (!mainClient) {
-      loggerBridge('No MCP server client available for server announcement.');
+      loggerBridge.warn(
+        'No MCP server client available for server announcement.'
+      );
       return;
     }
 
@@ -91,7 +93,7 @@ export class NostrAnnouncer {
 
     const announcementContent = JSON.stringify(announcementObject);
 
-    loggerBridge(`Using server ID: ${this.serverId}`);
+    loggerBridge.info(`Using server ID: ${this.serverId}`);
 
     const tags: string[][] = [
       [TAG_UNIQUE_IDENTIFIER, this.serverId],
@@ -110,7 +112,7 @@ export class NostrAnnouncer {
     });
 
     await this.relayHandler.publishEvent(event);
-    loggerBridge('Server announced');
+    loggerBridge.info('Server announced');
     return { event, serverId: this.serverId, announcementObject };
   }
 
@@ -142,7 +144,7 @@ export class NostrAnnouncer {
     });
 
     await this.relayHandler.publishEvent(event);
-    loggerBridge('Tools list announced');
+    loggerBridge.info('Tools list announced');
   }
 
   async announceResourcesList(resources?: ListResourcesResult) {
@@ -175,7 +177,7 @@ export class NostrAnnouncer {
     });
 
     await this.relayHandler.publishEvent(event);
-    loggerBridge('Resources list announced');
+    loggerBridge.info('Resources list announced');
   }
 
   async announceResourceTemplatesList(
@@ -187,7 +189,7 @@ export class NostrAnnouncer {
       !resourceTemplatesResult.resourceTemplates ||
       resourceTemplatesResult.resourceTemplates.length === 0
     ) {
-      loggerBridge('No resource templates to announce');
+      loggerBridge.info('No resource templates to announce');
       return;
     }
 
@@ -210,7 +212,7 @@ export class NostrAnnouncer {
     });
 
     await this.relayHandler.publishEvent(event);
-    loggerBridge(
+    loggerBridge.info(
       `Resource templates list announced with ${resourceTemplatesResult.resourceTemplates.length} templates`
     );
   }
@@ -245,12 +247,14 @@ export class NostrAnnouncer {
     });
 
     await this.relayHandler.publishEvent(event);
-    loggerBridge('Prompts list announced');
+    loggerBridge.info('Prompts list announced');
   }
 
   async announce() {
     if (this.isPrivateServer) {
-      loggerBridge('Private server: Skipping public updates to announcement.');
+      loggerBridge.info(
+        'Private server: Skipping public updates to announcement.'
+      );
       return;
     }
     const serverInfo = await this.announceServer();
@@ -328,7 +332,7 @@ export class NostrAnnouncer {
   ): Promise<Event[]> {
     const mainClient = this.mcpPool.getDefaultClient();
     if (!mainClient) {
-      loggerBridge('No MCP server client available for deletion.');
+      loggerBridge.warn('No MCP server client available for deletion.');
       return [];
     }
 
@@ -361,7 +365,9 @@ export class NostrAnnouncer {
       });
 
       await this.relayHandler.publishEvent(deletionEvent);
-      loggerBridge(`Published deletion event for kind ${kind} (serverId tag)`);
+      loggerBridge.info(
+        `Published deletion event for kind ${kind} (serverId tag)`
+      );
       allDeletionEvents.push(deletionEvent);
     }
 

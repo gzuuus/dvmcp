@@ -103,7 +103,7 @@ export function makeConfigLoader<T>(schema: ConfigSchema) {
       throw new Error(msg);
     }
 
-    logger('Configuration loaded and validated successfully');
+    logger.info('Configuration loaded and validated successfully');
 
     return merged as T;
   };

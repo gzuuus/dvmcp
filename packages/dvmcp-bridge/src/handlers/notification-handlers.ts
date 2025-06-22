@@ -26,7 +26,7 @@ export async function handleNotificationsCancel(
   const eventIdToCancel = tags.find((tag) => tag[0] === TAG_EVENT_ID)?.[1];
 
   if (eventIdToCancel) {
-    loggerBridge(`Received cancel request for job: ${eventIdToCancel}`);
+    loggerBridge.info(`Received cancel request for job: ${eventIdToCancel}`);
 
     // Send cancellation acknowledgment using centralized event publisher
     const eventPublisher = new EventPublisher(
@@ -50,6 +50,6 @@ export async function handleNotificationsCancel(
       responseContext?.shouldEncrypt || false
     );
   } else {
-    loggerBridge('Received cancel notification without event ID');
+    loggerBridge.warn('Received cancel notification without event ID');
   }
 }

@@ -40,7 +40,7 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
         capabilities = announcement.capabilities;
       }
     } catch (error) {
-      loggerDiscovery(`Error parsing server announcement: ${error}`);
+      loggerDiscovery.error(`Error parsing server announcement: ${error}`);
     }
 
     const serverInfo: ServerInfo = {
@@ -64,7 +64,7 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
       serverId,
     });
 
-    loggerDiscovery(`Registered server ${serverId} from ${pubkey}`);
+    loggerDiscovery.info(`Registered server ${serverId} from ${pubkey}`);
   }
 
   /**
@@ -114,14 +114,14 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
   public removeServer(serverId: string): boolean {
     const server = this.servers.get(serverId);
     if (!server) {
-      loggerDiscovery(`Server not found for removal: ${serverId}`);
+      loggerDiscovery.warn(`Server not found for removal: ${serverId}`);
       return false;
     }
 
     this.servers.delete(serverId);
     this.items.delete(serverId);
 
-    loggerDiscovery(`Server removed from registry: ${serverId}`);
+    loggerDiscovery.info(`Server removed from registry: ${serverId}`);
     return true;
   }
 
@@ -183,20 +183,22 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
     );
 
     if (hasCompletionsSupport) {
-      loggerDiscovery('Setting up completion request handler');
+      loggerDiscovery.info('Setting up completion request handler');
       mcpServer.server.setRequestHandler(
         CompleteRequestSchema,
         async (request) => {
           try {
             return await completionHandler(request.params);
           } catch (error) {
-            loggerDiscovery(`Error handling completion request: ${error}`);
+            loggerDiscovery.error(
+              `Error handling completion request: ${error}`
+            );
             throw error;
           }
         }
       );
     } else {
-      loggerDiscovery(
+      loggerDiscovery.debug(
         'No servers with completions capability found, skipping handler setup'
       );
     }
@@ -211,12 +213,12 @@ export class ServerRegistry extends BaseRegistry<DVMCPBridgeServer> {
     mcpServer: McpServer,
     pingHandler: (params: PingRequest['params']) => Promise<{}>
   ): void {
-    loggerDiscovery('Setting up ping request handler');
+    loggerDiscovery.info('Setting up ping request handler');
     mcpServer.server.setRequestHandler(PingRequestSchema, async (request) => {
       try {
         return await pingHandler(request.params);
       } catch (error) {
-        loggerDiscovery(`Error handling ping request: ${error}`);
+        loggerDiscovery.error(`Error handling ping request: ${error}`);
         throw error;
       }
     });

@@ -148,7 +148,7 @@ const configure = async (): Promise<void> => {
 };
 
 async function setupFromProvider(nprofileEntity: string): Promise<void> {
-  loggerDiscovery(
+  loggerDiscovery.info(
     `${CONFIG_EMOJIS.INFO} Setting up from provider: ${nprofileEntity}`
   );
 
@@ -172,7 +172,7 @@ async function setupFromProvider(nprofileEntity: string): Promise<void> {
       providerData.relays || [DEFAULT_VALUES.DEFAULT_RELAY_URL],
       providerData.pubkey
     );
-    loggerDiscovery(
+    loggerDiscovery.info(
       `${CONFIG_EMOJIS.SUCCESS} Successfully set up from provider`
     );
   } catch (error) {
@@ -182,7 +182,7 @@ async function setupFromProvider(nprofileEntity: string): Promise<void> {
 }
 
 async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
-  loggerDiscovery(
+  loggerDiscovery.info(
     `${CONFIG_EMOJIS.INFO} Setting up from server: ${naddrEntity}`
   );
 
@@ -214,7 +214,7 @@ async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
       process.exit(1);
     }
 
-    loggerDiscovery(
+    loggerDiscovery.info(
       `${CONFIG_EMOJIS.INFO} Fetching capabilities for server: ${parsedAnnouncement.serverId}`
     );
     const capabilities = await fetchServerCapabilities(
@@ -247,7 +247,7 @@ async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
       },
     };
 
-    loggerDiscovery(
+    loggerDiscovery.info(
       `${CONFIG_EMOJIS.INFO} Found server capabilities: ` +
         `${capabilities.tools.length} tools, ` +
         `${capabilities.resources.length} resources, ` +
@@ -256,7 +256,9 @@ async function setupFromServer(naddrEntity: string): Promise<DirectServerInfo> {
     );
 
     setupInMemoryConfig(relays, addrData.pubkey);
-    loggerDiscovery(`${CONFIG_EMOJIS.SUCCESS} Successfully set up from server`);
+    loggerDiscovery.info(
+      `${CONFIG_EMOJIS.SUCCESS} Successfully set up from server`
+    );
 
     return {
       pubkey: addrData.pubkey,
@@ -282,10 +284,12 @@ const runApp = async (directServerInfo?: DirectServerInfo): Promise<void> => {
       configOverrides.featureFlags = {};
     }
     configOverrides.featureFlags.interactive = true;
-    loggerDiscovery('Interactive mode enabled via CLI flag');
+    loggerDiscovery.info('Interactive mode enabled via CLI flag');
     if (!inMemoryConfig) {
       inMemoryConfig = createMinimalConfig();
-      loggerDiscovery('Created minimal configuration for interactive mode');
+      loggerDiscovery.info(
+        'Created minimal configuration for interactive mode'
+      );
     }
   }
 

@@ -35,7 +35,7 @@ export async function handleToolsList(
     JSON.parse(event.content)
   );
   if (!success) {
-    loggerBridge('tools list request error', error);
+    loggerBridge.error('tools list request error', error);
     const errorResponse = createProtocolErrorResponse(
       event.id,
       event.pubkey,
@@ -65,7 +65,7 @@ export async function handleToolsList(
         [TAG_PUBKEY, pubkey],
       ],
     });
-    loggerBridge('tools list response', response);
+    loggerBridge.debug('tools list response', response);
     const publisher = getResponsePublisher(
       relayHandler,
       keyManager,
@@ -113,7 +113,7 @@ export async function handleToolsCall(
     error,
   } = CallToolRequestSchema.safeParse(JSON.parse(event.content));
   if (!success) {
-    loggerBridge('tools call request error', error);
+    loggerBridge.error('tools call request error', error);
     const errorResponse = createProtocolErrorResponse(
       event.id,
       event.pubkey,

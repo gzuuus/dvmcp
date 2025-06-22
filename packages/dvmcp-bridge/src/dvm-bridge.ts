@@ -58,7 +58,7 @@ export class DVMBridge {
   ) {
     this.relayHandler =
       relayHandler ?? new RelayHandler(config.nostr.relayUrls);
-    loggerBridge('Initializing DVM Bridge...');
+    loggerBridge.info('Initializing DVM Bridge...');
     this.mcpPool = new MCPPool(config);
 
     this.keyManager = createKeyManager(config.nostr.privateKey);
@@ -71,17 +71,17 @@ export class DVMBridge {
     );
 
     if (this.config.mcp.serverId) {
-      loggerBridge(`Using custom server ID from config: ${this.serverId}`);
+      loggerBridge.info(`Using custom server ID from config: ${this.serverId}`);
     }
 
     // Initialize encryption manager if encryption is configured
     if (this.config.encryption) {
       this.encryptionManager = new EncryptionManager(this.config.encryption);
-      loggerBridge(
+      loggerBridge.info(
         `Encryption support enabled (${this.config.encryption.mode || 'optional'} mode)`
       );
     } else {
-      loggerBridge('Encryption support disabled');
+      loggerBridge.info('Encryption support disabled');
     }
 
     // Initialize centralized event publisher
@@ -100,8 +100,8 @@ export class DVMBridge {
       config.mcp.isPrivateServer || false
     );
 
-    loggerBridge('Public key:', publicKey);
-    loggerBridge('Server id:', this.serverId);
+    loggerBridge.info('Public key:', publicKey);
+    loggerBridge.info('Server id:', this.serverId);
   }
 
   private isWhitelisted(pubkey: string): boolean {
@@ -112,32 +112,34 @@ export class DVMBridge {
 
   async start() {
     if (this.isRunning) {
-      loggerBridge('Bridge is already running');
+      loggerBridge.warn('Bridge is already running');
       return;
     }
 
     try {
-      loggerBridge('Connecting to MCP servers...');
+      loggerBridge.info('Connecting to MCP servers...');
       await this.mcpPool.connect();
 
       const tools = await this.mcpPool.listTools();
-      loggerBridge(`Available MCP tools across all servers: ${tools.length}`);
+      loggerBridge.info(
+        `Available MCP tools across all servers: ${tools.length}`
+      );
 
       if (!this.config.mcp.isPrivateServer) {
-        loggerBridge('Announcing service to Nostr network...');
+        loggerBridge.info('Announcing service to Nostr network...');
         try {
           await this.nostrAnnouncer.announce();
         } catch (error) {
           console.warn('Failed to announce service to Nostr network:', error);
-          loggerBridge(
+          loggerBridge.warn(
             '⚠️ Warning: Failed to announce service to Nostr network. The bridge will still function, but will not be discoverable via Nostr.'
           );
         }
       } else {
-        loggerBridge('Private server mode: Skipping public announcement.');
+        loggerBridge.info('Private server mode: Skipping public announcement.');
       }
 
-      loggerBridge('Setting up request handlers...');
+      loggerBridge.info('Setting up request handlers...');
       const publicKey = this.keyManager.getPublicKey();
       const subscribe = () => {
         // Subscribe to both regular and encrypted events
@@ -156,18 +158,22 @@ export class DVMBridge {
       try {
         subscribe();
       } catch (error) {
-        loggerBridge(
+        loggerBridge.warn(
           '⚠️ Warning: Failed to subscribe to Nostr requests. Will retry on relay reconnection.'
         );
       }
 
       this.relayHandler.onRelayReconnected((url) => {
-        loggerBridge(`Relay reconnected: ${url}, re-subscribing to requests`);
+        loggerBridge.info(
+          `Relay reconnected: ${url}, re-subscribing to requests`
+        );
         subscribe();
       });
 
       this.isRunning = true;
-      loggerBridge('DVM Bridge is now running and ready to handle requests');
+      loggerBridge.info(
+        'DVM Bridge is now running and ready to handle requests'
+      );
     } catch (error) {
       console.error('Failed to start DVM Bridge:', error);
       throw error;
@@ -179,12 +185,12 @@ export class DVMBridge {
       return;
     }
 
-    loggerBridge('Stopping DVM Bridge...');
+    loggerBridge.info('Stopping DVM Bridge...');
     try {
       await this.mcpPool.disconnect();
       this.relayHandler.cleanup();
       this.isRunning = false;
-      loggerBridge('DVM Bridge stopped successfully');
+      loggerBridge.info('DVM Bridge stopped successfully');
     } catch (error) {
       console.error('Error stopping DVM Bridge:', error);
       throw error;
@@ -192,11 +198,11 @@ export class DVMBridge {
   }
 
   async deleteAnnouncement(reason?: string) {
-    loggerBridge('Deleting service announcement from relays...');
+    loggerBridge.info('Deleting service announcement from relays...');
     try {
       const deletionEvent =
         await this.nostrAnnouncer.deleteAnnouncement(reason);
-      loggerBridge('Service announcement deleted successfully');
+      loggerBridge.info('Service announcement deleted successfully');
       return deletionEvent;
     } catch (error) {
       console.error('Error deleting service announcement:', error);
@@ -234,7 +240,7 @@ export class DVMBridge {
         realSenderPubkey: decryptionResult.sender,
       };
     } catch (error) {
-      loggerBridge('Error in decryptEventAndExtractSender:', error);
+      loggerBridge.error('Error in decryptEventAndExtractSender:', error);
       return null;
     }
   }
@@ -246,20 +252,20 @@ export class DVMBridge {
         event.kind === GIFT_WRAP_KIND &&
         this.encryptionManager?.isEncryptionEnabled()
       ) {
-        loggerBridge('Received encrypted event, attempting to decrypt...');
+        loggerBridge.info('Received encrypted event, attempting to decrypt...');
 
         // Try to decrypt the event and extract the real sender's pubkey
         const decryptionResult = await this.decryptEventAndExtractSender(event);
 
         if (!decryptionResult) {
-          loggerBridge(
+          loggerBridge.debug(
             'Failed to decrypt event - may not be intended for this server'
           );
           return;
         }
 
         // Process the decrypted event with the real sender's pubkey
-        loggerBridge('Successfully decrypted event, processing...');
+        loggerBridge.info('Successfully decrypted event, processing...');
         // Construct a NostrEvent from the decrypted template and real sender pubkey
         // The ID should be computed from the inner event content, not the gift wrap
         const innerEventId = getEventHash({
@@ -324,7 +330,7 @@ export class DVMBridge {
     const serverIdentifier =
       tags.find((tag) => tag[0] === TAG_SERVER_IDENTIFIER)?.[1] || '';
 
-    loggerBridge(
+    loggerBridge.info(
       `Processing encrypted request from real sender: ${realSenderPubkey}`
     );
     await this.processRequest(
@@ -490,7 +496,7 @@ export class DVMBridge {
             break;
           case MCPMETHODS.notificationsInitialized:
             // Do nothing yet
-            loggerBridge(`Received ${method} from ${pubkey}`);
+            loggerBridge.info(`Received ${method} from ${pubkey}`);
             break;
           default:
             const notImpl = this.keyManager.signEvent({
@@ -527,10 +533,10 @@ export class DVMBridge {
             responseContext
           );
         } else {
-          loggerBridge(`Received unhandled notification type: ${method}`);
+          loggerBridge.warn(`Received unhandled notification type: ${method}`);
         }
       } else {
-        loggerBridge(`Received unhandled event kind: ${kind}`);
+        loggerBridge.warn(`Received unhandled event kind: ${kind}`);
       }
     } catch (error) {
       console.error('Error processing request:', error);

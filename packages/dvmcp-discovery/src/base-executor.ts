@@ -187,7 +187,7 @@ export abstract class BaseExecutor<T extends Capability, P, R> {
                 }
               } catch (encryptError) {
                 // If encryption fails, send the original unencrypted request
-                loggerDiscovery(
+                loggerDiscovery.warn(
                   'Failed to encrypt request, sending unencrypted:',
                   encryptError
                 );

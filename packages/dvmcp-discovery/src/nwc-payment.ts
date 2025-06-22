@@ -152,11 +152,11 @@ export class NWCPaymentHandler {
 
       this.relayHandler = new RelayHandler([this.walletRelay]);
 
-      loggerDiscovery('NWC payment handler initialized successfully');
-      loggerDiscovery('Using wallet pubkey:', this.walletPubkey);
-      loggerDiscovery('Using wallet relay:', this.walletRelay);
+      loggerDiscovery.info('NWC payment handler initialized successfully');
+      loggerDiscovery.info('Using wallet pubkey:', this.walletPubkey);
+      loggerDiscovery.info('Using wallet relay:', this.walletRelay);
     } catch (error) {
-      loggerDiscovery('Failed to initialize NWC payment handler:', error);
+      loggerDiscovery.error('Failed to initialize NWC payment handler:', error);
       throw new Error(
         `Failed to initialize NWC payment handler: ${error instanceof Error ? error.message : String(error)}`
       );
@@ -171,14 +171,20 @@ export class NWCPaymentHandler {
   public async payInvoice(invoice: string): Promise<boolean> {
     return new Promise(async (resolve, reject) => {
       try {
-        loggerDiscovery('Starting NWC payment process for invoice:', invoice);
+        loggerDiscovery.info(
+          'Starting NWC payment process for invoice:',
+          invoice
+        );
 
         const paymentRequest = await makeNwcRequestEvent(
           this.walletPubkey,
           this.secret,
           invoice
         );
-        loggerDiscovery('Payment request created with ID:', paymentRequest.id);
+        loggerDiscovery.debug(
+          'Payment request created with ID:',
+          paymentRequest.id
+        );
 
         const filter = {
           kinds: [NWCWalletResponse],
@@ -186,12 +192,12 @@ export class NWCPaymentHandler {
           since: Math.floor(Date.now() / 1000),
         };
 
-        loggerDiscovery(
+        loggerDiscovery.debug(
           'Setting up subscription to listen for payment response...'
         );
 
         const sub = this.relayHandler.subscribeToRequests((event: Event) => {
-          loggerDiscovery('Received response event:', event.id);
+          loggerDiscovery.debug('Received response event:', event.id);
           try {
             const decryptedContent = decrypt(
               this.secret,
@@ -202,42 +208,42 @@ export class NWCPaymentHandler {
               decryptedContent
             ) as NWCPayInvoiceResult;
 
-            loggerDiscovery('Payment response:', response);
+            loggerDiscovery.debug('Payment response:', response);
 
             if (response.error) {
-              loggerDiscovery('Payment failed:', response.error.message);
+              loggerDiscovery.error('Payment failed:', response.error.message);
               sub.close();
               reject(new Error(response.error.message));
             } else if (response.result) {
-              loggerDiscovery('Payment successful!');
-              loggerDiscovery('Preimage:', response.result.preimage);
+              loggerDiscovery.info('Payment successful!');
+              loggerDiscovery.debug('Preimage:', response.result.preimage);
               sub.close();
               resolve(true);
             } else {
-              loggerDiscovery('Unexpected response format:', response);
+              loggerDiscovery.error('Unexpected response format:', response);
               sub.close();
               reject(new Error('Unexpected response format from wallet'));
             }
           } catch (error) {
-            loggerDiscovery('Error decrypting response:', error);
+            loggerDiscovery.error('Error decrypting response:', error);
             sub.close();
             reject(error);
           }
         }, filter);
 
         const timeoutId = setTimeout(() => {
-          loggerDiscovery('Payment request timed out after 60 seconds');
+          loggerDiscovery.warn('Payment request timed out after 60 seconds');
           sub.close();
           reject(new Error('Payment request timed out'));
         }, 60000);
 
-        loggerDiscovery('Publishing payment request to relay...');
+        loggerDiscovery.debug('Publishing payment request to relay...');
         await this.relayHandler.publishEvent(paymentRequest);
-        loggerDiscovery(
+        loggerDiscovery.info(
           'Payment request published successfully. Waiting for response...'
         );
       } catch (error) {
-        loggerDiscovery('Error in NWC payment process:', error);
+        loggerDiscovery.error('Error in NWC payment process:', error);
         reject(error);
       }
     });
@@ -248,6 +254,6 @@ export class NWCPaymentHandler {
    */
   public cleanup(): void {
     this.relayHandler.cleanup();
-    loggerDiscovery('NWC payment handler cleaned up');
+    loggerDiscovery.info('NWC payment handler cleaned up');
   }
 }

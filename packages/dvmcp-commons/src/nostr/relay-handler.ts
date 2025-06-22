@@ -41,10 +41,10 @@ export class RelayHandler {
   private async ensureRelay(url: string) {
     try {
       await this.pool.ensureRelay(url, { connectionTimeout: 5000 });
-      logger(`Connected to relay: ${url}`);
+      logger.info(`Connected to relay: ${url}`);
       this.emitter.emit('relayReconnected', url);
     } catch (error) {
-      logger(`Failed to connect to relay ${url}:`, error);
+      logger.error(`Failed to connect to relay ${url}:`, error);
     }
   }
 
@@ -55,9 +55,11 @@ export class RelayHandler {
   async publishEvent(event: Event): Promise<void> {
     try {
       await Promise.any(this.pool.publish(this.relayUrls, event));
-      logger(`Event published(${event.kind}), id: ${event.id.slice(0, 12)}`);
+      logger.info(
+        `Event published(${event.kind}), id: ${event.id.slice(0, 12)}`
+      );
     } catch (error) {
-      console.error('Failed to publish event:', error);
+      logger.error('Failed to publish event:', error);
       throw error;
     }
   }
@@ -75,16 +77,16 @@ export class RelayHandler {
 
     const sub = this.pool.subscribeMany(this.relayUrls, filters, {
       onevent(event) {
-        logger(
+        logger.info(
           `Event received(${event.kind}), id: ${event.id.slice(0, 12)}, pubkey: ${event.pubkey.slice(0, 12)}, method: ${event.tags.find(([tag]) => tag === TAG_METHOD)?.[1]}`
         );
         onRequest(event);
       },
       oneose() {
-        logger('Reached end of stored events');
+        logger.debug('Reached end of stored events');
       },
       onclose(reasons) {
-        logger('Subscription closed:', reasons);
+        logger.debug('Subscription closed:', reasons);
       },
     });
 

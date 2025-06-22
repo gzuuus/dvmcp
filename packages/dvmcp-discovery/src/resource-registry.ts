@@ -122,13 +122,13 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     const resourceInfo = this.getItemInfo(resourceId);
 
     if (!resourceInfo) {
-      loggerDiscovery(`Resource not found for removal: ${resourceId}`);
+      loggerDiscovery.debug(`Resource not found for removal: ${resourceId}`);
       return false;
     }
 
     const result = this.removeItem(resourceId);
     if (result) {
-      loggerDiscovery(`Resource removed from registry: ${resourceId}`);
+      loggerDiscovery.info(`Resource removed from registry: ${resourceId}`);
     }
 
     return result;
@@ -163,7 +163,7 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     providerPubkey: string
   ): void {
     this.serverResources.set(serverId, resources);
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Registered ${resources.length} resources for server ${serverId}`
     );
 
@@ -221,11 +221,11 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
         serverId,
       });
 
-      loggerDiscovery(`Registered resource template: ${templateId}`);
+      loggerDiscovery.info(`Registered resource template: ${templateId}`);
 
       this.registerTemplateWithMcp(templateId, templateCapability);
     } catch (error) {
-      loggerDiscovery(`Error registering resource template: ${error}`);
+      loggerDiscovery.error(`Error registering resource template: ${error}`);
       throw error;
     }
   }
@@ -242,7 +242,7 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
     providerPubkey: string
   ): void {
     this.serverResourceTemplates.set(serverId, templates);
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Registered ${templates.length} resource templates for server ${serverId}`
     );
 
@@ -372,7 +372,9 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
 
             return result;
           } catch (error) {
-            loggerDiscovery(`Error executing resource template: ${error}`);
+            loggerDiscovery.error(
+              `Error executing resource template: ${error}`
+            );
             return {
               contents: [
                 {
@@ -388,11 +390,11 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
 
       this.storeRegisteredRef(templateId, ref);
 
-      loggerDiscovery(
+      loggerDiscovery.debug(
         `Registered resource template with MCP server: ${templateId}`
       );
     } catch (error) {
-      loggerDiscovery(
+      loggerDiscovery.error(
         `Error registering resource template with MCP server: ${error}`
       );
     }
@@ -426,7 +428,7 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
           } catch (error) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
-            loggerDiscovery(
+            loggerDiscovery.error(
               `Error executing resource ${resourceId}:`,
               errorMessage
             );
@@ -446,9 +448,9 @@ export class ResourceRegistry extends BaseRegistry<ResourceCapability> {
 
       this.storeRegisteredRef(resourceId, registeredResource);
 
-      loggerDiscovery('Resource registered successfully:', resourceId);
+      loggerDiscovery.debug('Resource registered successfully:', resourceId);
     } catch (error) {
-      loggerDiscovery('Error registering resource:', resourceId, error);
+      loggerDiscovery.error('Error registering resource:', resourceId, error);
     }
   }
 

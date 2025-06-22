@@ -55,7 +55,7 @@ export class PrivateDiscovery {
       try {
         await this.performHandshake(cfg);
       } catch (err) {
-        loggerDiscovery(
+        loggerDiscovery.error(
           `Private discovery failed for provider ${cfg.providerPubkey}:`,
           err
         );
@@ -104,14 +104,14 @@ export class PrivateDiscovery {
           encrypt: true,
           recipientPublicKey: cfg.providerPubkey,
         });
-        loggerDiscovery(
+        loggerDiscovery.debug(
           `Sent ENCRYPTED initialize request to private server ${cfg.providerPubkey} (${cfg.serverId || 'any'})`
         );
 
         // Wait for encrypted response first
         initResp = await this.waitForResponse(signedInitReq.id, WAIT_TIMEOUT);
       } catch (err) {
-        loggerDiscovery('Encrypted initialize publish failed:', err);
+        loggerDiscovery.warn('Encrypted initialize publish failed:', err);
       }
     }
 
@@ -122,7 +122,7 @@ export class PrivateDiscovery {
       }
       // Publish plaintext initialize
       await this.relayHandler.publishEvent(signedInitReq as Event);
-      loggerDiscovery(
+      loggerDiscovery.debug(
         `Sent UNENCRYPTED initialize request to private server ${cfg.providerPubkey} (${cfg.serverId || 'any'})`
       );
       initResp = await this.waitForResponse(signedInitReq.id, WAIT_TIMEOUT);
@@ -168,7 +168,7 @@ export class PrivateDiscovery {
         const result = JSON.parse(content) as { tools: Tool[] };
         if (Array.isArray(result.tools) && result.tools.length) {
           allCapabilities.tools = result.tools;
-          loggerDiscovery(
+          loggerDiscovery.debug(
             `Fetched ${result.tools.length} tools for ${serverId}`
           );
         }
@@ -184,7 +184,7 @@ export class PrivateDiscovery {
         const result = JSON.parse(content) as { resources: Resource[] };
         if (Array.isArray(result.resources) && result.resources.length) {
           allCapabilities.resources = result.resources;
-          loggerDiscovery(
+          loggerDiscovery.debug(
             `Fetched ${result.resources.length} resources for ${serverId}`
           );
         }
@@ -200,7 +200,7 @@ export class PrivateDiscovery {
         const result = JSON.parse(content) as { prompts: Prompt[] };
         if (Array.isArray(result.prompts) && result.prompts.length) {
           allCapabilities.prompts = result.prompts;
-          loggerDiscovery(
+          loggerDiscovery.debug(
             `Fetched ${result.prompts.length} prompts for ${serverId}`
           );
         }
@@ -223,13 +223,13 @@ export class PrivateDiscovery {
       .getUnifiedRegistration()
       .registerServerCapabilities(source, capabilities);
 
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Private server registration complete for ${serverId}: ` +
         `${stats.toolsCount} tools, ${stats.resourcesCount} resources, ` +
         `${stats.promptsCount} prompts, server registered: ${stats.serverRegistered}`
     );
 
-    loggerDiscovery(`Completed private discovery for server ${serverId}`);
+    loggerDiscovery.info(`Completed private discovery for server ${serverId}`);
   }
 
   /**
@@ -267,7 +267,7 @@ export class PrivateDiscovery {
         });
         resp = await this.waitForResponse(signedReq.id, WAIT_TIMEOUT);
       } catch (err) {
-        loggerDiscovery('Encrypted capability request failed:', err);
+        loggerDiscovery.warn('Encrypted capability request failed:', err);
         // Do not throw here, allow fallback to unencrypted if not required
       }
     }
@@ -339,14 +339,14 @@ export class PrivateDiscovery {
                 }
               } catch (decryptError) {
                 // Silently ignore decryption failures for non-matching events
-                loggerDiscovery(
+                loggerDiscovery.debug(
                   'Decryption failed for event (likely not for us):',
                   decryptError
                 );
               }
             }
           } catch (error) {
-            loggerDiscovery('Error processing response event:', error);
+            loggerDiscovery.error('Error processing response event:', error);
           }
         },
         {
@@ -395,7 +395,7 @@ export class PrivateDiscovery {
           encrypt: true,
           recipientPublicKey: cfg.providerPubkey,
         });
-        loggerDiscovery(
+        loggerDiscovery.debug(
           `Sent ENCRYPTED initialized notification to ${serverId}`
         );
       } catch (err) {
@@ -404,18 +404,18 @@ export class PrivateDiscovery {
           throw new Error(`Failed to send encrypted notification: ${err}`);
         }
         // Fallback to unencrypted for optional mode
-        loggerDiscovery(
+        loggerDiscovery.warn(
           'Encrypted notification failed, falling back to unencrypted:',
           err
         );
         await this.relayHandler.publishEvent(signedInitNotif as Event);
-        loggerDiscovery(
+        loggerDiscovery.debug(
           `Sent UNENCRYPTED initialized notification to ${serverId}`
         );
       }
     } else {
       await this.relayHandler.publishEvent(signedInitNotif as Event);
-      loggerDiscovery(
+      loggerDiscovery.debug(
         `Sent UNENCRYPTED initialized notification to ${serverId}`
       );
     }

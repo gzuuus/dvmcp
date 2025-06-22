@@ -31,10 +31,10 @@ async function fetchEvents(
   }
   const relayHandler = new RelayHandler(relays);
   try {
-    loggerDiscovery('Querying for events:', filter);
+    loggerDiscovery.debug('Querying for events:', filter);
     const events = await relayHandler.queryEvents(filter);
     if (events.length === 0) {
-      loggerDiscovery(errorMessage);
+      loggerDiscovery.info(errorMessage);
       return [];
     }
 
@@ -150,7 +150,7 @@ export async function fetchServerCapabilities(
 
         if (extractedItems && Array.isArray(extractedItems)) {
           items.push(...extractedItems);
-          loggerDiscovery(
+          loggerDiscovery.info(
             `Found ${extractedItems.length} ${type} for server ${serverId}`
           );
         }
@@ -186,7 +186,7 @@ export async function fetchServerCapabilities(
           Array.isArray(content.resourceTemplates)
         ) {
           resourceTemplates.push(...content.resourceTemplates);
-          loggerDiscovery(
+          loggerDiscovery.info(
             `Found ${content.resourceTemplates.length} resource templates for server ${serverId}`
           );
         } else if (
@@ -195,7 +195,7 @@ export async function fetchServerCapabilities(
           Array.isArray(content.resources)
         ) {
           resources.push(...content.resources);
-          loggerDiscovery(
+          loggerDiscovery.info(
             `Found ${content.resources.length} resources for server ${serverId}`
           );
         }
@@ -227,7 +227,7 @@ export function parseAnnouncement(event: Event): {
     if (event.kind === SERVER_ANNOUNCEMENT_KIND) {
       const content: InitializeResult = JSON.parse(event.content);
 
-      loggerDiscovery(
+      loggerDiscovery.debug(
         `Parsed server announcement with capabilities: ${Object.keys(content.capabilities || {}).join(', ')}`
       );
 
@@ -235,7 +235,7 @@ export function parseAnnouncement(event: Event): {
         (tag) => tag[0] === TAG_UNIQUE_IDENTIFIER
       )?.[1];
       if (!serverId) {
-        loggerDiscovery('Server announcement missing server ID');
+        loggerDiscovery.warn('Server announcement missing server ID');
       }
 
       return { result: content, serverId };

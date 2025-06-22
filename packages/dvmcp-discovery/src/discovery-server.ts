@@ -70,7 +70,7 @@ export class DiscoveryServer {
     // Initialize encryption manager if encryption is configured
     if (config.encryption) {
       this.encryptionManager = new EncryptionManager(config.encryption);
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Encryption manager initialized with mode: ${config.encryption.mode || 'optional'}`
       );
     }
@@ -161,13 +161,15 @@ export class DiscoveryServer {
 
     // Initialize built-in tools if interactive mode is enabled
     if (this.config.featureFlags?.interactive) {
-      loggerDiscovery('Interactive mode enabled: Registering built-in tools.');
+      loggerDiscovery.info(
+        'Interactive mode enabled: Registering built-in tools.'
+      );
       initBuiltInTools(this.mcpServer, this.toolRegistry, this);
     }
   }
 
   private async startDiscovery() {
-    loggerDiscovery('Starting discovery of MCP capabilities...');
+    loggerDiscovery.info('Starting discovery of MCP capabilities...');
 
     const filter: Filter = {
       kinds: [
@@ -183,23 +185,25 @@ export class DiscoveryServer {
 
       if (!isNaN(limitValue)) {
         filter.limit = limitValue;
-        loggerDiscovery(`Limiting DVM discovery to ${limitValue}`);
+        loggerDiscovery.info(`Limiting DVM discovery to ${limitValue}`);
       } else {
-        loggerDiscovery(
+        loggerDiscovery.warn(
           `Invalid discovery limit value: ${this.config.discovery.limit}, ignoring limit`
         );
       }
     }
 
-    loggerDiscovery('Querying Nostr relays for capability announcements...');
+    loggerDiscovery.debug(
+      'Querying Nostr relays for capability announcements...'
+    );
     const events = await this.relayHandler.queryEvents(filter);
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Received ${events.length} announcement events from relays`
     );
 
     await this.processAnnouncementEvents(events);
 
-    loggerDiscovery('Discovery process completed');
+    loggerDiscovery.info('Discovery process completed');
   }
 
   /**
@@ -215,35 +219,35 @@ export class DiscoveryServer {
     const resourcesLists = events.filter((e) => e.kind === RESOURCES_LIST_KIND);
     const promptsLists = events.filter((e) => e.kind === PROMPTS_LIST_KIND);
 
-    loggerDiscovery(
+    loggerDiscovery.debug(
       `Processing events: ${serverAnnouncements.length} server announcements, ` +
         `${toolsLists.length} tools lists, ${resourcesLists.length} resources lists, ` +
         `${promptsLists.length} prompts lists`
     );
 
     if (serverAnnouncements.length > 0) {
-      loggerDiscovery('Processing server announcements...');
+      loggerDiscovery.debug('Processing server announcements...');
       for (const event of serverAnnouncements) {
         await this.handleServerAnnouncement(event);
       }
     }
 
     if (toolsLists.length > 0) {
-      loggerDiscovery('Processing tools lists...');
+      loggerDiscovery.debug('Processing tools lists...');
       for (const event of toolsLists) {
         await this.handleToolsList(event);
       }
     }
 
     if (resourcesLists.length > 0) {
-      loggerDiscovery('Processing resources lists...');
+      loggerDiscovery.debug('Processing resources lists...');
       for (const event of resourcesLists) {
         await this.handleResourcesList(event);
       }
     }
 
     if (promptsLists.length > 0) {
-      loggerDiscovery('Processing prompts lists...');
+      loggerDiscovery.debug('Processing prompts lists...');
       for (const event of promptsLists) {
         await this.handlePromptsList(event);
       }
@@ -280,14 +284,14 @@ export class DiscoveryServer {
     const toolId = createCapabilityId(tool.name, pubkey);
 
     if (this.isToolRegistered(tool.name, pubkey)) {
-      loggerDiscovery(
+      loggerDiscovery.debug(
         `Tool ${tool.name} (${toolId}) is already registered, skipping registration`
       );
       return toolId;
     }
 
     this.toolRegistry.registerTool(toolId, tool, pubkey, serverId);
-    loggerDiscovery(`Registered tool from announcement: ${toolId}`);
+    loggerDiscovery.info(`Registered tool from announcement: ${toolId}`);
 
     return toolId;
   }
@@ -299,12 +303,12 @@ export class DiscoveryServer {
    */
   public addRelay(relayUrl: string): boolean {
     if (this.integratedRelays.has(relayUrl)) {
-      loggerDiscovery(`Relay ${relayUrl} is already integrated`);
+      loggerDiscovery.debug(`Relay ${relayUrl} is already integrated`);
       return false;
     }
 
     this.integratedRelays.add(relayUrl);
-    loggerDiscovery(`Added relay ${relayUrl} to integrated relays`);
+    loggerDiscovery.info(`Added relay ${relayUrl} to integrated relays`);
 
     const allRelays = [...new Set([...this.config.nostr.relayUrls, relayUrl])];
 
@@ -321,7 +325,7 @@ export class DiscoveryServer {
     this.promptExecutor.updateRelayHandler(this.relayHandler);
     this.pingExecutor.updateRelayHandler(this.relayHandler);
 
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Updated relay handler with new relay: ${relayUrl}. Total relays: ${allRelays.length}`
     );
 
@@ -341,7 +345,7 @@ export class DiscoveryServer {
     this.promptExecutor.updateRelayHandler(relayHandler);
     this.pingExecutor.updateRelayHandler(relayHandler);
 
-    loggerDiscovery('Updated relay handler in discovery server');
+    loggerDiscovery.debug('Updated relay handler in discovery server');
   }
 
   /**
@@ -359,7 +363,7 @@ export class DiscoveryServer {
   private async handleServerAnnouncement(event: Event) {
     try {
       if (!this.isAllowedDVM(event.pubkey)) {
-        loggerDiscovery('DVM not in whitelist:', event.pubkey);
+        loggerDiscovery.warn('DVM not in whitelist:', event.pubkey);
         return;
       }
 
@@ -367,7 +371,7 @@ export class DiscoveryServer {
         (t) => t[0] === TAG_UNIQUE_IDENTIFIER
       )?.[1];
       if (!serverId) {
-        loggerDiscovery('Server announcement missing server ID');
+        loggerDiscovery.warn('Server announcement missing server ID');
         return;
       }
       // Extract support_encryption tag
@@ -385,7 +389,7 @@ export class DiscoveryServer {
         event.content,
         supportsEncryption
       );
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Registered server: ${serverId} from ${event.pubkey}, encryption support: ${supportsEncryption}`
       );
     } catch (error) {
@@ -400,7 +404,7 @@ export class DiscoveryServer {
   private async handleToolsList(event: Event) {
     try {
       if (!this.isAllowedDVM(event.pubkey)) {
-        loggerDiscovery('DVM not in whitelist:', event.pubkey);
+        loggerDiscovery.warn('DVM not in whitelist:', event.pubkey);
         return;
       }
 
@@ -408,7 +412,7 @@ export class DiscoveryServer {
         (t) => t[0] === TAG_SERVER_IDENTIFIER
       )?.[1];
       if (!serverId) {
-        loggerDiscovery('Tools list missing server ID');
+        loggerDiscovery.warn('Tools list missing server ID');
         return;
       }
 
@@ -442,11 +446,13 @@ export class DiscoveryServer {
           capabilities
         );
 
-        loggerDiscovery(
+        loggerDiscovery.info(
           `Registered ${stats.toolsCount} tools from server ${serverId}`
         );
       } else {
-        loggerDiscovery(`No tools found in tools list from server ${serverId}`);
+        loggerDiscovery.debug(
+          `No tools found in tools list from server ${serverId}`
+        );
       }
     } catch (error) {
       console.error('Error processing tools list:', error);
@@ -460,7 +466,7 @@ export class DiscoveryServer {
   private async handleResourcesList(event: Event) {
     try {
       if (!this.isAllowedDVM(event.pubkey)) {
-        loggerDiscovery('DVM not in whitelist:', event.pubkey);
+        loggerDiscovery.warn('DVM not in whitelist:', event.pubkey);
         return;
       }
 
@@ -468,7 +474,7 @@ export class DiscoveryServer {
         (t) => t[0] === TAG_SERVER_IDENTIFIER
       )?.[1];
       if (!serverId) {
-        loggerDiscovery('Resources list missing server ID');
+        loggerDiscovery.warn('Resources list missing server ID');
         return;
       }
 
@@ -510,11 +516,11 @@ export class DiscoveryServer {
           capabilities
         );
 
-        loggerDiscovery(
+        loggerDiscovery.info(
           `Registered ${stats.resourcesCount} resources from server ${serverId} (provider: ${event.pubkey})`
         );
       } else {
-        loggerDiscovery(
+        loggerDiscovery.debug(
           `No resources found in resources list from server ${serverId}`
         );
       }
@@ -534,7 +540,7 @@ export class DiscoveryServer {
       try {
         const content: ListResourceTemplatesResult = JSON.parse(event.content);
         if (!content.resourceTemplates) {
-          loggerDiscovery(
+          loggerDiscovery.debug(
             'No resource templates found in resource templates list'
           );
           return;
@@ -566,11 +572,11 @@ export class DiscoveryServer {
           capabilities
         );
 
-        loggerDiscovery(
+        loggerDiscovery.info(
           `Registered ${stats.resourceTemplatesCount} resource templates from server ${serverId} (provider: ${event.pubkey})`
         );
       } else {
-        loggerDiscovery(
+        loggerDiscovery.debug(
           `No resource templates found in list from server ${serverId}`
         );
       }
@@ -587,7 +593,9 @@ export class DiscoveryServer {
       this.mcpServer.server
         .sendToolListChanged()
         .then(() => {
-          loggerDiscovery('Sent tool list changed notification to clients');
+          loggerDiscovery.debug(
+            'Sent tool list changed notification to clients'
+          );
         })
         .catch((error) => {
           console.error(
@@ -607,7 +615,7 @@ export class DiscoveryServer {
   private async handlePromptsList(event: Event) {
     try {
       if (!this.isAllowedDVM(event.pubkey)) {
-        loggerDiscovery('DVM not in whitelist:', event.pubkey);
+        loggerDiscovery.warn('DVM not in whitelist:', event.pubkey);
         return;
       }
 
@@ -615,7 +623,7 @@ export class DiscoveryServer {
         (t) => t[0] === TAG_SERVER_IDENTIFIER
       )?.[1];
       if (!serverId) {
-        loggerDiscovery('Prompts list missing server ID');
+        loggerDiscovery.warn('Prompts list missing server ID');
         return;
       }
 
@@ -649,11 +657,11 @@ export class DiscoveryServer {
           capabilities
         );
 
-        loggerDiscovery(
+        loggerDiscovery.info(
           `Registered ${stats.promptsCount} prompts from server ${serverId} (provider: ${event.pubkey})`
         );
       } else {
-        loggerDiscovery(
+        loggerDiscovery.debug(
           `No prompts found in prompts list from server ${serverId}`
         );
       }
@@ -747,7 +755,7 @@ export class DiscoveryServer {
       this.toolRegistry.removeToolsByProvider(providerPubkey);
     if (removedTools.length > 0) {
       this.notifyToolListChanged();
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Removed ${removedTools.length} tools from provider ${providerPubkey}`
       );
     }
@@ -763,7 +771,7 @@ export class DiscoveryServer {
     const removedTools = this.toolRegistry.removeToolsByPattern(pattern);
     if (removedTools.length > 0) {
       this.notifyToolListChanged();
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Removed ${removedTools.length} tools matching pattern ${pattern}`
       );
     }
@@ -774,37 +782,39 @@ export class DiscoveryServer {
     const isInteractive = this.config.featureFlags?.interactive === true;
     const forceDiscovery = options?.forceDiscovery === true;
 
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Starting discovery server with interactive mode: ${isInteractive ? 'enabled' : 'disabled'}`
     );
-    loggerDiscovery(
+    loggerDiscovery.info(
       `Relay URLs: ${this.config.nostr.relayUrls.length > 0 ? this.config.nostr.relayUrls.join(', ') : 'none'}`
     );
 
     // First, perform private server discovery if configured
     if (this.privateDiscovery) {
-      loggerDiscovery('Starting private server discovery...');
+      loggerDiscovery.info('Starting private server discovery...');
       await this.privateDiscovery.discover();
     }
 
     if (!isInteractive || forceDiscovery) {
       if (this.config.nostr.relayUrls.length > 0) {
         if (forceDiscovery && isInteractive) {
-          loggerDiscovery(
+          loggerDiscovery.info(
             'Force discovery enabled - running discovery despite interactive mode'
           );
         }
         await this.startDiscovery();
-        loggerDiscovery(
+        loggerDiscovery.info(
           `Discovery complete: ${this.toolRegistry.listTools().length} tools, ` +
             `${this.resourceRegistry.listResources().length} resources, ` +
             `${this.promptRegistry.listPrompts().length} prompts`
         );
       } else {
-        loggerDiscovery('Skipping discovery as no relay URLs are configured');
+        loggerDiscovery.warn(
+          'Skipping discovery as no relay URLs are configured'
+        );
       }
     } else {
-      loggerDiscovery(
+      loggerDiscovery.info(
         'Skipping discovery as running in interactive mode - using only built-in tools'
       );
     }
@@ -818,9 +828,9 @@ export class DiscoveryServer {
 
     const transport = new StdioServerTransport();
     await this.mcpServer.connect(transport);
-    loggerDiscovery('MCP server connected');
+    loggerDiscovery.info('MCP server connected');
 
-    loggerDiscovery('DVMCP Discovery Server started');
+    loggerDiscovery.info('DVMCP Discovery Server started');
   }
 
   /**
@@ -860,7 +870,7 @@ export class DiscoveryServer {
    * @returns Empty object as per MCP ping specification
    */
   public async handlePing(): Promise<{}> {
-    loggerDiscovery(
+    loggerDiscovery.debug(
       'Received ping request from MCP client, propagating to DVMCP servers'
     );
 
@@ -868,22 +878,24 @@ export class DiscoveryServer {
     const serversWithIds = this.serverRegistry.listServersWithIds();
 
     if (serversWithIds.length === 0) {
-      loggerDiscovery('No DVMCP servers to ping');
+      loggerDiscovery.debug('No DVMCP servers to ping');
       return {};
     }
 
     // Ping the first available server (or could ping all/random selection)
     const [serverId, serverInfo] = serversWithIds[0];
-    loggerDiscovery(`Pinging DVMCP server: ${serverInfo.pubkey} (${serverId})`);
+    loggerDiscovery.debug(
+      `Pinging DVMCP server: ${serverInfo.pubkey} (${serverId})`
+    );
 
     try {
       // Use the ping executor to ping the server with server ID
       const result = await this.pingExecutor.ping(serverInfo.pubkey, serverId);
-      loggerDiscovery(
+      loggerDiscovery.info(
         `Ping result: ${result.success ? 'success' : 'failed'} in ${result.responseTime}ms`
       );
     } catch (error) {
-      loggerDiscovery(`Ping failed with error: ${error}`);
+      loggerDiscovery.error(`Ping failed with error: ${error}`);
     }
 
     // Always return empty object as per MCP spec
@@ -913,6 +925,6 @@ export class DiscoveryServer {
     this.completionExecutor.cleanup();
     this.pingExecutor.cleanup();
 
-    loggerDiscovery('DVMCP Discovery Server cleaned up');
+    loggerDiscovery.info('DVMCP Discovery Server cleaned up');
   }
 }

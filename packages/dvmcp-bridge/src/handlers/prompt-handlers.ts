@@ -27,7 +27,7 @@ export async function handlePromptsList(
     JSON.parse(event.content)
   );
   if (!success) {
-    loggerBridge('prompts list request error', error);
+    loggerBridge.error('prompts list request error', error);
     const errorResponse = createProtocolErrorResponse(
       event.id,
       event.pubkey,
@@ -103,7 +103,7 @@ export async function handlePromptsGet(
     error,
   } = GetPromptRequestSchema.safeParse(JSON.parse(event.content));
   if (!success) {
-    loggerBridge('prompts get request error', error);
+    loggerBridge.error('prompts get request error', error);
     const errorResponse = createProtocolErrorResponse(
       event.id,
       event.pubkey,

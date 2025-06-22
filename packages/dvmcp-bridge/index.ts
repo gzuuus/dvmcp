@@ -25,7 +25,7 @@ export async function startBridge(options: BridgeStartOptions = {}) {
     const bridge = new DVMBridge(config);
 
     const shutdown = async () => {
-      loggerBridge('Shutting down...');
+      loggerBridge.info('Shutting down...');
       try {
         await bridge.stop();
         process.exit(0);

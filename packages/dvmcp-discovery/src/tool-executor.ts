@@ -62,7 +62,7 @@ export class ToolExecutor extends BaseExecutor<
         this.nwcPaymentHandler = new NWCPaymentHandler(this.config);
       }
     } catch (error) {
-      loggerDiscovery('Failed to initialize NWC payment handler:', error);
+      loggerDiscovery.error('Failed to initialize NWC payment handler:', error);
     }
   }
 
@@ -161,13 +161,13 @@ export class ToolExecutor extends BaseExecutor<
             throw new Error('No invoice found in payment-required event');
           }
 
-          loggerDiscovery(
+          loggerDiscovery.info(
             'Payment required for tool execution. Invoice:',
             invoice
           );
 
           if (!this.nwcPaymentHandler) {
-            loggerDiscovery(
+            loggerDiscovery.warn(
               'NWC payment handler not configured. Cannot process payment automatically.'
             );
             this.cleanupExecution(context.executionId);
@@ -181,12 +181,14 @@ export class ToolExecutor extends BaseExecutor<
 
           const success = await this.nwcPaymentHandler.payInvoice(invoice);
           if (success) {
-            loggerDiscovery('Payment successful, waiting for tool response...');
+            loggerDiscovery.info(
+              'Payment successful, waiting for tool response...'
+            );
           } else {
             throw new Error('Payment failed');
           }
         } catch (error) {
-          loggerDiscovery('Payment error:', error);
+          loggerDiscovery.error('Payment error:', error);
           this.cleanupExecution(context.executionId);
           reject(error instanceof Error ? error : new Error(String(error)));
         }

@@ -64,10 +64,13 @@ export abstract class BaseRegistry<T extends Capability> {
       try {
         ref.remove();
         this.registeredRefs.delete(id);
-        loggerDiscovery(`Item removed from McpServer: ${id}`);
+        loggerDiscovery.debug(`Item removed from McpServer: ${id}`);
         return true;
       } catch (error) {
-        loggerDiscovery(`Error removing item from McpServer: ${id}`, error);
+        loggerDiscovery.error(
+          `Error removing item from McpServer: ${id}`,
+          error
+        );
       }
     }
     return false;
@@ -115,9 +118,11 @@ export abstract class BaseRegistry<T extends Capability> {
     for (const [id, ref] of this.registeredRefs.entries()) {
       try {
         ref.remove();
-        loggerDiscovery(`Item removed from McpServer during clear: ${id}`);
+        loggerDiscovery.debug(
+          `Item removed from McpServer during clear: ${id}`
+        );
       } catch (error) {
-        loggerDiscovery(
+        loggerDiscovery.error(
           `Error removing item from McpServer during clear: ${id}`,
           error
         );

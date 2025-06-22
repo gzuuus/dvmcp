@@ -23,7 +23,7 @@ export async function handlePing(
   const pubkey = event.pubkey;
   const id = event.id;
 
-  loggerBridge(`Handling ping request from ${pubkey}`);
+  loggerBridge.info(`handling ping request from ${pubkey}`);
 
   try {
     const response = keyManager.signEvent({
@@ -41,9 +41,9 @@ export async function handlePing(
       responseContext.encryptionManager
     );
     await publisher.publishResponse(response, responseContext);
-    loggerBridge(`Sent ping response to ${pubkey}`);
+    loggerBridge.info(`sent ping response to ${pubkey}`);
   } catch (error) {
-    console.error('Error handling ping request:', error);
+    loggerBridge.error('error handling ping request:', error);
 
     // Send error response if something goes wrong
     const errorResponse = keyManager.signEvent({

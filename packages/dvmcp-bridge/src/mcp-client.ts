@@ -55,7 +55,7 @@ export class MCPClientHandler {
 
   async connect() {
     await this.client.connect(this.transport);
-    loggerBridge(
+    loggerBridge.info(
       'Connected to MCP server',
       this.client.getServerCapabilities(),
       this.client.getServerVersion()
@@ -110,7 +110,7 @@ export class MCPClientHandler {
   ): Promise<CompleteResult | undefined> {
     const capabilities = this.getServerCapabilities();
     if (!capabilities.completions) {
-      loggerBridge('Completions not supported by MCP server');
+      loggerBridge.debug('Completions not supported by MCP server');
       return undefined;
     }
 
@@ -120,7 +120,7 @@ export class MCPClientHandler {
         CompleteResultSchema
       );
     } catch (error) {
-      loggerBridge('Error calling completion/complete:', error);
+      loggerBridge.error('Error calling completion/complete:', error);
       throw error;
     }
   }

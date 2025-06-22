@@ -113,7 +113,7 @@ export class MCPPool {
       const caps = client.getServerCapabilities();
       if (caps && caps.completions) {
         this.completionCapableServers.set(clientId, client);
-        loggerBridge(`Server ${clientId} supports completions capability`);
+        loggerBridge.info(`Server ${clientId} supports completions capability`);
       }
     }
   }
@@ -132,7 +132,10 @@ export class MCPPool {
             }
           }
         } catch (err) {
-          loggerBridge(`[listTools] Failed for client '${clientName}':`, err);
+          loggerBridge.error(
+            `[listTools] Failed for client '${clientName}':`,
+            err
+          );
         }
       }
     }
@@ -154,7 +157,7 @@ export class MCPPool {
             }
           }
         } catch (err) {
-          loggerBridge(
+          loggerBridge.error(
             `[listResources] Failed for client '${clientName}':`,
             (err as any)?.message || err
           );
@@ -184,7 +187,7 @@ export class MCPPool {
             }
           }
         } catch (err) {
-          loggerBridge(
+          loggerBridge.error(
             `[listResourceTemplates] Failed for client '${clientName}':`,
             err
           );
@@ -211,7 +214,10 @@ export class MCPPool {
             }
           }
         } catch (err) {
-          loggerBridge(`[listPrompts] Failed for client '${clientName}':`, err);
+          loggerBridge.error(
+            `[listPrompts] Failed for client '${clientName}':`,
+            err
+          );
         }
       }
     }
@@ -231,7 +237,7 @@ export class MCPPool {
     );
 
     if (!handler) {
-      loggerBridge(`[readResource] No handler found for: ${resourceUri}`);
+      loggerBridge.debug(`[readResource] No handler found for: ${resourceUri}`);
       return undefined;
     }
 
@@ -241,12 +247,12 @@ export class MCPPool {
 
       const result = await handler.readResource(normalizedUri);
       if (!result) {
-        loggerBridge(`[readResource] Empty result for: ${resourceUri}`);
+        loggerBridge.debug(`[readResource] Empty result for: ${resourceUri}`);
       }
 
       return result;
     } catch (err: any) {
-      loggerBridge(
+      loggerBridge.error(
         `[readResource] Failed to read '${resourceUri}':`,
         err?.message || err
       );
@@ -265,7 +271,9 @@ export class MCPPool {
     );
 
     if (!handler) {
-      loggerBridge(`[getPrompt] Prompt handler not found for: ${promptName}`);
+      loggerBridge.debug(
+        `[getPrompt] Prompt handler not found for: ${promptName}`
+      );
       return undefined;
     }
 
@@ -276,14 +284,16 @@ export class MCPPool {
       );
 
       if (!result) {
-        loggerBridge(`[getPrompt] Empty result for prompt: ${promptName}`);
+        loggerBridge.debug(
+          `[getPrompt] Empty result for prompt: ${promptName}`
+        );
         return undefined;
       }
 
-      loggerBridge('created prompt from SDK result', result);
+      loggerBridge.info('created prompt from SDK result', result);
       return result;
     } catch (err: any) {
-      loggerBridge(
+      loggerBridge.error(
         `[getPrompt] Failed to get prompt '${promptName}' from backend:`,
         err && (err.message || err)
       );
@@ -300,7 +310,7 @@ export class MCPPool {
     );
 
     if (!client) {
-      loggerBridge(`[callTool] No client found for tool: ${name}`);
+      loggerBridge.debug(`[callTool] No client found for tool: ${name}`);
       return {
         content: [{ type: 'text', text: `Tool not found: ${name}` }],
         isError: true,
@@ -313,9 +323,9 @@ export class MCPPool {
         name,
         args
       );
-      loggerBridge(`[callTool] Result for tool '${name}':`, result);
+      loggerBridge.info(`[callTool] Result for tool '${name}':`, result);
       if (!result) {
-        loggerBridge(`[callTool] Empty result for tool: ${name}`);
+        loggerBridge.debug(`[callTool] Empty result for tool: ${name}`);
         return {
           content: [
             {
@@ -334,7 +344,7 @@ export class MCPPool {
       }
       return result;
     } catch (err: any) {
-      loggerBridge(
+      loggerBridge.error(
         `[callTool] Failed to call tool '${name}':`,
         err && (err.message || err)
       );
@@ -374,7 +384,9 @@ export class MCPPool {
       );
 
       if (!handler) {
-        loggerBridge(`[complete] Prompt handler not found for: ${ref.name}`);
+        loggerBridge.debug(
+          `[complete] Prompt handler not found for: ${ref.name}`
+        );
         return undefined;
       }
     } else if (ref.type === 'ref/resource') {
@@ -383,18 +395,20 @@ export class MCPPool {
       );
 
       if (!handler) {
-        loggerBridge(`[complete] Resource handler not found for: ${ref.uri}`);
+        loggerBridge.debug(
+          `[complete] Resource handler not found for: ${ref.uri}`
+        );
         return undefined;
       }
     } else {
-      loggerBridge(`[complete] Unsupported reference type`);
+      loggerBridge.warn(`[complete] Unsupported reference type`);
       return undefined;
     }
 
     // Check if the handler supports completions
     const caps = handler.getServerCapabilities();
     if (!caps.completions) {
-      loggerBridge(
+      loggerBridge.debug(
         `[complete] Server does not support completions for ${ref.type === 'ref/prompt' ? ref.name : ref.uri}`
       );
       return undefined;
@@ -402,12 +416,12 @@ export class MCPPool {
 
     try {
       // Call the completion method on the handler
-      loggerBridge(
+      loggerBridge.info(
         `[complete] Result for ${ref.type === 'ref/prompt' ? ref.name : ref.uri}`
       );
       return await handler.complete(params);
     } catch (err: any) {
-      loggerBridge(
+      loggerBridge.error(
         `[complete] Failed to get completions:`,
         err && (err.message || err)
       );

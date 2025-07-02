@@ -5,11 +5,11 @@ A bridge implementation that connects Model Context Protocol (MCP) servers to No
 ## Features
 
 - Connect and manage multiple MCP servers through a single DVM instance
-- Automatic service announcement using NIP-89
-- Tool discovery and execution through DVM kind:5910/6910 events
-- Job status updates and payment handling via kind:7000 events
-- Service announcement deletion using NIP-09
-- Encrypted communication support using NIP-17/NIP-59
+- Automatic service announcement
+- Tool discovery and execution
+- Job status updates and payment handling
+- Service announcement deletion
+- Encrypted communication support
 - Comprehensive error handling
 
 ## Configuration

@@ -1,3 +1,5 @@
+> **Important Note:**  This project is archived. It has been superseeded by [ContextVM/sdk](https://github.com/contextvm/ts-sdk).
+
 # DVMCP: Data Vending Machine Context Protocol
 
 DVMCP (Data Vending Machine Context Protocol) is a project that bridges the Model Context Protocol (MCP) with Nostr's Data Vending Machine (DVM) ecosystem. It enables AI and computational services running on MCP servers to be seamlessly discovered, accessed, and utilized via the decentralized Nostr network.
